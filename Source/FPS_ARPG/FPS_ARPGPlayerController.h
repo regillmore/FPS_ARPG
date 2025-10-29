@@ -7,6 +7,7 @@
 #include "FPS_ARPGPlayerController.generated.h"
 
 class UInputMappingContext;
+class UMainMenuWidget;
 class UUserWidget;
 
 /**
@@ -34,17 +35,39 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input|Input Mappings")
 	TArray<UInputMappingContext*> MobileExcludedMappingContexts;
 
-	/** Mobile controls widget to spawn */
-	UPROPERTY(EditAnywhere, Category="Input|Touch Controls")
-	TSubclassOf<UUserWidget> MobileControlsWidgetClass;
+        /** Mobile controls widget to spawn */
+        UPROPERTY(EditAnywhere, Category="Input|Touch Controls")
+        TSubclassOf<UUserWidget> MobileControlsWidgetClass;
 
-	/** Pointer to the mobile controls widget */
-	TObjectPtr<UUserWidget> MobileControlsWidget;
+        /** Pointer to the mobile controls widget */
+        TObjectPtr<UUserWidget> MobileControlsWidget;
 
-	/** Gameplay initialization */
-	virtual void BeginPlay() override;
+        /** Main menu widget type. Defaults to the native implementation but can be swapped in Blueprints. */
+        UPROPERTY(EditAnywhere, Category="UI|Main Menu")
+        TSubclassOf<UMainMenuWidget> MainMenuWidgetClass;
 
-	/** Input mapping context setup */
+        /** Instance of the main menu widget currently displayed. */
+        UPROPERTY()
+        TObjectPtr<UMainMenuWidget> MainMenuWidget;
+
+        /** Create and display the main menu UI for the local player. */
+        void ShowMainMenu();
+
+        /** Clean up the main menu widget and return to normal gameplay input. */
+        void HideMainMenu();
+
+        /** Callback fired when the player activates the start button. */
+        UFUNCTION()
+        void HandleStartGameRequested();
+
+        /** Callback fired when the player activates the quit button. */
+        UFUNCTION()
+        void HandleQuitGameRequested();
+
+        /** Gameplay initialization */
+        virtual void BeginPlay() override;
+
+        /** Input mapping context setup */
 	virtual void SetupInputComponent() override;
 
 };

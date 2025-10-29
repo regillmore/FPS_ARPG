@@ -2,25 +2,31 @@
 
 
 #include "FPS_ARPGPlayerController.h"
+
+#include "Blueprint/UserWidget.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
-#include "InputMappingContext.h"
-#include "FPS_ARPGCameraManager.h"
-#include "Blueprint/UserWidget.h"
 #include "FPS_ARPG.h"
+#include "FPS_ARPGCameraManager.h"
+#include "InputMappingContext.h"
+#include "Kismet/KismetSystemLibrary.h"
+#include "Slate/SlateEnums.h"
+#include "UI/MainMenuWidget.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
 AFPS_ARPGPlayerController::AFPS_ARPGPlayerController()
 {
-	// set the player camera manager class
-	PlayerCameraManagerClass = AFPS_ARPGCameraManager::StaticClass();
+        // set the player camera manager class
+        PlayerCameraManagerClass = AFPS_ARPGCameraManager::StaticClass();
+
+        MainMenuWidgetClass = UMainMenuWidget::StaticClass();
 }
 
 void AFPS_ARPGPlayerController::BeginPlay()
 {
-	Super::BeginPlay();
+        Super::BeginPlay();
 
-	
+
 	// only spawn touch controls on local player controllers
 	if (SVirtualJoystick::ShouldDisplayTouchInterface() && IsLocalPlayerController())
 	{
@@ -38,7 +44,12 @@ void AFPS_ARPGPlayerController::BeginPlay()
 
 		}
 
-	}
+        }
+
+        if (IsLocalController())
+        {
+                ShowMainMenu();
+        }
 }
 
 void AFPS_ARPGPlayerController::SetupInputComponent()
@@ -67,4 +78,63 @@ void AFPS_ARPGPlayerController::SetupInputComponent()
 		}
 	}
 	
+}
+
+void AFPS_ARPGPlayerController::ShowMainMenu()
+{
+        if (MainMenuWidget || !IsLocalController())
+        {
+                return;
+        }
+
+        TSubclassOf<UMainMenuWidget> WidgetClass = MainMenuWidgetClass ? MainMenuWidgetClass : UMainMenuWidget::StaticClass();
+        MainMenuWidget = CreateWidget<UMainMenuWidget>(this, WidgetClass);
+
+        if (!MainMenuWidget)
+        {
+                UE_LOG(LogFPS_ARPG, Error, TEXT("Failed to create main menu widget."));
+                return;
+        }
+
+        MainMenuWidget->OnStartGame.AddDynamic(this, &AFPS_ARPGPlayerController::HandleStartGameRequested);
+        MainMenuWidget->OnQuitGame.AddDynamic(this, &AFPS_ARPGPlayerController::HandleQuitGameRequested);
+        MainMenuWidget->AddToViewport(100);
+
+        bShowMouseCursor = true;
+        SetIgnoreLookInput(true);
+        SetIgnoreMoveInput(true);
+        FInputModeUIOnly InputMode;
+        InputMode.SetWidgetToFocus(MainMenuWidget->TakeWidget());
+        InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+        SetInputMode(InputMode);
+        SetPause(true);
+}
+
+void AFPS_ARPGPlayerController::HideMainMenu()
+{
+        if (!MainMenuWidget)
+        {
+                return;
+        }
+
+        MainMenuWidget->OnStartGame.RemoveDynamic(this, &AFPS_ARPGPlayerController::HandleStartGameRequested);
+        MainMenuWidget->OnQuitGame.RemoveDynamic(this, &AFPS_ARPGPlayerController::HandleQuitGameRequested);
+        MainMenuWidget->RemoveFromParent();
+        MainMenuWidget = nullptr;
+
+        SetPause(false);
+        SetIgnoreLookInput(false);
+        SetIgnoreMoveInput(false);
+        bShowMouseCursor = false;
+        SetInputMode(FInputModeGameOnly());
+}
+
+void AFPS_ARPGPlayerController::HandleStartGameRequested()
+{
+        HideMainMenu();
+}
+
+void AFPS_ARPGPlayerController::HandleQuitGameRequested()
+{
+        UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
 }
