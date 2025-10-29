@@ -53,6 +53,7 @@ Build/Scripts/*.csproj.props
 Build/Mac/*.PackageVersionCounter
 Build/Mac/Resources/*.plist
 Build/Mac/Resources/*.entitlements
+Build/Windows/*.log
 
 # Built data for maps
 *_BuiltData.uasset
