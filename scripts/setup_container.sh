@@ -40,16 +40,24 @@ PROJECT_DIR="${PROJECT_DIR:-$PWD}"          # assumes script runs in repo root
 
 echo "==> Setting up Godot ${GODOT_VERSION}-${GODOT_CHANNEL} (${GODOT_FLAVOR})"
 
-# ---- OS deps ----------------------------------------------------------------
+# ---- OS deps (works on Ubuntu 24.04 and earlier) ---------------------------
 echo "==> Installing base packages"
 export DEBIAN_FRONTEND=noninteractive
-$SUDO apt-get update -y
-$SUDO apt-get install -y --no-install-recommends \
+sudo apt-get update -y
+
+# Pick the right ALSA package name (24.04 uses t64)
+ALSA_PKG=libasound2
+if . /etc/os-release && [ "${VERSION_CODENAME:-}" = "noble" ]; then
+  ALSA_PKG=libasound2t64
+fi
+
+sudo apt-get install -y --no-install-recommends \
   wget curl unzip ca-certificates git \
   libxi6 libxrandr2 libxcursor1 libxinerama1 libgl1 \
-  libasound2 libpulse0 libudev1 \
+  "$ALSA_PKG" libpulse0 libudev1 \
   xvfb xauth \
   python3 python3-pip make g++ pkg-config
+
 
 # ---- Download a headless-capable Godot binary -------------------------------
 # We try common 4.x artifact names to keep this robust across sub-minor changes.
