@@ -1,8 +1,33 @@
 #!/usr/bin/env bash
 # Provision a headless Godot 4.5.1 toolchain and sanity-check the project.
-# Works on Ubuntu 24.04 in ephemeral agent containers.
+# If invoked by sh or without exec bit, re-exec under bash.
+[ -n "${BASH_VERSION:-}" ] || exec /usr/bin/env bash "$0" "$@"
 
 set -euo pipefail
+# set -x  # uncomment if you want verbose logs always
+
+# Use sudo only if needed/available
+SUDO=""
+if [ "$(id -u)" -ne 0 ]; then
+  if command -v sudo >/dev/null 2>&1; then
+    SUDO="sudo"
+  else
+    echo "This script needs root or sudo to install packages." >&2
+    exit 1
+  fi
+fi
+
+# Choose an install prefix we can actually write to
+PREFIX="/usr/local"
+if ! $SUDO sh -c "test -w $PREFIX/bin" 2>/dev/null; then
+  PREFIX="$HOME/.local"
+  mkdir -p "$PREFIX/bin"
+  export PATH="$PREFIX/bin:$PATH"
+fi
+
+# Use the writable prefix for the Godot binary
+INSTALL_BIN="${INSTALL_BIN:-$PREFIX/bin/godot}"
+export INSTALL_BIN
 
 # ---- Configuration (override via env if needed) -----------------------------
 GODOT_VERSION="${GODOT_VERSION:-4.5.1}"     # target engine version
@@ -18,8 +43,8 @@ echo "==> Setting up Godot ${GODOT_VERSION}-${GODOT_CHANNEL} (${GODOT_FLAVOR})"
 # ---- OS deps ----------------------------------------------------------------
 echo "==> Installing base packages"
 export DEBIAN_FRONTEND=noninteractive
-sudo apt-get update -y
-sudo apt-get install -y --no-install-recommends \
+$SUDO apt-get update -y
+$SUDO apt-get install -y --no-install-recommends \
   wget curl unzip ca-certificates git \
   libxi6 libxrandr2 libxcursor1 libxinerama1 libgl1 \
   libasound2 libpulse0 libudev1 \
@@ -72,18 +97,18 @@ if [[ -z "${bin_path}" ]]; then
   echo "ERROR: Godot binary not found in archive."
   exit 3
 fi
-sudo install -m 0755 "${bin_path}" "${INSTALL_BIN}"
+$SUDO install -m 0755 "${bin_path}" "${INSTALL_BIN}"
 
 # If we only got the GUI editor, create a wrapper that uses xvfb for headless ops when needed.
 if "${INSTALL_BIN}" --help 2>&1 | grep -qi 'headless'; then
   echo "==> Installed headless-capable Godot."
 else
   echo "==> Installed GUI editor; creating xvfb-run wrapper for headless usage."
-  sudo tee /usr/local/bin/godot-headless >/dev/null <<'EOS'
+  $SUDO tee /usr/local/bin/godot-headless >/dev/null <<'EOS'
 #!/usr/bin/env bash
 exec xvfb-run -a /usr/local/bin/godot "$@"
 EOS
-  sudo chmod +x /usr/local/bin/godot-headless
+  $SUDO chmod +x /usr/local/bin/godot-headless
   INSTALL_BIN="/usr/local/bin/godot-headless"
 fi
 
@@ -104,9 +129,9 @@ if [[ "${GODOT_FLAVOR}" == "mono" ]]; then
   sudo apt-get install -y --no-install-recommends dotnet-sdk-8.0 || {
     # If the SDK package isn’t present by default, add MS feed:
     wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb -O "$work/msprod.deb"
-    sudo dpkg -i "$work/msprod.deb"
-    sudo apt-get update -y
-    sudo apt-get install -y --no-install-recommends dotnet-sdk-8.0
+    $SUDO dpkg -i "$work/msprod.deb"
+    $SUDO apt-get update -y
+    $SUDO apt-get install -y --no-install-recommends dotnet-sdk-8.0
   }
 fi
 
