@@ -100,12 +100,22 @@ class MainMenu:
 class StatsMenu:
     """Lightweight overlay that visualises :class:`PlayerStats`."""
 
-    def __init__(self, stats: PlayerStats) -> None:
+    def __init__(
+        self,
+        stats: PlayerStats,
+        *,
+        parent: DirectFrame | None = None,
+        frame_size: tuple[float, float, float, float] | None = None,
+        footer_text: str | None = "TAB - Close",
+    ) -> None:
         self.stats = stats
-        self.frame = DirectFrame(
-            frameColor=(0.05, 0.05, 0.07, 0.85),
-            frameSize=(-0.75, 0.75, -0.6, 0.6),
-        )
+        frame_kwargs: dict[str, object] = {
+            "frameColor": (0.05, 0.05, 0.07, 0.85),
+            "frameSize": frame_size or (-0.75, 0.75, -0.6, 0.6),
+        }
+        if parent is not None:
+            frame_kwargs["parent"] = parent
+        self.frame = DirectFrame(**frame_kwargs)
         self.title = OnscreenText(
             text="Operative Profile",
             parent=self.frame,
@@ -125,15 +135,18 @@ class StatsMenu:
             align=TextNode.ALeft,
             mayChange=True,
         )
-        self.footer = OnscreenText(
-            text="TAB - Close",
-            parent=self.frame,
-            pos=(0, -0.55),
-            scale=0.045,
-            fg=(0.7, 0.75, 0.95, 1),
-            align=TextNode.ACenter,
-            mayChange=False,
-        )
+        if footer_text:
+            self.footer = OnscreenText(
+                text=footer_text,
+                parent=self.frame,
+                pos=(0, -0.55),
+                scale=0.045,
+                fg=(0.7, 0.75, 0.95, 1),
+                align=TextNode.ACenter,
+                mayChange=False,
+            )
+        else:
+            self.footer = None
 
         self.is_visible = True
 
@@ -163,12 +176,22 @@ class InventoryMenu:
     GRID_COLUMNS = 6
     GRID_ROWS = 4
 
-    def __init__(self, inventory: Inventory) -> None:
+    def __init__(
+        self,
+        inventory: Inventory,
+        *,
+        parent: DirectFrame | None = None,
+        frame_size: tuple[float, float, float, float] | None = None,
+        footer_text: str | None = "I - Close",
+    ) -> None:
         self.inventory = inventory
-        self.frame = DirectFrame(
-            frameColor=(0.08, 0.07, 0.09, 0.92),
-            frameSize=(-0.9, 0.9, -0.7, 0.7),
-        )
+        frame_kwargs: dict[str, object] = {
+            "frameColor": (0.08, 0.07, 0.09, 0.92),
+            "frameSize": frame_size or (-0.9, 0.9, -0.7, 0.7),
+        }
+        if parent is not None:
+            frame_kwargs["parent"] = parent
+        self.frame = DirectFrame(**frame_kwargs)
         self.title = OnscreenText(
             text="Field Inventory",
             parent=self.frame,
@@ -225,15 +248,18 @@ class InventoryMenu:
             mayChange=True,
             wordwrap=18,
         )
-        self.footer = OnscreenText(
-            text="I - Close",
-            parent=self.frame,
-            pos=(0, -0.62),
-            scale=0.045,
-            fg=(0.7, 0.8, 1, 1),
-            align=TextNode.ACenter,
-            mayChange=False,
-        )
+        if footer_text:
+            self.footer = OnscreenText(
+                text=footer_text,
+                parent=self.frame,
+                pos=(0, -0.62),
+                scale=0.045,
+                fg=(0.7, 0.8, 1, 1),
+                align=TextNode.ACenter,
+                mayChange=False,
+            )
+        else:
+            self.footer = None
 
         self.is_visible = True
         self._default_detail_message = "Hover over an item to inspect its details."
@@ -461,4 +487,156 @@ class InventoryMenu:
         self.detail_window.setPos(x, 0, z)
 
 
-__all__ = ["InventoryMenu", "MainMenu", "StatsMenu"]
+class TabbedMenu:
+    """Container that combines stats and inventory views under tab controls."""
+
+    TAB_STATS = "stats"
+    TAB_INVENTORY = "inventory"
+
+    def __init__(self, stats: PlayerStats, inventory: Inventory) -> None:
+        self.stats = stats
+        self.inventory = inventory
+
+        self.frame = DirectFrame(
+            frameColor=(0.03, 0.04, 0.08, 0.95),
+            frameSize=(-1.05, 1.05, -0.8, 0.8),
+        )
+        self.title = OnscreenText(
+            text="Operative Interface",
+            parent=self.frame,
+            pos=(0, 0.63),
+            scale=0.08,
+            fg=(0.95, 0.95, 0.88, 1),
+            shadow=(0, 0, 0, 0.85),
+            align=TextNode.ACenter,
+            mayChange=False,
+        )
+
+        self.content_frame = DirectFrame(
+            parent=self.frame,
+            frameColor=(0, 0, 0, 0),
+            pos=(0, 0, -0.05),
+        )
+
+        self.stats_menu = StatsMenu(
+            stats,
+            parent=self.content_frame,
+            footer_text=None,
+        )
+        self.inventory_menu = InventoryMenu(
+            inventory,
+            parent=self.content_frame,
+            footer_text=None,
+        )
+
+        # Slightly reposition panels to accommodate the shared title bar.
+        self.stats_menu.frame.setZ(-0.05)
+        self.inventory_menu.frame.setZ(-0.02)
+
+        self.tab_buttons: dict[str, DirectButton] = {}
+        self._build_tabs()
+
+        self.footer = OnscreenText(
+            text="TAB - Toggle Menu   I - Jump to Inventory Tab",
+            parent=self.frame,
+            pos=(0, -0.72),
+            scale=0.045,
+            fg=(0.75, 0.82, 1, 1),
+            align=TextNode.ACenter,
+            mayChange=False,
+        )
+
+        self.active_tab: str = self.TAB_STATS
+        self.is_visible = True
+        self.select_tab(self.TAB_STATS)
+
+    def _build_tabs(self) -> None:
+        button_cfg = dict(
+            parent=self.frame,
+            scale=0.06,
+            text_fg=(0.92, 0.94, 1, 1),
+            text_shadow=(0, 0, 0, 0.8),
+            pad=(0.6, 0.35),
+            relief=1,
+            pressEffect=False,
+            rolloverSound=None,
+            clickSound=None,
+        )
+
+        self.tab_buttons[self.TAB_STATS] = DirectButton(
+            text="Operative Stats",
+            pos=(-0.45, 0, 0.5),
+            command=self._on_tab_selected,
+            extraArgs=[self.TAB_STATS],
+            **button_cfg,
+        )
+        self.tab_buttons[self.TAB_INVENTORY] = DirectButton(
+            text="Field Inventory",
+            pos=(0.45, 0, 0.5),
+            command=self._on_tab_selected,
+            extraArgs=[self.TAB_INVENTORY],
+            **button_cfg,
+        )
+
+        self._refresh_tab_visuals()
+
+    def _on_tab_selected(self, tab: str) -> None:
+        self.select_tab(tab)
+
+    def _refresh_tab_visuals(self) -> None:
+        for name, button in self.tab_buttons.items():
+            if name == self.active_tab:
+                button["frameColor"] = (0.25, 0.32, 0.55, 1)
+            else:
+                button["frameColor"] = (0.12, 0.14, 0.2, 1)
+
+    def select_tab(self, tab: str) -> None:
+        if tab not in (self.TAB_STATS, self.TAB_INVENTORY):
+            return
+        self.active_tab = tab
+        if self.is_visible:
+            if tab == self.TAB_STATS:
+                self.inventory_menu.hide()
+                self.stats_menu.show()
+                self.stats_menu.update()
+            else:
+                self.stats_menu.hide()
+                self.inventory_menu.show()
+                self.inventory_menu.update()
+        self._refresh_tab_visuals()
+
+    def show(self) -> None:
+        self.frame.show()
+        self.is_visible = True
+        self.select_tab(self.active_tab)
+
+    def hide(self) -> None:
+        self.frame.hide()
+        self.is_visible = False
+        self.stats_menu.hide()
+        self.inventory_menu.hide()
+
+    def update(self) -> None:
+        if not self.is_visible:
+            return
+        if self.active_tab == self.TAB_STATS:
+            self.stats_menu.update()
+        else:
+            self.inventory_menu.update()
+
+    def destroy(self) -> None:
+        for button in self.tab_buttons.values():
+            button.destroy()
+        self.tab_buttons.clear()
+
+        self.stats_menu.destroy()
+        self.inventory_menu.destroy()
+
+        for widget in ("footer", "content_frame", "title", "frame"):
+            element = getattr(self, widget, None)
+            if element is not None:
+                element.destroy()
+                setattr(self, widget, None)
+
+
+__all__ = ["InventoryMenu", "MainMenu", "StatsMenu", "TabbedMenu"]

@@ -9,7 +9,7 @@ from panda3d.core import ClockObject, TextNode, Vec3, WindowProperties
 
 from .inventory import Inventory, ItemTemplate
 from .stats import PlayerStats
-from .ui import InventoryMenu, StatsMenu
+from .ui import TabbedMenu
 
 if TYPE_CHECKING:  # pragma: no cover - used only for type checking
     from .app import GameApp
@@ -50,8 +50,7 @@ class GameWorld:
         self._setup_camera()
         self._setup_controls()
         self._setup_hud()
-        self._setup_stats_menu()
-        self._setup_inventory_menu()
+        self._setup_tabbed_menu()
 
         self._task_name = "update_game_world"
         self.app.taskMgr.add(self._update_task, self._task_name)
@@ -92,7 +91,7 @@ class GameWorld:
 
     def _setup_hud(self) -> None:
         self.hud_text = OnscreenText(
-            text="WASD to move, Mouse to look, TAB stats, I inventory",
+            text="WASD move, Mouse look, TAB menu, I inventory tab",
             pos=(0, 0.9),
             scale=0.05,
             fg=(0.9, 0.9, 0.9, 1),
@@ -100,13 +99,9 @@ class GameWorld:
             mayChange=False,
         )
 
-    def _setup_stats_menu(self) -> None:
-        self.stats_menu = StatsMenu(self.player_stats)
-        self.stats_menu.hide()
-
-    def _setup_inventory_menu(self) -> None:
-        self.inventory_menu = InventoryMenu(self.inventory)
-        self.inventory_menu.hide()
+    def _setup_tabbed_menu(self) -> None:
+        self.tabbed_menu = TabbedMenu(self.player_stats, self.inventory)
+        self.tabbed_menu.hide()
 
     def _seed_debug_items(self) -> None:
         """Populate the prototype inventory with a few sample items."""
@@ -182,10 +177,8 @@ class GameWorld:
             self.player_stats.tick(dt)
             self._update_mouse_look()
             self._update_movement(dt)
-        if self.stats_menu.is_visible:
-            self.stats_menu.update()
-        if self.inventory_menu.is_visible:
-            self.inventory_menu.update()
+        if self.tabbed_menu.is_visible:
+            self.tabbed_menu.update()
         return task.cont
 
     def _update_mouse_look(self) -> None:
@@ -237,12 +230,9 @@ class GameWorld:
         self.is_paused = False
         self._set_mouse_capture(False)
 
-        if hasattr(self, "stats_menu") and self.stats_menu is not None:
-            self.stats_menu.destroy()
-            self.stats_menu = None
-        if hasattr(self, "inventory_menu") and self.inventory_menu is not None:
-            self.inventory_menu.destroy()
-            self.inventory_menu = None
+        if hasattr(self, "tabbed_menu") and self.tabbed_menu is not None:
+            self.tabbed_menu.destroy()
+            self.tabbed_menu = None
 
         if hasattr(self, "hud_text") and self.hud_text is not None:
             self.hud_text.destroy()
@@ -256,24 +246,22 @@ class GameWorld:
 
     # UI actions ------------------------------------------------------
     def _toggle_stats_menu(self) -> None:
-        if self.stats_menu.is_visible:
-            self.stats_menu.hide()
-        else:
-            if self.inventory_menu.is_visible:
-                self.inventory_menu.hide()
-                self._set_paused(False)
-            self.stats_menu.show()
-            self.stats_menu.update()
+        self._toggle_tabbed_menu(TabbedMenu.TAB_STATS)
 
     def _toggle_inventory_menu(self) -> None:
-        if self.inventory_menu.is_visible:
-            self.inventory_menu.hide()
+        self._toggle_tabbed_menu(TabbedMenu.TAB_INVENTORY)
+
+    def _toggle_tabbed_menu(self, tab: str) -> None:
+        if self.tabbed_menu.is_visible and self.tabbed_menu.active_tab == tab:
+            self.tabbed_menu.hide()
             self._set_paused(False)
-        else:
-            if self.stats_menu.is_visible:
-                self.stats_menu.hide()
-            self.inventory_menu.show()
+            return
+
+        if not self.tabbed_menu.is_visible:
+            self.tabbed_menu.show()
             self._set_paused(True)
+
+        self.tabbed_menu.select_tab(tab)
 
 
 __all__ = ["GameWorld"]
