@@ -897,14 +897,14 @@ class InventoryMenu:
         for index in range(len(self.slots)):
             self._apply_slot_visual(index)
 
-    def _on_slot_hover(self, _event, index: int) -> None:
+    def _on_slot_hover(self, index: int, _event: object | None = None) -> None:
         if index >= len(self.slots):
             return
         self._current_hover_index = index
         self.slots[index]["frameColor"] = self._hover_slot_color
         self._apply_description(index)
 
-    def _on_slot_exit(self, _event, index: int) -> None:
+    def _on_slot_exit(self, index: int, _event: object | None = None) -> None:
         if index >= len(self.slots):
             return
         if self._current_hover_index == index:
