@@ -746,10 +746,18 @@ class InventoryMenu:
             align=TextNode.ALeft,
             mayChange=True,
         )
+        self.detail_window = DirectFrame(
+            parent=self.frame,
+            frameColor=(0.12, 0.12, 0.16, 0.95),
+            frameSize=(-0.35, 0.35, -0.25, 0.25),
+            borderWidth=(0.01, 0.01),
+            relief=1,
+            sortOrder=100,
+        )
         self.detail_title = OnscreenText(
             text="",
-            parent=self.frame,
-            pos=(0.55, 0.46),
+            parent=self.detail_window,
+            pos=(-0.32, 0.18),
             scale=0.055,
             fg=(0.95, 0.95, 0.88, 1),
             align=TextNode.ALeft,
@@ -758,13 +766,13 @@ class InventoryMenu:
         )
         self.detail_body = OnscreenText(
             text="",
-            parent=self.frame,
-            pos=(0.55, 0.35),
+            parent=self.detail_window,
+            pos=(-0.32, 0.05),
             scale=0.045,
             fg=(0.85, 0.88, 1, 1),
             align=TextNode.ALeft,
             mayChange=True,
-            wordwrap=16,
+            wordwrap=18,
         )
         self.footer = OnscreenText(
             text="I - Close",
@@ -789,6 +797,7 @@ class InventoryMenu:
         self._current_hover_index: int | None = None
 
         self._create_slots()
+        self.detail_window.hide()
         self._set_default_description()
 
     def _create_slots(self) -> None:
@@ -881,6 +890,7 @@ class InventoryMenu:
             "footer",
             "detail_body",
             "detail_title",
+            "detail_window",
             "capacity_hint",
             "capacity_text",
             "title",
@@ -896,12 +906,14 @@ class InventoryMenu:
         self._set_default_description()
         for index in range(len(self.slots)):
             self._apply_slot_visual(index)
+        self.detail_window.hide()
 
     def _on_slot_hover(self, index: int, _event: object | None = None) -> None:
         if index >= len(self.slots):
             return
         self._current_hover_index = index
         self.slots[index]["frameColor"] = self._hover_slot_color
+        self._position_detail_window(index)
         self._apply_description(index)
 
     def _on_slot_exit(self, index: int, _event: object | None = None) -> None:
@@ -910,16 +922,20 @@ class InventoryMenu:
         if self._current_hover_index == index:
             self._current_hover_index = None
             self._set_default_description()
+            self.detail_window.hide()
         self._apply_slot_visual(index)
 
     def _refresh_hover_description(self) -> None:
         if self._current_hover_index is None:
             self._set_default_description()
+            self.detail_window.hide()
             return
         if self._current_hover_index >= len(self.slot_contents):
             self._current_hover_index = None
             self._set_default_description()
+            self.detail_window.hide()
             return
+        self._position_detail_window(self._current_hover_index)
         self._apply_description(self._current_hover_index)
 
     def _apply_slot_visual(self, index: int) -> None:
@@ -938,6 +954,7 @@ class InventoryMenu:
     def _set_default_description(self) -> None:
         self.detail_title.setText("Item Details")
         self.detail_body.setText(self._default_detail_message)
+        self.detail_window.hide()
 
     def _apply_description(self, index: int) -> None:
         stack = self.slot_contents[index]
@@ -961,6 +978,7 @@ class InventoryMenu:
 
         self.detail_title.setText(f"{stack.template.name} (x{stack.quantity})")
         self.detail_body.setText("\n".join(lines))
+        self.detail_window.show()
 
     def _set_empty_description(self) -> None:
         if self.inventory.is_full():
@@ -971,6 +989,25 @@ class InventoryMenu:
             message = "Ready to store newly acquired gear."
         self.detail_title.setText("Empty Slot")
         self.detail_body.setText(message)
+        self.detail_window.show()
+
+    def _position_detail_window(self, index: int) -> None:
+        slot = self.slots[index]
+        slot_pos = slot.getPos(self.frame)
+        offset_x = 0.38
+        offset_z = 0.0
+
+        x = slot_pos.x + offset_x
+        z = slot_pos.z + offset_z
+
+        # If the tooltip would overflow the right edge, flip it to the left side
+        if x > 0.55:
+            x = slot_pos.x - offset_x
+
+        # Clamp vertically to keep the tooltip within the menu bounds
+        z = max(-0.35, min(0.45, z))
+
+        self.detail_window.setPos(x, 0, z)
 
 
 
