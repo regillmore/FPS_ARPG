@@ -496,6 +496,7 @@ class TabbedMenu:
     def __init__(self, stats: PlayerStats, inventory: Inventory) -> None:
         self.stats = stats
         self.inventory = inventory
+        self.active_tab = None
 
         self.frame = DirectFrame(
             frameColor=(0.03, 0.04, 0.08, 0.95),
