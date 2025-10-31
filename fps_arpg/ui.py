@@ -275,6 +275,7 @@ class InventoryMenu:
         self._equipment_empty_color = (0.12, 0.12, 0.18, 0.95)
         self._equipment_filled_color = (0.22, 0.24, 0.3, 0.95)
         self._equipment_hover_color = (0.35, 0.38, 0.55, 1)
+        self._equipment_selected_color = (0.48, 0.36, 0.22, 1)
 
         self.slot_count = self.GRID_COLUMNS * self.GRID_ROWS
         self.slots: list[DirectButton] = []
@@ -282,6 +283,7 @@ class InventoryMenu:
         self._current_hover_index: int | None = None
         self._dragged_stack: InventoryStack | None = None
         self._drag_source_index: int | None = None
+        self._drag_source_equipment_index: int | None = None
         self._current_equipment_hover: int | None = None
 
         self.equipment_buttons: list[DirectButton] = []
@@ -365,6 +367,8 @@ class InventoryMenu:
                 pressEffect=False,
                 rolloverSound=None,
                 clickSound=None,
+                command=self._on_equipment_clicked,
+                extraArgs=[index],
             )
             button.bind(DGG.ENTER, self._on_equipment_hover, [index])
             button.bind(DGG.EXIT, self._on_equipment_exit, [index])
@@ -528,6 +532,10 @@ class InventoryMenu:
             self._start_drag(index, stack)
             return
 
+        if self._drag_source_equipment_index is not None:
+            self._handle_equipment_drop_onto_inventory(index)
+            return
+
         if self._drag_source_index is None:
             self._cancel_drag()
             return
@@ -539,6 +547,7 @@ class InventoryMenu:
         moved = self.inventory.move_stack(self._drag_source_index, index)
         self._dragged_stack = None
         self._drag_source_index = None
+        self._drag_source_equipment_index = None
         if self._drag_label is not None:
             self._drag_label.hide()
         if moved:
@@ -561,7 +570,7 @@ class InventoryMenu:
             return
         if self._current_hover_index == index:
             self._current_hover_index = None
-            if self._dragged_stack is not None and self._drag_source_index is not None:
+            if self._dragged_stack is not None and self._has_active_drag_source():
                 self._set_drag_description(self._dragged_stack)
             else:
                 self._set_default_description()
@@ -581,15 +590,40 @@ class InventoryMenu:
             return
         if self._current_equipment_hover == index:
             self._current_equipment_hover = None
-            if self._dragged_stack is not None and self._drag_source_index is not None:
+            if self._dragged_stack is not None and self._has_active_drag_source():
                 self._set_drag_description(self._dragged_stack)
             else:
                 self._set_default_description()
                 self.detail_window.hide()
         self._apply_equipment_slot_visual(index)
 
+    def _on_equipment_clicked(self, index: int) -> None:
+        if index >= len(self.equipment_slot_ids):
+            return
+
+        slot_id = self.equipment_slot_ids[index]
+        slot_state = self.equipment.get_slot(slot_id)
+        if slot_state is None:
+            return
+
+        if self._dragged_stack is None:
+            if slot_state.item is None:
+                return
+            self._start_equipment_drag(index, slot_state.item)
+            return
+
+        if self._drag_source_index is not None:
+            self._handle_inventory_drop_onto_equipment(index)
+            return
+
+        if self._drag_source_equipment_index is not None:
+            self._handle_equipment_drop_onto_equipment(index)
+            return
+
+        self._cancel_drag()
+
     def _refresh_hover_description(self) -> None:
-        if self._dragged_stack is not None and self._drag_source_index is not None:
+        if self._dragged_stack is not None and self._has_active_drag_source():
             if (
                 self._current_hover_index is None
                 and self._current_equipment_hover is None
@@ -643,16 +677,25 @@ class InventoryMenu:
     def _apply_equipment_slot_visual(self, index: int) -> None:
         button = self.equipment_buttons[index]
         item = self.equipment_slot_contents[index]
-        if self._current_equipment_hover == index:
+        if self._drag_source_equipment_index == index:
+            button["frameColor"] = self._equipment_selected_color
+        elif self._current_equipment_hover == index:
             button["frameColor"] = self._equipment_hover_color
         elif item is None:
             button["frameColor"] = self._equipment_empty_color
         else:
             button["frameColor"] = self._equipment_filled_color
 
+    def _has_active_drag_source(self) -> bool:
+        return (
+            self._drag_source_index is not None
+            or self._drag_source_equipment_index is not None
+        )
+
     def _start_drag(self, index: int, stack: InventoryStack) -> None:
         self._dragged_stack = stack
         self._drag_source_index = index
+        self._drag_source_equipment_index = None
         if self._drag_label is not None:
             self._drag_label.setText(f"{stack.template.name}\n x{stack.quantity}")
             self._drag_label.show()
@@ -663,12 +706,218 @@ class InventoryMenu:
     def _cancel_drag(self) -> None:
         if self._dragged_stack is None:
             return
+        if self._drag_source_equipment_index is not None:
+            slot_id = self.equipment_slot_ids[self._drag_source_equipment_index]
+            self.equipment.equip(slot_id, self._dragged_stack.template)
+            self._update_equipment_panel()
         self._dragged_stack = None
         self._drag_source_index = None
+        self._drag_source_equipment_index = None
         if self._drag_label is not None:
             self._drag_label.hide()
         self._refresh_all_slot_visuals()
         self._refresh_hover_description()
+
+    def _reset_drag_state(self) -> None:
+        if self._drag_label is not None:
+            self._drag_label.hide()
+        self._dragged_stack = None
+        self._drag_source_index = None
+        self._drag_source_equipment_index = None
+
+    def _start_equipment_drag(self, index: int, item: ItemTemplate) -> None:
+        slot_id = self.equipment_slot_ids[index]
+        removed = self.equipment.unequip(slot_id)
+        if removed is None:
+            return
+        self._dragged_stack = InventoryStack(template=removed, quantity=1)
+        self._drag_source_index = None
+        self._drag_source_equipment_index = index
+        if self._drag_label is not None:
+            self._drag_label.setText(f"{removed.name}\n x1")
+            self._drag_label.show()
+        self._update_equipment_panel()
+        self._update_drag_visual()
+        self._set_drag_description(self._dragged_stack)
+        self._refresh_all_equipment_visuals()
+
+    def _handle_inventory_drop_onto_equipment(self, index: int) -> None:
+        if self._drag_source_index is None:
+            self._cancel_drag()
+            return
+        if self._drag_source_index >= len(self.slot_contents):
+            self._cancel_drag()
+            return
+
+        stack = self.slot_contents[self._drag_source_index]
+        if stack is None:
+            self._cancel_drag()
+            return
+
+        slot_id = self.equipment_slot_ids[index]
+        slot_state = self.equipment.get_slot(slot_id)
+        if slot_state is None:
+            self._cancel_drag()
+            return
+
+        if not slot_state.definition.accepts(stack.template):
+            self._cancel_drag()
+            return
+
+        previous_item = slot_state.item
+        original_quantity = stack.quantity
+
+        equipped = self.equipment.equip(slot_id, stack.template)
+        if not equipped:
+            self._cancel_drag()
+            return
+
+        if original_quantity <= 1:
+            self.inventory.stacks[self._drag_source_index] = None
+        else:
+            stack.quantity -= 1
+
+        placed_previous = True
+        preferred_index = (
+            self._drag_source_index if original_quantity <= 1 else None
+        )
+        if previous_item is not None:
+            placed_previous = self._place_item_in_inventory(
+                previous_item, preferred_index=preferred_index
+            )
+
+        if not placed_previous:
+            if original_quantity <= 1:
+                self.inventory.stacks[self._drag_source_index] = InventoryStack(
+                    template=stack.template,
+                    quantity=original_quantity,
+                )
+            else:
+                stack.quantity = original_quantity
+            if previous_item is not None:
+                self.equipment.equip(slot_id, previous_item)
+            else:
+                self.equipment.unequip(slot_id)
+            self._reset_drag_state()
+            self.update()
+            return
+
+        self._reset_drag_state()
+        self.update()
+
+    def _handle_equipment_drop_onto_inventory(self, index: int) -> None:
+        if self._dragged_stack is None:
+            self._cancel_drag()
+            return
+        if self._drag_source_equipment_index is None:
+            self._cancel_drag()
+            return
+
+        dragged_template = self._dragged_stack.template
+        target_stack = self.inventory.stacks[index]
+
+        if target_stack is None:
+            self.inventory.stacks[index] = InventoryStack(
+                template=dragged_template,
+                quantity=self._dragged_stack.quantity,
+            )
+            self._reset_drag_state()
+            self.update()
+            return
+
+        if (
+            target_stack.template.id == dragged_template.id
+            and target_stack.space_remaining() >= self._dragged_stack.quantity
+        ):
+            target_stack.quantity += self._dragged_stack.quantity
+            self._reset_drag_state()
+            self.update()
+            return
+
+        if target_stack.quantity != 1:
+            self._cancel_drag()
+            return
+
+        source_slot_id = self.equipment_slot_ids[self._drag_source_equipment_index]
+        source_state = self.equipment.get_slot(source_slot_id)
+        if source_state is None:
+            self._cancel_drag()
+            return
+        if not source_state.definition.accepts(target_stack.template):
+            self._cancel_drag()
+            return
+
+        equipped = self.equipment.equip(source_slot_id, target_stack.template)
+        if not equipped:
+            self._cancel_drag()
+            return
+
+        self.inventory.stacks[index] = InventoryStack(
+            template=dragged_template,
+            quantity=self._dragged_stack.quantity,
+        )
+        self._reset_drag_state()
+        self.update()
+
+    def _handle_equipment_drop_onto_equipment(self, index: int) -> None:
+        if self._dragged_stack is None:
+            self._cancel_drag()
+            return
+        if self._drag_source_equipment_index is None:
+            self._cancel_drag()
+            return
+
+        if index == self._drag_source_equipment_index:
+            self._cancel_drag()
+            return
+
+        source_slot_id = self.equipment_slot_ids[self._drag_source_equipment_index]
+        target_slot_id = self.equipment_slot_ids[index]
+        source_state = self.equipment.get_slot(source_slot_id)
+        target_state = self.equipment.get_slot(target_slot_id)
+        if source_state is None or target_state is None:
+            self._cancel_drag()
+            return
+
+        dragged_template = self._dragged_stack.template
+        if not target_state.definition.accepts(dragged_template):
+            self._cancel_drag()
+            return
+
+        existing_item = target_state.item
+        if existing_item is not None and not source_state.definition.accepts(
+            existing_item
+        ):
+            self._cancel_drag()
+            return
+
+        equipped = self.equipment.equip(target_slot_id, dragged_template)
+        if not equipped:
+            self._cancel_drag()
+            return
+
+        if existing_item is not None:
+            self.equipment.equip(source_slot_id, existing_item)
+
+        self._reset_drag_state()
+        self.update()
+
+    def _place_item_in_inventory(
+        self, template: ItemTemplate, *, preferred_index: int | None = None
+    ) -> bool:
+        if (
+            preferred_index is not None
+            and 0 <= preferred_index < len(self.inventory.stacks)
+            and self.inventory.stacks[preferred_index] is None
+        ):
+            self.inventory.stacks[preferred_index] = InventoryStack(
+                template=template,
+                quantity=1,
+            )
+            return True
+
+        remainder = self.inventory.add_item(template, 1)
+        return remainder == 0
 
     def _set_drag_description(self, stack: InventoryStack) -> None:
         lines = [
