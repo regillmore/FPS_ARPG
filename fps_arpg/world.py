@@ -259,9 +259,9 @@ class GameWorld:
 
         if not self.tabbed_menu.is_visible:
             self.tabbed_menu.show()
+            self._set_paused(True)
 
         self.tabbed_menu.select_tab(tab)
-        self._set_paused(tab == TabbedMenu.TAB_INVENTORY)
 
 
 __all__ = ["GameWorld"]
