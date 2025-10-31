@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from direct.gui.DirectGui import DirectButton, DirectFrame, OnscreenText
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import ClockObject, TextNode, Vec3, WindowProperties
@@ -176,6 +178,8 @@ class GameWorld:
         self.heading = 0.0
         self.pitch = 0.0
 
+        self.player_stats = PlayerStats()
+
         self.key_map: dict[str, bool] = {
             "forward": False,
             "back": False,
@@ -189,6 +193,7 @@ class GameWorld:
         self._setup_camera()
         self._setup_controls()
         self._setup_hud()
+        self._setup_stats_menu()
 
         self._task_name = "update_game_world"
         self.app.taskMgr.add(self._update_task, self._task_name)
@@ -225,15 +230,22 @@ class GameWorld:
         self._bind("d", "right", True)
         self._bind("d-up", "right", False)
 
+        self.app.accept("tab", self._toggle_stats_menu)
+        self._accepted_events.append("tab")
+
     def _setup_hud(self) -> None:
         self.hud_text = OnscreenText(
-            text="WASD to move, Mouse to look",
+            text="WASD to move, Mouse to look, TAB for stats",
             pos=(0, 0.9),
             scale=0.05,
             fg=(0.9, 0.9, 0.9, 1),
             align=TextNode.ACenter,
             mayChange=False,
         )
+
+    def _setup_stats_menu(self) -> None:
+        self.stats_menu = StatsMenu(self.player_stats)
+        self.stats_menu.hide()
 
     # Event helpers ---------------------------------------------------
     def _bind(self, event_name: str, key: str, value: bool) -> None:
@@ -246,8 +258,11 @@ class GameWorld:
     # Update loop -----------------------------------------------------
     def _update_task(self, task) -> int:
         dt = ClockObject.getGlobalClock().getDt()
+        self.player_stats.tick(dt)
         self._update_mouse_look()
         self._update_movement(dt)
+        if self.stats_menu.is_visible:
+            self.stats_menu.update()
         return task.cont
 
     def _update_mouse_look(self) -> None:
@@ -300,6 +315,10 @@ class GameWorld:
         props.setCursorHidden(False)
         self.app.win.requestProperties(props)
 
+        if hasattr(self, "stats_menu") and self.stats_menu is not None:
+            self.stats_menu.destroy()
+            self.stats_menu = None
+
         if hasattr(self, "hud_text") and self.hud_text is not None:
             self.hud_text.destroy()
             self.hud_text = None
@@ -309,6 +328,180 @@ class GameWorld:
         self.app.camera.setHpr(0, 0, 0)
 
         self.root.removeNode()
+
+    # UI actions ------------------------------------------------------
+    def _toggle_stats_menu(self) -> None:
+        if self.stats_menu.is_visible:
+            self.stats_menu.hide()
+        else:
+            self.stats_menu.show()
+            self.stats_menu.update()
+
+
+@dataclass
+class PlayerStats:
+    """Lightweight RPG stats container with a few helper operations."""
+
+    level: int = 1
+    xp: int = 0
+    xp_to_next: int = 100
+    max_health: float = 120.0
+    health: float = 120.0
+    max_focus: float = 60.0
+    focus: float = 60.0
+    strength: int = 12
+    agility: int = 10
+    willpower: int = 8
+    points_available: int = 0
+    health_regen: float = 1.5
+    focus_regen: float = 3.0
+
+    def __post_init__(self) -> None:
+        self.health = min(self.health, self.max_health)
+        self.focus = min(self.focus, self.max_focus)
+
+    # Core operations -------------------------------------------------
+    def apply_damage(self, amount: float) -> None:
+        """Reduce health by ``amount`` without dropping below zero."""
+
+        if amount <= 0:
+            return
+        self.health = max(0.0, self.health - amount)
+
+    def heal(self, amount: float) -> None:
+        """Restore health while respecting the maximum."""
+
+        if amount <= 0:
+            return
+        self.health = min(self.max_health, self.health + amount)
+
+    def spend_focus(self, amount: float) -> bool:
+        """Try to spend focus; return ``True`` on success."""
+
+        if amount <= 0:
+            return True
+        if self.focus < amount:
+            return False
+        self.focus -= amount
+        return True
+
+    def restore_focus(self, amount: float) -> None:
+        if amount <= 0:
+            return
+        self.focus = min(self.max_focus, self.focus + amount)
+
+    def gain_xp(self, amount: int) -> None:
+        if amount <= 0:
+            return
+
+        self.xp += amount
+        while self.xp >= self.xp_to_next:
+            self.xp -= self.xp_to_next
+            self._level_up()
+
+    # Update ----------------------------------------------------------
+    def tick(self, dt: float) -> None:
+        """Passive regeneration tick called each frame."""
+
+        if dt <= 0:
+            return
+
+        if self.health < self.max_health:
+            self.health = min(self.max_health, self.health + self.health_regen * dt)
+
+        if self.focus < self.max_focus:
+            self.focus = min(self.max_focus, self.focus + self.focus_regen * dt)
+
+    # Internal helpers ------------------------------------------------
+    def _level_up(self) -> None:
+        self.level += 1
+        self.points_available += 3
+
+        self.max_health += 8 + self.strength * 0.5
+        self.max_focus += 5 + self.willpower * 0.4
+        self.health = self.max_health
+        self.focus = self.max_focus
+
+        self.xp_to_next = int(self.xp_to_next * 1.25)
+
+    # Formatting helpers ---------------------------------------------
+    def build_summary_lines(self) -> list[str]:
+        """Generate user-facing lines describing the current stats."""
+
+        return [
+            f"Level {self.level}",
+            f"XP: {self.xp} / {self.xp_to_next}",
+            "",
+            f"Health: {int(self.health)} / {int(self.max_health)}",
+            f"Focus: {int(self.focus)} / {int(self.max_focus)}",
+            "",
+            f"Strength: {self.strength}",
+            f"Agility: {self.agility}",
+            f"Willpower: {self.willpower}",
+            "",
+            f"Ability Points Available: {self.points_available}",
+        ]
+
+
+class StatsMenu:
+    """Lightweight overlay that visualises :class:`PlayerStats`."""
+
+    def __init__(self, stats: PlayerStats) -> None:
+        self.stats = stats
+        self.frame = DirectFrame(
+            frameColor=(0.05, 0.05, 0.07, 0.85),
+            frameSize=(-0.75, 0.75, -0.6, 0.6),
+        )
+        self.title = OnscreenText(
+            text="Operative Profile",
+            parent=self.frame,
+            pos=(0, 0.5),
+            scale=0.08,
+            fg=(0.95, 0.92, 0.8, 1),
+            shadow=(0, 0, 0, 0.8),
+            align=TextNode.ACenter,
+            mayChange=False,
+        )
+        self.body = OnscreenText(
+            text="",
+            parent=self.frame,
+            pos=(-0.7, 0.35),
+            scale=0.055,
+            fg=(0.85, 0.88, 1, 1),
+            align=TextNode.ALeft,
+            mayChange=True,
+        )
+        self.footer = OnscreenText(
+            text="TAB - Close",
+            parent=self.frame,
+            pos=(0, -0.55),
+            scale=0.045,
+            fg=(0.7, 0.75, 0.95, 1),
+            align=TextNode.ACenter,
+            mayChange=False,
+        )
+
+        self.is_visible = True
+
+    def update(self) -> None:
+        lines = self.stats.build_summary_lines()
+        self.body.setText("\n".join(lines))
+
+    def show(self) -> None:
+        self.frame.show()
+        self.is_visible = True
+
+    def hide(self) -> None:
+        self.frame.hide()
+        self.is_visible = False
+
+    def destroy(self) -> None:
+        for widget in ("footer", "body", "title", "frame"):
+            element = getattr(self, widget, None)
+            if element is not None:
+                element.destroy()
+                setattr(self, widget, None)
+
 
 
 if __name__ == "__main__":
