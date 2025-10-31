@@ -179,6 +179,8 @@ class GameWorld:
         self.pitch = 0.0
 
         self.player_stats = PlayerStats()
+        self.inventory = Inventory()
+        self._seed_debug_items()
 
         self.key_map: dict[str, bool] = {
             "forward": False,
@@ -194,6 +196,7 @@ class GameWorld:
         self._setup_controls()
         self._setup_hud()
         self._setup_stats_menu()
+        self._setup_inventory_menu()
 
         self._task_name = "update_game_world"
         self.app.taskMgr.add(self._update_task, self._task_name)
@@ -232,10 +235,12 @@ class GameWorld:
 
         self.app.accept("tab", self._toggle_stats_menu)
         self._accepted_events.append("tab")
+        self.app.accept("i", self._toggle_inventory_menu)
+        self._accepted_events.append("i")
 
     def _setup_hud(self) -> None:
         self.hud_text = OnscreenText(
-            text="WASD to move, Mouse to look, TAB for stats",
+            text="WASD to move, Mouse to look, TAB stats, I inventory",
             pos=(0, 0.9),
             scale=0.05,
             fg=(0.9, 0.9, 0.9, 1),
@@ -246,6 +251,47 @@ class GameWorld:
     def _setup_stats_menu(self) -> None:
         self.stats_menu = StatsMenu(self.player_stats)
         self.stats_menu.hide()
+
+    def _setup_inventory_menu(self) -> None:
+        self.inventory_menu = InventoryMenu(self.inventory)
+        self.inventory_menu.hide()
+
+    def _seed_debug_items(self) -> None:
+        """Populate the prototype inventory with a few sample items."""
+
+        samples = [
+            (ItemTemplate(
+                id="field_medkit",
+                name="Field Medkit",
+                description="Restores a large chunk of health when deployed.",
+                category="Consumable",
+                stack_limit=5,
+            ), 3),
+            (ItemTemplate(
+                id="focus_ampoule",
+                name="Focus Ampoule",
+                description="A stimulant vial that restores tactical focus.",
+                category="Consumable",
+                stack_limit=10,
+            ), 5),
+            (ItemTemplate(
+                id="sentinel_rifle",
+                name="Sentinel Rifle",
+                description="A precision marksman rifle from the Aegis program.",
+                category="Primary Weapon",
+                stack_limit=1,
+            ), 1),
+            (ItemTemplate(
+                id="aegis_operative_badge",
+                name="Operative Badge",
+                description="Identification marking elite Aegis operatives.",
+                category="Quest Item",
+                stack_limit=1,
+            ), 1),
+        ]
+
+        for template, qty in samples:
+            self.inventory.add_item(template, qty)
 
     # Event helpers ---------------------------------------------------
     def _bind(self, event_name: str, key: str, value: bool) -> None:
@@ -263,6 +309,8 @@ class GameWorld:
         self._update_movement(dt)
         if self.stats_menu.is_visible:
             self.stats_menu.update()
+        if self.inventory_menu.is_visible:
+            self.inventory_menu.update()
         return task.cont
 
     def _update_mouse_look(self) -> None:
@@ -318,6 +366,9 @@ class GameWorld:
         if hasattr(self, "stats_menu") and self.stats_menu is not None:
             self.stats_menu.destroy()
             self.stats_menu = None
+        if hasattr(self, "inventory_menu") and self.inventory_menu is not None:
+            self.inventory_menu.destroy()
+            self.inventory_menu = None
 
         if hasattr(self, "hud_text") and self.hud_text is not None:
             self.hud_text.destroy()
@@ -334,8 +385,19 @@ class GameWorld:
         if self.stats_menu.is_visible:
             self.stats_menu.hide()
         else:
+            if self.inventory_menu.is_visible:
+                self.inventory_menu.hide()
             self.stats_menu.show()
             self.stats_menu.update()
+
+    def _toggle_inventory_menu(self) -> None:
+        if self.inventory_menu.is_visible:
+            self.inventory_menu.hide()
+        else:
+            if self.stats_menu.is_visible:
+                self.stats_menu.hide()
+            self.inventory_menu.show()
+            self.inventory_menu.update()
 
 
 @dataclass
@@ -443,6 +505,123 @@ class PlayerStats:
         ]
 
 
+@dataclass
+class ItemTemplate:
+    """Static definition describing an inventory item."""
+
+    id: str
+    name: str
+    description: str
+    category: str
+    stack_limit: int = 1
+
+    def __post_init__(self) -> None:
+        if self.stack_limit < 1:
+            raise ValueError("stack_limit must be at least 1")
+
+
+@dataclass
+class InventoryStack:
+    """Represents a stack of identical items stored together."""
+
+    template: ItemTemplate
+    quantity: int = 0
+
+    def space_remaining(self) -> int:
+        return max(0, self.template.stack_limit - self.quantity)
+
+
+class Inventory:
+    """Simple inventory container supporting stackable items."""
+
+    def __init__(self, capacity: int = 24) -> None:
+        self.capacity = capacity
+        self.stacks: list[InventoryStack] = []
+
+    # Core management -------------------------------------------------
+    def add_item(self, template: ItemTemplate, quantity: int = 1) -> int:
+        """Add ``quantity`` items and return any remainder not stored."""
+
+        if quantity <= 0:
+            return 0
+
+        remaining = quantity
+
+        # Fill existing stacks first.
+        for stack in self.stacks:
+            if stack.template.id != template.id:
+                continue
+            space = stack.space_remaining()
+            if space <= 0:
+                continue
+            to_add = min(space, remaining)
+            stack.quantity += to_add
+            remaining -= to_add
+            if remaining == 0:
+                return 0
+
+        # Create new stacks if there is capacity remaining.
+        while remaining > 0 and len(self.stacks) < self.capacity:
+            to_add = min(template.stack_limit, remaining)
+            self.stacks.append(InventoryStack(template=template, quantity=to_add))
+            remaining -= to_add
+
+        return remaining
+
+    def remove_item(self, item_id: str, quantity: int = 1) -> int:
+        """Remove items matching ``item_id`` and return the amount removed."""
+
+        if quantity <= 0:
+            return 0
+
+        removed = 0
+        for stack in list(self.stacks):
+            if stack.template.id != item_id:
+                continue
+            take = min(stack.quantity, quantity - removed)
+            stack.quantity -= take
+            removed += take
+            if stack.quantity == 0:
+                self.stacks.remove(stack)
+            if removed >= quantity:
+                break
+        return removed
+
+    # Query helpers ---------------------------------------------------
+    def count_unique(self) -> int:
+        return len(self.stacks)
+
+    def is_full(self) -> bool:
+        return self.count_unique() >= self.capacity
+
+    def build_summary_lines(self) -> list[str]:
+        """Return formatted lines suitable for the inventory UI."""
+
+        lines: list[str] = [
+            f"Capacity: {self.count_unique()} / {self.capacity}",
+            "",
+        ]
+
+        if not self.stacks:
+            lines.append("Inventory is empty.")
+            return lines
+
+        for index, stack in enumerate(self.stacks, start=1):
+            lines.append(f"{index:02}. {stack.template.name}")
+            lines.append(
+                f"    {stack.template.category}  x{stack.quantity}"
+                + (" (Full)" if stack.space_remaining() == 0 else "")
+            )
+            if stack.template.description:
+                lines.append(f"    {stack.template.description}")
+            lines.append("")
+
+        if lines[-1] == "":
+            lines.pop()
+
+        return lines
+
+
 class StatsMenu:
     """Lightweight overlay that visualises :class:`PlayerStats`."""
 
@@ -485,6 +664,71 @@ class StatsMenu:
 
     def update(self) -> None:
         lines = self.stats.build_summary_lines()
+        self.body.setText("\n".join(lines))
+
+    def show(self) -> None:
+        self.frame.show()
+        self.is_visible = True
+
+    def hide(self) -> None:
+        self.frame.hide()
+        self.is_visible = False
+
+    def destroy(self) -> None:
+        for widget in ("footer", "body", "title", "frame"):
+            element = getattr(self, widget, None)
+            if element is not None:
+                element.destroy()
+                setattr(self, widget, None)
+
+
+class InventoryMenu:
+    """Overlay that renders the current contents of an :class:`Inventory`."""
+
+    def __init__(self, inventory: Inventory) -> None:
+        self.inventory = inventory
+        self.frame = DirectFrame(
+            frameColor=(0.08, 0.07, 0.09, 0.92),
+            frameSize=(-0.9, 0.9, -0.7, 0.7),
+        )
+        self.title = OnscreenText(
+            text="Field Inventory",
+            parent=self.frame,
+            pos=(0, 0.58),
+            scale=0.08,
+            fg=(0.95, 0.95, 0.85, 1),
+            shadow=(0, 0, 0, 0.8),
+            align=TextNode.ACenter,
+            mayChange=False,
+        )
+        self.body = OnscreenText(
+            text="",
+            parent=self.frame,
+            pos=(-0.82, 0.45),
+            scale=0.055,
+            fg=(0.9, 0.9, 1, 1),
+            align=TextNode.ALeft,
+            mayChange=True,
+            wordwrap=32,
+        )
+        self.footer = OnscreenText(
+            text="I - Close",
+            parent=self.frame,
+            pos=(0, -0.62),
+            scale=0.045,
+            fg=(0.7, 0.8, 1, 1),
+            align=TextNode.ACenter,
+            mayChange=False,
+        )
+
+        self.is_visible = True
+
+    def update(self) -> None:
+        lines = self.inventory.build_summary_lines()
+        # Add a helpful reminder if the inventory is nearing capacity.
+        if self.inventory.is_full():
+            lines.append("")
+            lines.append("Inventory full - clear space to loot more gear.")
         self.body.setText("\n".join(lines))
 
     def show(self) -> None:
