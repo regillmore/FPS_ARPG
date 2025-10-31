@@ -606,7 +606,7 @@ class InventoryMenu:
 
         mouse_x = base.mouseWatcherNode.getMouseX()
         mouse_y = base.mouseWatcherNode.getMouseY()
-        self._drag_label.setPos(mouse_x, 0, mouse_y)
+        self._drag_label.setPos(mouse_x, mouse_y)
         self._drag_label.show()
 
     def _on_cancel_drag_event(self, _event: object | None = None) -> None:
