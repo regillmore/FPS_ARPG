@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from direct.gui import DirectGuiGlobals as DGG
 from direct.gui.DirectGui import DirectButton, DirectFrame, OnscreenText
+from direct.showbase import ShowBaseGlobal
 from panda3d.core import TextNode
 
 from .inventory import Inventory, InventoryStack
@@ -267,13 +268,30 @@ class InventoryMenu:
         self._default_slot_color = (0.16, 0.17, 0.22, 0.95)
         self._full_slot_color = (0.25, 0.18, 0.18, 0.95)
         self._hover_slot_color = (0.4, 0.4, 0.55, 1)
+        self._selected_slot_color = (0.5, 0.4, 0.25, 1)
 
         self.slot_count = self.GRID_COLUMNS * self.GRID_ROWS
         self.slots: list[DirectButton] = []
         self.slot_contents: list[InventoryStack | None] = [None] * self.slot_count
         self._current_hover_index: int | None = None
+        self._dragged_stack: InventoryStack | None = None
+        self._drag_source_index: int | None = None
+
+        drag_parent = getattr(ShowBaseGlobal, "aspect2d", None)
+        self._drag_label = OnscreenText(
+            text="",
+            parent=drag_parent,
+            pos=(0, 0),
+            scale=0.055,
+            fg=(0.96, 0.96, 0.88, 1),
+            shadow=(0, 0, 0, 0.9),
+            align=TextNode.ACenter,
+            mayChange=True,
+        )
+        self._drag_label.hide()
 
         self._create_slots()
+        self.frame.bind(DGG.B3PRESS, self._on_cancel_drag_event)
         self.detail_window.hide()
         self._set_default_description()
 
@@ -309,6 +327,8 @@ class InventoryMenu:
                     pressEffect=False,
                     rolloverSound=None,
                     clickSound=None,
+                    command=self._on_slot_clicked,
+                    extraArgs=[index],
                 )
                 button.bind(DGG.ENTER, self._on_slot_hover, [index])
                 button.bind(DGG.EXIT, self._on_slot_exit, [index])
@@ -322,16 +342,11 @@ class InventoryMenu:
             self.slot_contents[index] = stack
             if stack is None:
                 slot["text"] = ""
-                slot["frameColor"] = self._empty_slot_color
             else:
                 slot["text"] = f"{stack.template.name}\n x{stack.quantity}"
-                if stack.template.stack_limit > 1 and stack.space_remaining() == 0:
-                    slot["frameColor"] = self._full_slot_color
-                else:
-                    slot["frameColor"] = self._default_slot_color
 
-            if self._current_hover_index == index:
-                slot["frameColor"] = self._hover_slot_color
+        for index in range(len(self.slots)):
+            self._apply_slot_visual(index)
 
         capacity_line = (
             f"Capacity: {self.inventory.count_unique()} / {self.inventory.capacity}"
@@ -344,20 +359,29 @@ class InventoryMenu:
         else:
             self.capacity_hint.setText("")
 
-        self._refresh_hover_description()
+        if self._dragged_stack is None:
+            self._refresh_hover_description()
+
+        self._update_drag_visual()
 
     def show(self) -> None:
         self.frame.show()
         self.is_visible = True
+        self._cancel_drag()
         self._clear_hover_state()
         self.update()
 
     def hide(self) -> None:
         self.frame.hide()
         self.is_visible = False
+        self._cancel_drag()
         self._clear_hover_state()
 
     def destroy(self) -> None:
+        self._cancel_drag()
+        if getattr(self, "_drag_label", None) is not None:
+            self._drag_label.destroy()
+            self._drag_label = None
         for slot in getattr(self, "slots", []):
             slot.destroy()
         self.slots = []
@@ -385,24 +409,60 @@ class InventoryMenu:
             self._apply_slot_visual(index)
         self.detail_window.hide()
 
+    def _on_slot_clicked(self, index: int) -> None:
+        if index >= len(self.slot_contents):
+            return
+
+        if self._dragged_stack is None:
+            stack = self.slot_contents[index]
+            if stack is None:
+                return
+            self._start_drag(index, stack)
+            return
+
+        if self._drag_source_index is None:
+            self._cancel_drag()
+            return
+
+        if index == self._drag_source_index:
+            self._cancel_drag()
+            return
+
+        moved = self.inventory.move_stack(self._drag_source_index, index)
+        self._dragged_stack = None
+        self._drag_source_index = None
+        if self._drag_label is not None:
+            self._drag_label.hide()
+        if moved:
+            self.update()
+        else:
+            self._refresh_all_slot_visuals()
+            self._refresh_hover_description()
+
     def _on_slot_hover(self, index: int, _event: object | None = None) -> None:
         if index >= len(self.slots):
             return
         self._current_hover_index = index
         self.slots[index]["frameColor"] = self._hover_slot_color
-        self._position_detail_window(index)
-        self._apply_description(index)
+        self._refresh_hover_description()
 
     def _on_slot_exit(self, index: int, _event: object | None = None) -> None:
         if index >= len(self.slots):
             return
         if self._current_hover_index == index:
             self._current_hover_index = None
-            self._set_default_description()
-            self.detail_window.hide()
+            if self._dragged_stack is not None and self._drag_source_index is not None:
+                self._set_drag_description(self._dragged_stack)
+            else:
+                self._set_default_description()
+                self.detail_window.hide()
         self._apply_slot_visual(index)
 
     def _refresh_hover_description(self) -> None:
+        if self._dragged_stack is not None and self._drag_source_index is not None:
+            if self._current_hover_index is None:
+                self._set_drag_description(self._dragged_stack)
+                return
         if self._current_hover_index is None:
             self._set_default_description()
             self.detail_window.hide()
@@ -413,7 +473,13 @@ class InventoryMenu:
             self.detail_window.hide()
             return
         self._position_detail_window(self._current_hover_index)
-        self._apply_description(self._current_hover_index)
+        if (
+            self._dragged_stack is not None
+            and self._drag_source_index == self._current_hover_index
+        ):
+            self._set_drag_description(self._dragged_stack)
+        else:
+            self._apply_description(self._current_hover_index)
 
     def _apply_slot_visual(self, index: int) -> None:
         stack = self.slot_contents[index]
@@ -421,12 +487,50 @@ class InventoryMenu:
         if self._current_hover_index == index:
             slot["frameColor"] = self._hover_slot_color
             return
+        if self._dragged_stack is not None and self._drag_source_index == index:
+            slot["frameColor"] = self._selected_slot_color
+            return
         if stack is None:
             slot["frameColor"] = self._empty_slot_color
         elif stack.template.stack_limit > 1 and stack.space_remaining() == 0:
             slot["frameColor"] = self._full_slot_color
         else:
             slot["frameColor"] = self._default_slot_color
+
+    def _start_drag(self, index: int, stack: InventoryStack) -> None:
+        self._dragged_stack = stack
+        self._drag_source_index = index
+        if self._drag_label is not None:
+            self._drag_label.setText(f"{stack.template.name}\n x{stack.quantity}")
+            self._drag_label.show()
+        self._update_drag_visual()
+        self._set_drag_description(stack)
+        self._refresh_all_slot_visuals()
+
+    def _cancel_drag(self) -> None:
+        if self._dragged_stack is None:
+            return
+        self._dragged_stack = None
+        self._drag_source_index = None
+        if self._drag_label is not None:
+            self._drag_label.hide()
+        self._refresh_all_slot_visuals()
+        self._refresh_hover_description()
+
+    def _set_drag_description(self, stack: InventoryStack) -> None:
+        lines = [
+            f"Quantity: {stack.quantity}",
+            "",
+            "Click another slot to move this stack.",
+            "Right click to cancel.",
+        ]
+        self.detail_title.setText(f"Moving: {stack.template.name}")
+        self.detail_body.setText("\n".join(lines))
+        self.detail_window.show()
+
+    def _refresh_all_slot_visuals(self) -> None:
+        for idx in range(len(self.slots)):
+            self._apply_slot_visual(idx)
 
     def _set_default_description(self) -> None:
         self.detail_title.setText("Item Details")
@@ -485,6 +589,28 @@ class InventoryMenu:
         z = max(-0.35, min(0.45, z))
 
         self.detail_window.setPos(x, 0, z)
+
+    def _update_drag_visual(self) -> None:
+        if self._dragged_stack is None or self._drag_label is None:
+            if self._drag_label is not None:
+                self._drag_label.hide()
+            return
+
+        base = ShowBaseGlobal.base
+        if base is None or base.mouseWatcherNode is None:
+            self._drag_label.hide()
+            return
+        if not base.mouseWatcherNode.hasMouse():
+            self._drag_label.hide()
+            return
+
+        mouse_x = base.mouseWatcherNode.getMouseX()
+        mouse_y = base.mouseWatcherNode.getMouseY()
+        self._drag_label.setPos(mouse_x, mouse_y)
+        self._drag_label.show()
+
+    def _on_cancel_drag_event(self, _event: object | None = None) -> None:
+        self._cancel_drag()
 
 
 class TabbedMenu:
