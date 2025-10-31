@@ -896,6 +896,7 @@ class InventoryMenu:
                 button.bind(DGG.ENTER, self._on_slot_hover, [index])
                 button.bind(DGG.EXIT, self._on_slot_exit, [index])
                 button.bind(DGG.B1PRESS, self._on_slot_press, [index])
+                button.bind(DGG.B1RELEASE, self._on_global_release)
                 self.slots.append(button)
                 index += 1
 
