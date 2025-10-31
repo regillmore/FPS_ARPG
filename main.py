@@ -752,6 +752,7 @@ class InventoryMenu:
             frameSize=(-0.35, 0.35, -0.25, 0.25),
             borderWidth=(0.01, 0.01),
             relief=1,
+            sortOrder=100,
         )
         self.detail_title = OnscreenText(
             text="",
