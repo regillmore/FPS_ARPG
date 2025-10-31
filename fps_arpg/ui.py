@@ -331,7 +331,7 @@ class InventoryMenu:
             mayChange=False,
         )
 
-        slot_height = 0.19
+        slot_height = 0.15
         spacing = 0.045
         start_z = 0.31
 
