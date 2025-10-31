@@ -1,0 +1,37 @@
+# Compiled Python files
+*.pyc
+fps_arpg/__pycache__/
+
+# Panda3D specific files
+*.egg
+*.bam
+*.prc
+*.pdef
+*.pstats
+*.log
+
+# Build artifacts and temporary files
+build/
+dist/
+tmp/
+temp/
+
+# Operating system specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE and editor specific files (examples)
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.bak
+*~
+
+# Virtual environment files
+venv/
+env/
+
+# Dependency management files (if used)
+pip-wheel-metadata/
