@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from direct.gui.DirectGui import OnscreenText
 from panda3d.core import ClockObject, TextNode, Vec3, WindowProperties
 
+from .equipment import EquipmentLoadout
 from .inventory import Inventory, ItemTemplate
 from .stats import PlayerStats
 from .ui import TabbedMenu
@@ -35,6 +36,7 @@ class GameWorld:
 
         self.player_stats = PlayerStats()
         self.inventory = Inventory()
+        self.equipment = EquipmentLoadout()
         self._seed_debug_items()
 
         self.key_map: dict[str, bool] = {
@@ -100,11 +102,69 @@ class GameWorld:
         )
 
     def _setup_tabbed_menu(self) -> None:
-        self.tabbed_menu = TabbedMenu(self.player_stats, self.inventory)
+        self.tabbed_menu = TabbedMenu(
+            self.player_stats, self.inventory, self.equipment
+        )
         self.tabbed_menu.hide()
 
     def _seed_debug_items(self) -> None:
         """Populate the prototype inventory with a few sample items."""
+
+        gear_templates = [
+            (
+                ItemTemplate(
+                    id="aegis_recon_visor",
+                    name="Recon Visor",
+                    description="Advanced optics suite hardened for combat ops.",
+                    category="Armor - Head",
+                    stack_limit=1,
+                ),
+                "head",
+            ),
+            (
+                ItemTemplate(
+                    id="aegis_breastplate",
+                    name="Ballistic Carapace",
+                    description="Reactive plating that disperses high-calibre impacts.",
+                    category="Armor - Chest",
+                    stack_limit=1,
+                ),
+                "chest",
+            ),
+            (
+                ItemTemplate(
+                    id="aegis_vambraces",
+                    name="Kinetic Vambraces",
+                    description="Servo-assisted forearm guards for melee deflection.",
+                    category="Armor - Arms",
+                    stack_limit=1,
+                ),
+                "arms",
+            ),
+            (
+                ItemTemplate(
+                    id="aegis_greaves",
+                    name="Mobility Greaves",
+                    description="Stabilised leg armor that enhances jump resilience.",
+                    category="Armor - Legs",
+                    stack_limit=1,
+                ),
+                "legs",
+            ),
+            (
+                ItemTemplate(
+                    id="aegis_psionic_relic",
+                    name="Psionic Resonator",
+                    description="Artifact that boosts tactical focus regeneration.",
+                    category="Artifact",
+                    stack_limit=1,
+                ),
+                "artifact",
+            ),
+        ]
+
+        for template, slot_id in gear_templates:
+            self.equipment.equip(slot_id, template)
 
         samples = [
             (ItemTemplate(
@@ -133,6 +193,20 @@ class GameWorld:
                 name="Operative Badge",
                 description="Identification marking elite Aegis operatives.",
                 category="Quest Item",
+                stack_limit=1,
+            ), 1),
+            (ItemTemplate(
+                id="reserve_arm_guards",
+                name="Reserve Arm Guards",
+                description="Spare gauntlets stored for emergency deployment.",
+                category="Armor - Arms",
+                stack_limit=1,
+            ), 1),
+            (ItemTemplate(
+                id="lunar_focus_charm",
+                name="Lunar Focus Charm",
+                description="A miniature relic humming with psionic energy.",
+                category="Artifact",
                 stack_limit=1,
             ), 1),
         ]
