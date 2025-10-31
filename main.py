@@ -560,7 +560,7 @@ class Inventory:
 
     def __init__(self, capacity: int = 24) -> None:
         self.capacity = capacity
-        self.stacks: list[InventoryStack] = []
+        self.stacks: list[InventoryStack | None] = [None] * capacity
 
     # Core management -------------------------------------------------
     def add_item(self, template: ItemTemplate, quantity: int = 1) -> int:
@@ -573,6 +573,8 @@ class Inventory:
 
         # Fill existing stacks first.
         for stack in self.stacks:
+            if stack is None:
+                continue
             if stack.template.id != template.id:
                 continue
             space = stack.space_remaining()
@@ -585,10 +587,17 @@ class Inventory:
                 return 0
 
         # Create new stacks if there is capacity remaining.
-        while remaining > 0 and len(self.stacks) < self.capacity:
+        if remaining <= 0:
+            return 0
+
+        for index, stack in enumerate(self.stacks):
+            if stack is not None:
+                continue
             to_add = min(template.stack_limit, remaining)
-            self.stacks.append(InventoryStack(template=template, quantity=to_add))
+            self.stacks[index] = InventoryStack(template=template, quantity=to_add)
             remaining -= to_add
+            if remaining == 0:
+                break
 
         return remaining
 
@@ -599,24 +608,68 @@ class Inventory:
             return 0
 
         removed = 0
-        for stack in list(self.stacks):
+        for index, stack in enumerate(self.stacks):
+            if stack is None:
+                continue
             if stack.template.id != item_id:
                 continue
             take = min(stack.quantity, quantity - removed)
             stack.quantity -= take
             removed += take
             if stack.quantity == 0:
-                self.stacks.remove(stack)
+                self.stacks[index] = None
             if removed >= quantity:
                 break
         return removed
 
     # Query helpers ---------------------------------------------------
     def count_unique(self) -> int:
-        return len(self.stacks)
+        return sum(1 for stack in self.stacks if stack is not None)
 
     def is_full(self) -> bool:
-        return self.count_unique() >= self.capacity
+        return all(stack is not None for stack in self.stacks)
+
+    def get_stack(self, index: int) -> InventoryStack | None:
+        if 0 <= index < self.capacity:
+            return self.stacks[index]
+        return None
+
+    def move_stack(self, src_index: int, dest_index: int) -> bool:
+        """Move or merge a stack between slots.
+
+        Returns ``True`` if the inventory was modified.
+        """
+
+        if src_index == dest_index:
+            return False
+        if not (0 <= src_index < self.capacity and 0 <= dest_index < self.capacity):
+            return False
+
+        src_stack = self.stacks[src_index]
+        dest_stack = self.stacks[dest_index]
+
+        if src_stack is None:
+            return False
+
+        if dest_stack is None:
+            self.stacks[dest_index] = src_stack
+            self.stacks[src_index] = None
+            return True
+
+        if dest_stack.template.id == src_stack.template.id:
+            if dest_stack.template.stack_limit > 1:
+                available = dest_stack.space_remaining()
+                if available > 0:
+                    transfer = min(available, src_stack.quantity)
+                    dest_stack.quantity += transfer
+                    src_stack.quantity -= transfer
+                    if src_stack.quantity == 0:
+                        self.stacks[src_index] = None
+                    return transfer > 0
+                return False
+
+        self.stacks[dest_index], self.stacks[src_index] = src_stack, dest_stack
+        return True
 
     def build_summary_lines(self) -> list[str]:
         """Return formatted lines suitable for the inventory UI."""
@@ -626,12 +679,15 @@ class Inventory:
             "",
         ]
 
-        if not self.stacks:
+        if self.count_unique() == 0:
             lines.append("Inventory is empty.")
             return lines
 
-        for index, stack in enumerate(self.stacks, start=1):
-            lines.append(f"{index:02}. {stack.template.name}")
+        display_index = 1
+        for stack in self.stacks:
+            if stack is None:
+                continue
+            lines.append(f"{display_index:02}. {stack.template.name}")
             lines.append(
                 f"    {stack.template.category}  x{stack.quantity}"
                 + (" (Full)" if stack.space_remaining() == 0 else "")
@@ -639,6 +695,7 @@ class Inventory:
             if stack.template.description:
                 lines.append(f"    {stack.template.description}")
             lines.append("")
+            display_index += 1
 
         if lines[-1] == "":
             lines.pop()
@@ -790,15 +847,18 @@ class InventoryMenu:
         self._default_slot_color = (0.16, 0.17, 0.22, 0.95)
         self._full_slot_color = (0.25, 0.18, 0.18, 0.95)
         self._hover_slot_color = (0.4, 0.4, 0.55, 1)
+        self._drag_slot_color = (0.55, 0.42, 0.22, 1)
 
         self.slot_count = self.GRID_COLUMNS * self.GRID_ROWS
         self.slots: list[DirectButton] = []
         self.slot_contents: list[InventoryStack | None] = [None] * self.slot_count
         self._current_hover_index: int | None = None
+        self._drag_origin_index: int | None = None
 
         self._create_slots()
         self.detail_window.hide()
         self._set_default_description()
+        self.frame.bind(DGG.B1RELEASE, self._on_global_release)
 
     def _create_slots(self) -> None:
         slot_width = 0.22
@@ -835,26 +895,19 @@ class InventoryMenu:
                 )
                 button.bind(DGG.ENTER, self._on_slot_hover, [index])
                 button.bind(DGG.EXIT, self._on_slot_exit, [index])
+                button.bind(DGG.B1PRESS, self._on_slot_press, [index])
                 self.slots.append(button)
                 index += 1
 
     def update(self) -> None:
-        stacks = self.inventory.stacks
         for index, slot in enumerate(self.slots):
-            stack = stacks[index] if index < len(stacks) else None
+            stack = self.inventory.get_stack(index)
             self.slot_contents[index] = stack
             if stack is None:
                 slot["text"] = ""
-                slot["frameColor"] = self._empty_slot_color
             else:
                 slot["text"] = f"{stack.template.name}\n x{stack.quantity}"
-                if stack.template.stack_limit > 1 and stack.space_remaining() == 0:
-                    slot["frameColor"] = self._full_slot_color
-                else:
-                    slot["frameColor"] = self._default_slot_color
-
-            if self._current_hover_index == index:
-                slot["frameColor"] = self._hover_slot_color
+            self._apply_slot_visual(index)
 
         capacity_line = (
             f"Capacity: {self.inventory.count_unique()} / {self.inventory.capacity}"
@@ -903,6 +956,7 @@ class InventoryMenu:
 
     def _clear_hover_state(self) -> None:
         self._current_hover_index = None
+        self._drag_origin_index = None
         self._set_default_description()
         for index in range(len(self.slots)):
             self._apply_slot_visual(index)
@@ -911,8 +965,10 @@ class InventoryMenu:
     def _on_slot_hover(self, index: int, _event: object | None = None) -> None:
         if index >= len(self.slots):
             return
+        if self._current_hover_index is not None and self._current_hover_index != index:
+            self._apply_slot_visual(self._current_hover_index)
         self._current_hover_index = index
-        self.slots[index]["frameColor"] = self._hover_slot_color
+        self._apply_slot_visual(index)
         self._position_detail_window(index)
         self._apply_description(index)
 
@@ -923,6 +979,18 @@ class InventoryMenu:
             self._current_hover_index = None
             self._set_default_description()
             self.detail_window.hide()
+        self._apply_slot_visual(index)
+
+    def _on_slot_press(self, index: int, _event: object | None = None) -> None:
+        if index >= len(self.slots):
+            return
+        stack = self.slot_contents[index]
+        if stack is None:
+            return
+        if self._drag_origin_index is not None and self._drag_origin_index != index:
+            self._apply_slot_visual(self._drag_origin_index)
+        self._current_hover_index = index
+        self._drag_origin_index = index
         self._apply_slot_visual(index)
 
     def _refresh_hover_description(self) -> None:
@@ -939,12 +1007,15 @@ class InventoryMenu:
         self._apply_description(self._current_hover_index)
 
     def _apply_slot_visual(self, index: int) -> None:
+        if index >= len(self.slots):
+            return
         stack = self.slot_contents[index]
         slot = self.slots[index]
-        if self._current_hover_index == index:
+        if self._drag_origin_index == index:
+            slot["frameColor"] = self._drag_slot_color
+        elif self._current_hover_index == index:
             slot["frameColor"] = self._hover_slot_color
-            return
-        if stack is None:
+        elif stack is None:
             slot["frameColor"] = self._empty_slot_color
         elif stack.template.stack_limit > 1 and stack.space_remaining() == 0:
             slot["frameColor"] = self._full_slot_color
@@ -1008,6 +1079,32 @@ class InventoryMenu:
         z = max(-0.35, min(0.45, z))
 
         self.detail_window.setPos(x, 0, z)
+
+    def _on_global_release(self, _event: object | None = None) -> None:
+        if self._drag_origin_index is None:
+            return
+
+        origin_index = self._drag_origin_index
+        target_index = self._current_hover_index
+
+        self._drag_origin_index = None
+
+        if (
+            target_index is None
+            or target_index >= len(self.slots)
+            or target_index >= self.inventory.capacity
+        ):
+            self._apply_slot_visual(origin_index)
+            self._refresh_hover_description()
+            return
+
+        moved = self.inventory.move_stack(origin_index, target_index)
+        if moved:
+            self.update()
+        else:
+            self._apply_slot_visual(origin_index)
+            self._apply_slot_visual(target_index)
+            self._refresh_hover_description()
 
 
 
