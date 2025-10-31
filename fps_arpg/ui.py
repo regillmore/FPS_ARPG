@@ -9,7 +9,8 @@ from direct.gui.DirectGui import DirectButton, DirectFrame, OnscreenText
 from direct.showbase import ShowBaseGlobal
 from panda3d.core import TextNode
 
-from .inventory import Inventory, InventoryStack
+from .equipment import EquipmentLoadout
+from .inventory import Inventory, InventoryStack, ItemTemplate
 from .stats import PlayerStats
 
 if TYPE_CHECKING:  # pragma: no cover - used only for type checking
@@ -180,12 +181,14 @@ class InventoryMenu:
     def __init__(
         self,
         inventory: Inventory,
+        equipment: EquipmentLoadout,
         *,
         parent: DirectFrame | None = None,
         frame_size: tuple[float, float, float, float] | None = None,
         footer_text: str | None = "I - Close",
     ) -> None:
         self.inventory = inventory
+        self.equipment = equipment
         frame_kwargs: dict[str, object] = {
             "frameColor": (0.08, 0.07, 0.09, 0.92),
             "frameSize": frame_size or (-0.9, 0.9, -0.7, 0.7),
@@ -269,6 +272,9 @@ class InventoryMenu:
         self._full_slot_color = (0.25, 0.18, 0.18, 0.95)
         self._hover_slot_color = (0.4, 0.4, 0.55, 1)
         self._selected_slot_color = (0.5, 0.4, 0.25, 1)
+        self._equipment_empty_color = (0.12, 0.12, 0.18, 0.95)
+        self._equipment_filled_color = (0.22, 0.24, 0.3, 0.95)
+        self._equipment_hover_color = (0.35, 0.38, 0.55, 1)
 
         self.slot_count = self.GRID_COLUMNS * self.GRID_ROWS
         self.slots: list[DirectButton] = []
@@ -276,6 +282,13 @@ class InventoryMenu:
         self._current_hover_index: int | None = None
         self._dragged_stack: InventoryStack | None = None
         self._drag_source_index: int | None = None
+        self._current_equipment_hover: int | None = None
+
+        self.equipment_buttons: list[DirectButton] = []
+        self.equipment_slot_ids: list[str] = []
+        self.equipment_slot_labels: list[str] = []
+        self.equipment_slot_categories: list[tuple[str, ...]] = []
+        self.equipment_slot_contents: list[ItemTemplate | None] = []
 
         drag_parent = getattr(ShowBaseGlobal, "aspect2d", None)
         self._drag_label = OnscreenText(
@@ -290,10 +303,79 @@ class InventoryMenu:
         )
         self._drag_label.hide()
 
+        self._create_equipment_panel()
         self._create_slots()
         self.frame.bind(DGG.B3PRESS, self._on_cancel_drag_event)
         self.detail_window.hide()
         self._set_default_description()
+
+    def _create_equipment_panel(self) -> None:
+        self.equipment_panel = DirectFrame(
+            parent=self.frame,
+            pos=(0.68, 0, 0.03),
+            frameColor=(0.1, 0.1, 0.14, 0.95),
+            frameSize=(-0.28, 0.28, -0.55, 0.55),
+            borderWidth=(0.012, 0.012),
+            relief=1,
+        )
+        self.equipment_title = OnscreenText(
+            text="Equipped Gear",
+            parent=self.equipment_panel,
+            pos=(0, 0.46),
+            scale=0.06,
+            fg=(0.92, 0.94, 1, 1),
+            shadow=(0, 0, 0, 0.8),
+            align=TextNode.ACenter,
+            mayChange=False,
+        )
+
+        slot_height = 0.19
+        spacing = 0.045
+        start_z = 0.31
+
+        self.equipment_buttons.clear()
+        self.equipment_slot_ids.clear()
+        self.equipment_slot_labels.clear()
+        self.equipment_slot_categories.clear()
+        self.equipment_slot_contents.clear()
+
+        for index, slot_state in enumerate(self.equipment.iter_slots()):
+            slot_id = slot_state.definition.id
+            slot_label = slot_state.definition.name
+            slot_categories = slot_state.definition.allowed_categories
+
+            z = start_z - index * (slot_height + spacing)
+            button = DirectButton(
+                parent=self.equipment_panel,
+                pos=(0, 0, z),
+                frameColor=self._equipment_empty_color,
+                frameSize=(
+                    -0.24,
+                    0.24,
+                    -slot_height / 2,
+                    slot_height / 2,
+                ),
+                text="",
+                text_scale=0.045,
+                text_align=TextNode.ACenter,
+                text_fg=(0.92, 0.92, 1, 1),
+                text_wordwrap=12,
+                textMayChange=1,
+                relief=1,
+                pressEffect=False,
+                rolloverSound=None,
+                clickSound=None,
+            )
+            button.bind(DGG.ENTER, self._on_equipment_hover, [index])
+            button.bind(DGG.EXIT, self._on_equipment_exit, [index])
+
+            self.equipment_buttons.append(button)
+            self.equipment_slot_ids.append(slot_id)
+            self.equipment_slot_labels.append(slot_label)
+            self.equipment_slot_categories.append(slot_categories)
+            self.equipment_slot_contents.append(slot_state.item)
+
+        self._update_equipment_panel()
 
     def _create_slots(self) -> None:
         slot_width = 0.22
@@ -335,6 +417,20 @@ class InventoryMenu:
                 self.slots.append(button)
                 index += 1
 
+    def _update_equipment_panel(self) -> None:
+        for index, button in enumerate(self.equipment_buttons):
+            slot_id = self.equipment_slot_ids[index]
+            state = self.equipment.get_slot(slot_id)
+            item = state.item if state is not None else None
+            self.equipment_slot_contents[index] = item
+            if item is None:
+                button["text"] = f"{self.equipment_slot_labels[index]}\n-- Empty --"
+            else:
+                button["text"] = (
+                    f"{self.equipment_slot_labels[index]}\n{item.name}"
+                )
+        self._refresh_all_equipment_visuals()
+
     def update(self) -> None:
         stacks = self.inventory.stacks
         for index, slot in enumerate(self.slots):
@@ -347,6 +443,8 @@ class InventoryMenu:
 
         for index in range(len(self.slots)):
             self._apply_slot_visual(index)
+
+        self._update_equipment_panel()
 
         capacity_line = (
             f"Capacity: {self.inventory.count_unique()} / {self.inventory.capacity}"
@@ -387,6 +485,14 @@ class InventoryMenu:
         self.slots = []
         self.slot_contents = []
 
+        for button in getattr(self, "equipment_buttons", []):
+            button.destroy()
+        self.equipment_buttons = []
+        self.equipment_slot_ids = []
+        self.equipment_slot_labels = []
+        self.equipment_slot_categories = []
+        self.equipment_slot_contents = []
+
         for widget in (
             "footer",
             "detail_body",
@@ -394,6 +500,8 @@ class InventoryMenu:
             "detail_window",
             "capacity_hint",
             "capacity_text",
+            "equipment_title",
+            "equipment_panel",
             "title",
             "frame",
         ):
@@ -404,10 +512,10 @@ class InventoryMenu:
 
     def _clear_hover_state(self) -> None:
         self._current_hover_index = None
+        self._current_equipment_hover = None
         self._set_default_description()
-        for index in range(len(self.slots)):
-            self._apply_slot_visual(index)
         self.detail_window.hide()
+        self._refresh_all_slot_visuals()
 
     def _on_slot_clicked(self, index: int) -> None:
         if index >= len(self.slot_contents):
@@ -442,8 +550,10 @@ class InventoryMenu:
     def _on_slot_hover(self, index: int, _event: object | None = None) -> None:
         if index >= len(self.slots):
             return
+        self._current_equipment_hover = None
         self._current_hover_index = index
         self.slots[index]["frameColor"] = self._hover_slot_color
+        self._refresh_all_equipment_visuals()
         self._refresh_hover_description()
 
     def _on_slot_exit(self, index: int, _event: object | None = None) -> None:
@@ -458,11 +568,43 @@ class InventoryMenu:
                 self.detail_window.hide()
         self._apply_slot_visual(index)
 
+    def _on_equipment_hover(self, index: int, _event: object | None = None) -> None:
+        if index >= len(self.equipment_buttons):
+            return
+        self._current_hover_index = None
+        self._current_equipment_hover = index
+        self._refresh_all_slot_visuals()
+        self._refresh_hover_description()
+
+    def _on_equipment_exit(self, index: int, _event: object | None = None) -> None:
+        if index >= len(self.equipment_buttons):
+            return
+        if self._current_equipment_hover == index:
+            self._current_equipment_hover = None
+            if self._dragged_stack is not None and self._drag_source_index is not None:
+                self._set_drag_description(self._dragged_stack)
+            else:
+                self._set_default_description()
+                self.detail_window.hide()
+        self._apply_equipment_slot_visual(index)
+
     def _refresh_hover_description(self) -> None:
         if self._dragged_stack is not None and self._drag_source_index is not None:
-            if self._current_hover_index is None:
+            if (
+                self._current_hover_index is None
+                and self._current_equipment_hover is None
+            ):
                 self._set_drag_description(self._dragged_stack)
                 return
+        if self._current_equipment_hover is not None:
+            button = self.equipment_buttons[self._current_equipment_hover]
+            self._position_detail_window_near(
+                button,
+                prefer_left=True,
+                offset_x=0.34,
+            )
+            self._apply_equipment_description(self._current_equipment_hover)
+            return
         if self._current_hover_index is None:
             self._set_default_description()
             self.detail_window.hide()
@@ -472,7 +614,8 @@ class InventoryMenu:
             self._set_default_description()
             self.detail_window.hide()
             return
-        self._position_detail_window(self._current_hover_index)
+        slot = self.slots[self._current_hover_index]
+        self._position_detail_window_near(slot)
         if (
             self._dragged_stack is not None
             and self._drag_source_index == self._current_hover_index
@@ -496,6 +639,16 @@ class InventoryMenu:
             slot["frameColor"] = self._full_slot_color
         else:
             slot["frameColor"] = self._default_slot_color
+
+    def _apply_equipment_slot_visual(self, index: int) -> None:
+        button = self.equipment_buttons[index]
+        item = self.equipment_slot_contents[index]
+        if self._current_equipment_hover == index:
+            button["frameColor"] = self._equipment_hover_color
+        elif item is None:
+            button["frameColor"] = self._equipment_empty_color
+        else:
+            button["frameColor"] = self._equipment_filled_color
 
     def _start_drag(self, index: int, stack: InventoryStack) -> None:
         self._dragged_stack = stack
@@ -531,6 +684,11 @@ class InventoryMenu:
     def _refresh_all_slot_visuals(self) -> None:
         for idx in range(len(self.slots)):
             self._apply_slot_visual(idx)
+        self._refresh_all_equipment_visuals()
+
+    def _refresh_all_equipment_visuals(self) -> None:
+        for idx in range(len(self.equipment_buttons)):
+            self._apply_equipment_slot_visual(idx)
 
     def _set_default_description(self) -> None:
         self.detail_title.setText("Item Details")
@@ -561,6 +719,29 @@ class InventoryMenu:
         self.detail_body.setText("\n".join(lines))
         self.detail_window.show()
 
+    def _apply_equipment_description(self, index: int) -> None:
+        slot_label = self.equipment_slot_labels[index]
+        item = self.equipment_slot_contents[index]
+        if item is None:
+            lines = ["Slot is currently empty."]
+            categories = self.equipment_slot_categories[index]
+            if categories:
+                lines.append("")
+                lines.append("Accepts:")
+                for category in categories:
+                    lines.append(f"- {category}")
+            else:
+                lines.append("Accepts any equipped item.")
+            self.detail_title.setText(slot_label)
+        else:
+            lines = [f"Category: {item.category}"]
+            if item.description:
+                lines.append("")
+                lines.append(item.description)
+            self.detail_title.setText(f"{slot_label}: {item.name}")
+        self.detail_body.setText("\n".join(lines))
+        self.detail_window.show()
+
     def _set_empty_description(self) -> None:
         if self.inventory.is_full():
             message = (
@@ -572,20 +753,24 @@ class InventoryMenu:
         self.detail_body.setText(message)
         self.detail_window.show()
 
-    def _position_detail_window(self, index: int) -> None:
-        slot = self.slots[index]
-        slot_pos = slot.getPos(self.frame)
-        offset_x = 0.38
-        offset_z = 0.0
+    def _position_detail_window_near(
+        self,
+        node: DirectButton,
+        *,
+        prefer_left: bool = False,
+        offset_x: float = 0.38,
+        offset_z: float = 0.0,
+    ) -> None:
+        node_pos = node.getPos(self.frame)
+        direction = -1 if prefer_left else 1
+        x = node_pos.x + direction * offset_x
+        z = node_pos.z + offset_z
 
-        x = slot_pos.x + offset_x
-        z = slot_pos.z + offset_z
+        if not prefer_left and x > 0.55:
+            x = node_pos.x - offset_x
+        if prefer_left and x < -0.55:
+            x = node_pos.x + offset_x
 
-        # If the tooltip would overflow the right edge, flip it to the left side
-        if x > 0.55:
-            x = slot_pos.x - offset_x
-
-        # Clamp vertically to keep the tooltip within the menu bounds
         z = max(-0.35, min(0.45, z))
 
         self.detail_window.setPos(x, 0, z)
@@ -619,9 +804,12 @@ class TabbedMenu:
     TAB_STATS = "stats"
     TAB_INVENTORY = "inventory"
 
-    def __init__(self, stats: PlayerStats, inventory: Inventory) -> None:
+    def __init__(
+        self, stats: PlayerStats, inventory: Inventory, equipment: EquipmentLoadout
+    ) -> None:
         self.stats = stats
         self.inventory = inventory
+        self.equipment = equipment
         self.active_tab = None
 
         self.frame = DirectFrame(
@@ -652,6 +840,7 @@ class TabbedMenu:
         )
         self.inventory_menu = InventoryMenu(
             inventory,
+            equipment,
             parent=self.content_frame,
             footer_text=None,
         )
