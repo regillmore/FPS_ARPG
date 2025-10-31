@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from direct.gui import DirectGuiGlobals as DGG
 from direct.gui.DirectGui import DirectButton, DirectFrame, OnscreenText
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import ClockObject, TextNode, Vec3, WindowProperties
@@ -177,6 +178,8 @@ class GameWorld:
 
         self.heading = 0.0
         self.pitch = 0.0
+        self.is_paused = False
+        self._mouse_captured = False
 
         self.player_stats = PlayerStats()
         self.inventory = Inventory()
@@ -218,10 +221,7 @@ class GameWorld:
         self.center_x = int(self.app.win.getXSize() / 2)
         self.center_y = int(self.app.win.getYSize() / 2)
 
-        props = WindowProperties()
-        props.setCursorHidden(True)
-        self.app.win.requestProperties(props)
-        self.app.win.movePointer(0, self.center_x, self.center_y)
+        self._set_mouse_capture(True)
 
     def _setup_controls(self) -> None:
         self._bind("w", "forward", True)
@@ -301,12 +301,35 @@ class GameWorld:
     def _set_key(self, key: str, value: bool) -> None:
         self.key_map[key] = value
 
+    def _set_mouse_capture(self, capture: bool) -> None:
+        if self._mouse_captured == capture:
+            return
+
+        props = WindowProperties()
+        props.setCursorHidden(capture)
+        self.app.win.requestProperties(props)
+
+        self._mouse_captured = capture
+        if capture:
+            self.app.win.movePointer(0, self.center_x, self.center_y)
+
+    def _set_paused(self, paused: bool) -> None:
+        if self.is_paused == paused:
+            return
+
+        self.is_paused = paused
+        if paused:
+            self._set_mouse_capture(False)
+        else:
+            self._set_mouse_capture(True)
+
     # Update loop -----------------------------------------------------
     def _update_task(self, task) -> int:
         dt = ClockObject.getGlobalClock().getDt()
-        self.player_stats.tick(dt)
-        self._update_mouse_look()
-        self._update_movement(dt)
+        if not self.is_paused:
+            self.player_stats.tick(dt)
+            self._update_mouse_look()
+            self._update_movement(dt)
         if self.stats_menu.is_visible:
             self.stats_menu.update()
         if self.inventory_menu.is_visible:
@@ -359,9 +382,8 @@ class GameWorld:
             self.app.ignore(event_name)
         self._accepted_events.clear()
 
-        props = WindowProperties()
-        props.setCursorHidden(False)
-        self.app.win.requestProperties(props)
+        self.is_paused = False
+        self._set_mouse_capture(False)
 
         if hasattr(self, "stats_menu") and self.stats_menu is not None:
             self.stats_menu.destroy()
@@ -387,17 +409,19 @@ class GameWorld:
         else:
             if self.inventory_menu.is_visible:
                 self.inventory_menu.hide()
+                self._set_paused(False)
             self.stats_menu.show()
             self.stats_menu.update()
 
     def _toggle_inventory_menu(self) -> None:
         if self.inventory_menu.is_visible:
             self.inventory_menu.hide()
+            self._set_paused(False)
         else:
             if self.stats_menu.is_visible:
                 self.stats_menu.hide()
             self.inventory_menu.show()
-            self.inventory_menu.update()
+            self._set_paused(True)
 
 
 @dataclass
@@ -685,6 +709,9 @@ class StatsMenu:
 class InventoryMenu:
     """Overlay that renders the current contents of an :class:`Inventory`."""
 
+    GRID_COLUMNS = 6
+    GRID_ROWS = 4
+
     def __init__(self, inventory: Inventory) -> None:
         self.inventory = inventory
         self.frame = DirectFrame(
@@ -701,15 +728,43 @@ class InventoryMenu:
             align=TextNode.ACenter,
             mayChange=False,
         )
-        self.body = OnscreenText(
+        self.capacity_text = OnscreenText(
             text="",
             parent=self.frame,
-            pos=(-0.82, 0.45),
-            scale=0.055,
-            fg=(0.9, 0.9, 1, 1),
+            pos=(-0.82, 0.46),
+            scale=0.05,
+            fg=(0.85, 0.88, 1, 1),
             align=TextNode.ALeft,
             mayChange=True,
-            wordwrap=32,
+        )
+        self.capacity_hint = OnscreenText(
+            text="",
+            parent=self.frame,
+            pos=(-0.82, 0.4),
+            scale=0.042,
+            fg=(0.9, 0.6, 0.6, 1),
+            align=TextNode.ALeft,
+            mayChange=True,
+        )
+        self.detail_title = OnscreenText(
+            text="",
+            parent=self.frame,
+            pos=(0.55, 0.46),
+            scale=0.055,
+            fg=(0.95, 0.95, 0.88, 1),
+            align=TextNode.ALeft,
+            mayChange=True,
+            wordwrap=16,
+        )
+        self.detail_body = OnscreenText(
+            text="",
+            parent=self.frame,
+            pos=(0.55, 0.35),
+            scale=0.045,
+            fg=(0.85, 0.88, 1, 1),
+            align=TextNode.ALeft,
+            mayChange=True,
+            wordwrap=16,
         )
         self.footer = OnscreenText(
             text="I - Close",
@@ -722,29 +777,200 @@ class InventoryMenu:
         )
 
         self.is_visible = True
+        self._default_detail_message = "Hover over an item to inspect its details."
+        self._empty_slot_color = (0.08, 0.08, 0.12, 0.95)
+        self._default_slot_color = (0.16, 0.17, 0.22, 0.95)
+        self._full_slot_color = (0.25, 0.18, 0.18, 0.95)
+        self._hover_slot_color = (0.4, 0.4, 0.55, 1)
+
+        self.slot_count = self.GRID_COLUMNS * self.GRID_ROWS
+        self.slots: list[DirectButton] = []
+        self.slot_contents: list[InventoryStack | None] = [None] * self.slot_count
+        self._current_hover_index: int | None = None
+
+        self._create_slots()
+        self._set_default_description()
+
+    def _create_slots(self) -> None:
+        slot_width = 0.22
+        slot_height = 0.22
+        spacing = 0.03
+        start_x = -0.78
+        start_z = 0.32
+
+        index = 0
+        for row in range(self.GRID_ROWS):
+            for col in range(self.GRID_COLUMNS):
+                x = start_x + col * (slot_width + spacing)
+                z = start_z - row * (slot_height + spacing)
+                button = DirectButton(
+                    parent=self.frame,
+                    pos=(x, 0, z),
+                    frameColor=self._empty_slot_color,
+                    frameSize=(
+                        -slot_width / 2,
+                        slot_width / 2,
+                        -slot_height / 2,
+                        slot_height / 2,
+                    ),
+                    text="",
+                    text_scale=0.045,
+                    text_align=TextNode.ACenter,
+                    text_fg=(0.92, 0.92, 1, 1),
+                    text_wordwrap=9,
+                    textMayChange=1,
+                    relief=1,
+                    pressEffect=False,
+                    rolloverSound=None,
+                    clickSound=None,
+                )
+                button.bind(DGG.ENTER, self._on_slot_hover, [index])
+                button.bind(DGG.EXIT, self._on_slot_exit, [index])
+                self.slots.append(button)
+                index += 1
 
     def update(self) -> None:
-        lines = self.inventory.build_summary_lines()
-        # Add a helpful reminder if the inventory is nearing capacity.
+        stacks = self.inventory.stacks
+        for index, slot in enumerate(self.slots):
+            stack = stacks[index] if index < len(stacks) else None
+            self.slot_contents[index] = stack
+            if stack is None:
+                slot["text"] = ""
+                slot["frameColor"] = self._empty_slot_color
+            else:
+                slot["text"] = f"{stack.template.name}\n x{stack.quantity}"
+                if stack.template.stack_limit > 1 and stack.space_remaining() == 0:
+                    slot["frameColor"] = self._full_slot_color
+                else:
+                    slot["frameColor"] = self._default_slot_color
+
+            if self._current_hover_index == index:
+                slot["frameColor"] = self._hover_slot_color
+
+        capacity_line = (
+            f"Capacity: {self.inventory.count_unique()} / {self.inventory.capacity}"
+        )
+        self.capacity_text.setText(capacity_line)
         if self.inventory.is_full():
-            lines.append("")
-            lines.append("Inventory full - clear space to loot more gear.")
-        self.body.setText("\n".join(lines))
+            self.capacity_hint.setText(
+                "Inventory full - clear space to loot more gear."
+            )
+        else:
+            self.capacity_hint.setText("")
+
+        self._refresh_hover_description()
 
     def show(self) -> None:
         self.frame.show()
         self.is_visible = True
+        self._clear_hover_state()
+        self.update()
 
     def hide(self) -> None:
         self.frame.hide()
         self.is_visible = False
+        self._clear_hover_state()
 
     def destroy(self) -> None:
-        for widget in ("footer", "body", "title", "frame"):
+        for slot in getattr(self, "slots", []):
+            slot.destroy()
+        self.slots = []
+        self.slot_contents = []
+
+        for widget in (
+            "footer",
+            "detail_body",
+            "detail_title",
+            "capacity_hint",
+            "capacity_text",
+            "title",
+            "frame",
+        ):
             element = getattr(self, widget, None)
             if element is not None:
                 element.destroy()
                 setattr(self, widget, None)
+
+    def _clear_hover_state(self) -> None:
+        self._current_hover_index = None
+        self._set_default_description()
+        for index in range(len(self.slots)):
+            self._apply_slot_visual(index)
+
+    def _on_slot_hover(self, _event, index: int) -> None:
+        if index >= len(self.slots):
+            return
+        self._current_hover_index = index
+        self.slots[index]["frameColor"] = self._hover_slot_color
+        self._apply_description(index)
+
+    def _on_slot_exit(self, _event, index: int) -> None:
+        if index >= len(self.slots):
+            return
+        if self._current_hover_index == index:
+            self._current_hover_index = None
+            self._set_default_description()
+        self._apply_slot_visual(index)
+
+    def _refresh_hover_description(self) -> None:
+        if self._current_hover_index is None:
+            self._set_default_description()
+            return
+        if self._current_hover_index >= len(self.slot_contents):
+            self._current_hover_index = None
+            self._set_default_description()
+            return
+        self._apply_description(self._current_hover_index)
+
+    def _apply_slot_visual(self, index: int) -> None:
+        stack = self.slot_contents[index]
+        slot = self.slots[index]
+        if self._current_hover_index == index:
+            slot["frameColor"] = self._hover_slot_color
+            return
+        if stack is None:
+            slot["frameColor"] = self._empty_slot_color
+        elif stack.template.stack_limit > 1 and stack.space_remaining() == 0:
+            slot["frameColor"] = self._full_slot_color
+        else:
+            slot["frameColor"] = self._default_slot_color
+
+    def _set_default_description(self) -> None:
+        self.detail_title.setText("Item Details")
+        self.detail_body.setText(self._default_detail_message)
+
+    def _apply_description(self, index: int) -> None:
+        stack = self.slot_contents[index]
+        if stack is None:
+            self._set_empty_description()
+            return
+
+        lines = [f"Category: {stack.template.category}"]
+        if stack.template.stack_limit > 1:
+            lines.append(
+                f"Stack: {stack.quantity}/{stack.template.stack_limit}"
+            )
+            if stack.space_remaining() == 0:
+                lines.append("Stack is full.")
+        else:
+            lines.append(f"Quantity: {stack.quantity}")
+
+        if stack.template.description:
+            lines.append("")
+            lines.append(stack.template.description)
+
+        self.detail_title.setText(f"{stack.template.name} (x{stack.quantity})")
+        self.detail_body.setText("\n".join(lines))
+
+    def _set_empty_description(self) -> None:
+        if self.inventory.is_full():
+            message = (
+                "Inventory is at capacity. Clear space to pick up new gear."
+            )
+        else:
+            message = "Ready to store newly acquired gear."
+        self.detail_title.setText("Empty Slot")
+        self.detail_body.setText(message)
 
 
 
