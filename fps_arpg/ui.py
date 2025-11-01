@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from direct.gui import DirectGuiGlobals as DGG
 from direct.gui.DirectGui import DirectButton, DirectFrame, OnscreenText
 from direct.showbase import ShowBaseGlobal
-from panda3d.core import TextNode
+from panda3d.core import Point3, TextNode
 
 from .equipment import EquipmentLoadout
 from .inventory import Inventory, InventoryStack, ItemTemplate
@@ -1037,7 +1037,20 @@ class InventoryMenu:
 
         mouse_x = base.mouseWatcherNode.getMouseX()
         mouse_y = base.mouseWatcherNode.getMouseY()
-        self._drag_label.setPos(mouse_x, mouse_y)
+
+        # Mouse coordinates are reported in the square ``render2d`` space, but
+        # the drag label lives in ``aspect2d``. Convert the position so both
+        # axes stay aligned regardless of the current aspect ratio.
+        aspect2d = getattr(ShowBaseGlobal, "aspect2d", None)
+        render2d = getattr(ShowBaseGlobal, "render2d", None)
+        if aspect2d is None or render2d is None:
+            self._drag_label.hide()
+            return
+
+        render_point = Point3(mouse_x, 0, mouse_y)
+        aspect_point = aspect2d.getRelativePoint(render2d, render_point)
+
+        self._drag_label.setPos(aspect_point.x, aspect_point.z)
         self._drag_label.show()
 
     def _on_cancel_drag_event(self, _event: object | None = None) -> None:

@@ -20,7 +20,7 @@ if TYPE_CHECKING:  # pragma: no cover - used only for type checking
 class GameWorld:
     """Simple first-playable test area with FPS-style controls."""
 
-    MOVE_SPEED = 7.5
+    MOVE_SPEED = 10
     MOUSE_SENSITIVITY = 0.2
     PITCH_LIMIT = 75
 
