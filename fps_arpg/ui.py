@@ -113,7 +113,7 @@ class StatsMenu:
         self.stats = stats
         frame_kwargs: dict[str, object] = {
             "frameColor": (0.05, 0.05, 0.07, 0.85),
-            "frameSize": frame_size or (-1, 1, -0.65, 0.85),
+            "frameSize": frame_size or (-0.95, 0.95, -0.7, 0.8),
         }
         if parent is not None:
             frame_kwargs["parent"] = parent
@@ -121,7 +121,7 @@ class StatsMenu:
         self.body = OnscreenText(
             text="",
             parent=self.frame,
-            pos=(-0.95, 0.75),
+            pos=(-0.9, 0.7),
             scale=0.055,
             fg=(0.85, 0.88, 1, 1),
             align=TextNode.ALeft,
@@ -181,7 +181,7 @@ class InventoryMenu:
         self.equipment = equipment
         frame_kwargs: dict[str, object] = {
             "frameColor": (0.08, 0.07, 0.09, 0.92),
-            "frameSize": frame_size or (-1, 1, -0.68, 0.82),
+            "frameSize": frame_size or (-0.95, 0.95, -0.73, 0.77),
         }
         if parent is not None:
             frame_kwargs["parent"] = parent
@@ -1060,13 +1060,13 @@ class TabbedMenu:
 
         self.frame = DirectFrame(
             frameColor=(0.03, 0.04, 0.08, 0.95),
-            frameSize=(-1.05, 1.05, -0.8, 0.8),
+            frameSize=(-1., 1, -0.8, 0.8),
         )
 
         self.content_frame = DirectFrame(
             parent=self.frame,
             frameColor=(0, 0, 0, 0),
-            pos=(0, 0, -0.05),
+            pos=(0, 0, 0),
         )
 
         self.stats_menu = StatsMenu(
