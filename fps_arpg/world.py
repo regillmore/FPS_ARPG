@@ -11,6 +11,7 @@ from .equipment import EquipmentLoadout
 from .inventory import Inventory, ItemTemplate
 from .stats import PlayerStats
 from .ui import TabbedMenu
+from .weapons import WeaponState, get_weapon_blueprint
 
 if TYPE_CHECKING:  # pragma: no cover - used only for type checking
     from .app import GameApp
@@ -39,6 +40,8 @@ class GameWorld:
         self.equipment = EquipmentLoadout()
         self.equipment.add_listener(self._on_equipment_changed)
         self._seed_debug_items()
+        self.active_weapon: WeaponState | None = None
+        self.is_fire_held = False
         self._on_equipment_changed(self.equipment)
 
         self.key_map: dict[str, bool] = {
@@ -92,6 +95,12 @@ class GameWorld:
         self._accepted_events.append("tab")
         self.app.accept("i", self._toggle_inventory_menu)
         self._accepted_events.append("i")
+        self.app.accept("mouse1", self._on_fire_pressed)
+        self._accepted_events.append("mouse1")
+        self.app.accept("mouse1-up", self._on_fire_released)
+        self._accepted_events.append("mouse1-up")
+        self.app.accept("r", self._reload_weapon)
+        self._accepted_events.append("r")
 
     def _setup_hud(self) -> None:
         self.hud_text = OnscreenText(
@@ -102,6 +111,16 @@ class GameWorld:
             align=TextNode.ACenter,
             mayChange=False,
         )
+
+        self.weapon_hud = OnscreenText(
+            text="No weapon equipped",
+            pos=(0.9, -0.85),
+            scale=0.06,
+            fg=(0.85, 0.95, 1, 1),
+            align=TextNode.ARight,
+            mayChange=True,
+        )
+        self._update_weapon_hud()
 
     def _setup_tabbed_menu(self) -> None:
         self.tabbed_menu = TabbedMenu(
@@ -249,6 +268,7 @@ class GameWorld:
 
         self.is_paused = paused
         if paused:
+            self.is_fire_held = False
             self._set_mouse_capture(False)
         else:
             self._set_mouse_capture(True)
@@ -260,6 +280,7 @@ class GameWorld:
             self.player_stats.tick(dt)
             self._update_mouse_look()
             self._update_movement(dt)
+            self._update_weapon(dt)
         if self.tabbed_menu.is_visible:
             self.tabbed_menu.update()
         return task.cont
@@ -322,6 +343,9 @@ class GameWorld:
         if hasattr(self, "hud_text") and self.hud_text is not None:
             self.hud_text.destroy()
             self.hud_text = None
+        if hasattr(self, "weapon_hud") and self.weapon_hud is not None:
+            self.weapon_hud.destroy()
+            self.weapon_hud = None
 
         self.app.camera.reparentTo(self.app.render)
         self.app.camera.setPos(0, 0, 0)
@@ -351,6 +375,86 @@ class GameWorld:
     # Equipment events ------------------------------------------------
     def _on_equipment_changed(self, loadout: EquipmentLoadout) -> None:
         self.player_stats.set_equipment_bonuses(loadout.build_stat_bonuses())
+        self._refresh_active_weapon(loadout)
+
+    # Weapon handling ------------------------------------------------
+    def _refresh_active_weapon(self, loadout: EquipmentLoadout) -> None:
+        slot = loadout.get_slot("primary")
+        template = slot.item if slot is not None else None
+        if template is None:
+            self.active_weapon = None
+            self.is_fire_held = False
+        else:
+            blueprint = get_weapon_blueprint(template.id)
+            if blueprint is None:
+                self.active_weapon = None
+                self.is_fire_held = False
+            else:
+                self.active_weapon = WeaponState(blueprint)
+        self._update_weapon_hud()
+
+    def _update_weapon(self, dt: float) -> None:
+        weapon = self.active_weapon
+        if weapon is None:
+            return
+
+        was_reloading = weapon.is_reloading
+        weapon.update(dt)
+        if was_reloading and not weapon.is_reloading:
+            self._update_weapon_hud()
+        if self.is_fire_held and weapon.blueprint.automatic:
+            event = weapon.try_fire()
+            if event.fired:
+                print(
+                    f"[Weapon] Fired {weapon.blueprint.name} for {event.damage:.1f} damage"
+                )
+                self._update_weapon_hud()
+            elif event.reason == "empty":
+                self._update_weapon_hud()
+
+    def _on_fire_pressed(self) -> None:
+        if self.is_paused:
+            return
+        self.is_fire_held = True
+        weapon = self.active_weapon
+        if weapon is None:
+            return
+        event = weapon.try_fire()
+        if event.fired:
+            print(f"[Weapon] Fired {weapon.blueprint.name} for {event.damage:.1f} damage")
+        elif event.reason == "empty":
+            print("[Weapon] Trigger pulled on empty magazine")
+        elif event.reason == "reloading":
+            print("[Weapon] Cannot fire while reloading")
+        self._update_weapon_hud()
+
+    def _on_fire_released(self) -> None:
+        self.is_fire_held = False
+
+    def _reload_weapon(self) -> None:
+        if self.is_paused:
+            return
+        weapon = self.active_weapon
+        if weapon is None:
+            return
+        event = weapon.start_reload()
+        if event.reason == "reload-started":
+            print(f"[Weapon] Reloading {weapon.blueprint.name}")
+        elif event.reason == "mag-full":
+            print("[Weapon] Magazine already full")
+        elif event.reason == "already-reloading":
+            print("[Weapon] Reload already in progress")
+        self._update_weapon_hud()
+
+    def _update_weapon_hud(self) -> None:
+        if not hasattr(self, "weapon_hud") or self.weapon_hud is None:
+            return
+        if self.active_weapon is None:
+            self.weapon_hud.setText("No weapon equipped")
+            return
+        weapon = self.active_weapon
+        status = "Reloading" if weapon.is_reloading else weapon.get_ammo_display()
+        self.weapon_hud.setText(f"{weapon.blueprint.name}\n{status}")
 
 
 __all__ = ["GameWorld"]

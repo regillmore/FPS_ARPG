@@ -61,6 +61,11 @@ class EquipmentLoadout:
             name="Tactical Relic",
             allowed_categories=("Artifact",),
         ),
+        EquipmentSlotDefinition(
+            id="primary",
+            name="Primary Weapon",
+            allowed_categories=("Primary Weapon", "Weapon"),
+        ),
     )
 
     def __init__(self, slots: Iterable[EquipmentSlotDefinition] | None = None) -> None:
