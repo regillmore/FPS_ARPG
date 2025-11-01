@@ -5,13 +5,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from direct.gui.DirectGui import OnscreenText
-from panda3d.core import ClockObject, TextNode, Vec3, WindowProperties
+from panda3d.core import ClockObject, NodePath, TextNode, Vec3, WindowProperties
 
 from .equipment import EquipmentLoadout
 from .inventory import Inventory, ItemTemplate
 from .stats import PlayerStats
 from .ui import TabbedMenu
-from .weapons import WeaponState, get_weapon_blueprint
+from .weapon_geometry import build_weapon_model
+from .weapons import WeaponBlueprint, WeaponState, get_weapon_blueprint
 
 if TYPE_CHECKING:  # pragma: no cover - used only for type checking
     from .app import GameApp
@@ -42,7 +43,8 @@ class GameWorld:
         self._seed_debug_items()
         self.active_weapon: WeaponState | None = None
         self.is_fire_held = False
-        self._on_equipment_changed(self.equipment)
+        self.weapon_root: NodePath | None = None
+        self.weapon_model: NodePath | None = None
 
         self.key_map: dict[str, bool] = {
             "forward": False,
@@ -55,9 +57,12 @@ class GameWorld:
 
         self._setup_environment()
         self._setup_camera()
+        self._setup_weapon_anchor()
         self._setup_controls()
         self._setup_hud()
         self._setup_tabbed_menu()
+
+        self._on_equipment_changed(self.equipment)
 
         self._task_name = "update_game_world"
         self.app.taskMgr.add(self._update_task, self._task_name)
@@ -80,6 +85,12 @@ class GameWorld:
         self.center_y = int(self.app.win.getYSize() / 2)
 
         self._set_mouse_capture(True)
+
+    def _setup_weapon_anchor(self) -> None:
+        self.weapon_root = self.app.camera.attachNewNode("weapon_anchor")
+        self.weapon_root.setPos(0.32, 0.85, -0.3)
+        self.weapon_root.setHpr(5, -4, 0)
+        self.weapon_root.setScale(1.0)
 
     def _setup_controls(self) -> None:
         self._bind("w", "forward", True)
@@ -339,6 +350,12 @@ class GameWorld:
         if hasattr(self, "weapon_hud") and self.weapon_hud is not None:
             self.weapon_hud.destroy()
             self.weapon_hud = None
+        if self.weapon_model is not None and not self.weapon_model.isEmpty():
+            self.weapon_model.removeNode()
+            self.weapon_model = None
+        if self.weapon_root is not None and not self.weapon_root.isEmpty():
+            self.weapon_root.removeNode()
+            self.weapon_root = None
 
         self.app.camera.reparentTo(self.app.render)
         self.app.camera.setPos(0, 0, 0)
@@ -374,17 +391,33 @@ class GameWorld:
     def _refresh_active_weapon(self, loadout: EquipmentLoadout) -> None:
         slot = loadout.get_slot("primary")
         template = slot.item if slot is not None else None
-        if template is None:
-            self.active_weapon = None
-            self.is_fire_held = False
-        else:
+        blueprint: WeaponBlueprint | None = None
+        self.is_fire_held = False
+        if template is not None:
             blueprint = get_weapon_blueprint(template.id)
-            if blueprint is None:
-                self.active_weapon = None
-                self.is_fire_held = False
-            else:
-                self.active_weapon = WeaponState(blueprint)
+        if blueprint is None:
+            self.active_weapon = None
+        else:
+            self.active_weapon = WeaponState(blueprint)
+        self._set_weapon_model(blueprint)
         self._update_weapon_hud()
+
+    def _set_weapon_model(self, blueprint: WeaponBlueprint | None) -> None:
+        if self.weapon_model is not None and not self.weapon_model.isEmpty():
+            self.weapon_model.removeNode()
+            self.weapon_model = None
+
+        if blueprint is None:
+            return
+
+        if self.weapon_root is None or self.weapon_root.isEmpty():
+            return
+
+        model = build_weapon_model(blueprint)
+        model.reparentTo(self.weapon_root)
+        model.setPos(0, 0, 0)
+        model.setScale(1.0)
+        self.weapon_model = model
 
     def _update_weapon(self, dt: float) -> None:
         weapon = self.active_weapon
