@@ -268,6 +268,7 @@ class GameWorld:
 
         self.is_paused = paused
         if paused:
+            self.is_fire_held = False
             self._set_mouse_capture(False)
         else:
             self._set_mouse_capture(True)
@@ -412,6 +413,8 @@ class GameWorld:
                 self._update_weapon_hud()
 
     def _on_fire_pressed(self) -> None:
+        if self.is_paused:
+            return
         self.is_fire_held = True
         weapon = self.active_weapon
         if weapon is None:
@@ -429,6 +432,8 @@ class GameWorld:
         self.is_fire_held = False
 
     def _reload_weapon(self) -> None:
+        if self.is_paused:
+            return
         weapon = self.active_weapon
         if weapon is None:
             return
