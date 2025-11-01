@@ -37,6 +37,11 @@ class EquipmentLoadout:
 
     DEFAULT_SLOTS: tuple[EquipmentSlotDefinition, ...] = (
         EquipmentSlotDefinition(
+            id="primary",
+            name="Primary Weapon",
+            allowed_categories=("Primary Weapon", "Weapon"),
+        ),
+        EquipmentSlotDefinition(
             id="head",
             name="Headgear",
             allowed_categories=("Armor - Head", "Armor"),
@@ -60,11 +65,6 @@ class EquipmentLoadout:
             id="artifact",
             name="Tactical Relic",
             allowed_categories=("Artifact",),
-        ),
-        EquipmentSlotDefinition(
-            id="primary",
-            name="Primary Weapon",
-            allowed_categories=("Primary Weapon", "Weapon"),
         ),
     )
 
