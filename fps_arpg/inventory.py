@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Mapping
 
 
 @dataclass
@@ -14,6 +15,7 @@ class ItemTemplate:
     description: str
     category: str
     stack_limit: int = 1
+    stat_bonuses: Mapping[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.stack_limit < 1:
