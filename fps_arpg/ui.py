@@ -11,7 +11,7 @@ from panda3d.core import TextNode
 
 from .equipment import EquipmentLoadout
 from .inventory import Inventory, InventoryStack, ItemTemplate
-from .stats import PlayerStats
+from .stats import PlayerStats, build_stat_bonus_lines
 
 if TYPE_CHECKING:  # pragma: no cover - used only for type checking
     from .app import GameApp
@@ -310,6 +310,7 @@ class InventoryMenu:
         self.frame.bind(DGG.B3PRESS, self._on_cancel_drag_event)
         self.detail_window.hide()
         self._set_default_description()
+        self._stat_block_header = "Stat Effects:"
 
     def _create_equipment_panel(self) -> None:
         self.equipment_panel = DirectFrame(
@@ -926,6 +927,7 @@ class InventoryMenu:
             "Click another slot to move this stack.",
             "Right click to cancel.",
         ]
+        self._extend_with_stat_bonuses(lines, stack.template)
         self.detail_title.setText(f"Moving: {stack.template.name}")
         self.detail_body.setText("\n".join(lines))
         self.detail_window.show()
@@ -964,6 +966,8 @@ class InventoryMenu:
             lines.append("")
             lines.append(stack.template.description)
 
+        self._extend_with_stat_bonuses(lines, stack.template)
+
         self.detail_title.setText(f"{stack.template.name} (x{stack.quantity})")
         self.detail_body.setText("\n".join(lines))
         self.detail_window.show()
@@ -987,6 +991,7 @@ class InventoryMenu:
             if item.description:
                 lines.append("")
                 lines.append(item.description)
+            self._extend_with_stat_bonuses(lines, item)
             self.detail_title.setText(f"{slot_label}: {item.name}")
         self.detail_body.setText("\n".join(lines))
         self.detail_window.show()
@@ -1023,6 +1028,18 @@ class InventoryMenu:
         z = max(-0.35, min(0.45, z))
 
         self.detail_window.setPos(x, 0, z)
+
+    def _extend_with_stat_bonuses(
+        self, lines: list[str], template: ItemTemplate
+    ) -> None:
+        bonus_lines = build_stat_bonus_lines(template.stat_bonuses)
+        if not bonus_lines:
+            return
+        if lines and lines[-1] != "":
+            lines.append("")
+        lines.append(self._stat_block_header)
+        for entry in bonus_lines:
+            lines.append(f"- {entry}")
 
     def _update_drag_visual(self) -> None:
         if self._dragged_stack is None or self._drag_label is None:

@@ -37,7 +37,9 @@ class GameWorld:
         self.player_stats = PlayerStats()
         self.inventory = Inventory()
         self.equipment = EquipmentLoadout()
+        self.equipment.add_listener(self._on_equipment_changed)
         self._seed_debug_items()
+        self._on_equipment_changed(self.equipment)
 
         self.key_map: dict[str, bool] = {
             "forward": False,
@@ -118,6 +120,7 @@ class GameWorld:
                     description="Advanced optics suite hardened for combat ops.",
                     category="Armor - Head",
                     stack_limit=1,
+                    stat_bonuses={"max_focus": 10, "willpower": 2},
                 ),
                 "head",
             ),
@@ -128,6 +131,7 @@ class GameWorld:
                     description="Reactive plating that disperses high-calibre impacts.",
                     category="Armor - Chest",
                     stack_limit=1,
+                    stat_bonuses={"max_health": 35, "health_regen": 0.5},
                 ),
                 "chest",
             ),
@@ -138,6 +142,7 @@ class GameWorld:
                     description="Servo-assisted forearm guards for melee deflection.",
                     category="Armor - Arms",
                     stack_limit=1,
+                    stat_bonuses={"strength": 3},
                 ),
                 "arms",
             ),
@@ -148,6 +153,7 @@ class GameWorld:
                     description="Stabilised leg armor that enhances jump resilience.",
                     category="Armor - Legs",
                     stack_limit=1,
+                    stat_bonuses={"agility": 3, "max_health": 15},
                 ),
                 "legs",
             ),
@@ -158,6 +164,7 @@ class GameWorld:
                     description="Artifact that boosts tactical focus regeneration.",
                     category="Artifact",
                     stack_limit=1,
+                    stat_bonuses={"max_focus": 20, "focus_regen": 1.5},
                 ),
                 "artifact",
             ),
@@ -201,6 +208,7 @@ class GameWorld:
                 description="Spare gauntlets stored for emergency deployment.",
                 category="Armor - Arms",
                 stack_limit=1,
+                stat_bonuses={"strength": 1},
             ), 1),
             (ItemTemplate(
                 id="lunar_focus_charm",
@@ -208,6 +216,7 @@ class GameWorld:
                 description="A miniature relic humming with psionic energy.",
                 category="Artifact",
                 stack_limit=1,
+                stat_bonuses={"max_focus": 10, "focus_regen": 0.8},
             ), 1),
         ]
 
@@ -297,6 +306,8 @@ class GameWorld:
     def destroy(self) -> None:
         self.app.taskMgr.remove(self._task_name)
 
+        self.equipment.remove_listener(self._on_equipment_changed)
+
         for event_name in self._accepted_events:
             self.app.ignore(event_name)
         self._accepted_events.clear()
@@ -336,6 +347,10 @@ class GameWorld:
             self._set_paused(True)
 
         self.tabbed_menu.select_tab(tab)
+
+    # Equipment events ------------------------------------------------
+    def _on_equipment_changed(self, loadout: EquipmentLoadout) -> None:
+        self.player_stats.set_equipment_bonuses(loadout.build_stat_bonuses())
 
 
 __all__ = ["GameWorld"]
