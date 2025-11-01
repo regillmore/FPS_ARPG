@@ -166,7 +166,7 @@ class InventoryMenu:
     """Overlay that renders the current contents of an :class:`Inventory`."""
 
     GRID_COLUMNS = 5
-    GRID_ROWS = 4
+    GRID_ROWS = 5
 
     def __init__(
         self,
@@ -189,7 +189,7 @@ class InventoryMenu:
         self.capacity_text = OnscreenText(
             text="",
             parent=self.frame,
-            pos=(-0.82, 0.46),
+            pos=(-0.9, -0.55),
             scale=0.05,
             fg=(0.85, 0.88, 1, 1),
             align=TextNode.ALeft,
@@ -295,16 +295,16 @@ class InventoryMenu:
     def _create_equipment_panel(self) -> None:
         self.equipment_panel = DirectFrame(
             parent=self.frame,
-            pos=(0.68, 0, 0.20),
+            pos=(0.61, 0, 0.17),
             frameColor=(0.1, 0.1, 0.14, 0.95),
-            frameSize=(-0.28, 0.28, -0.80, 0.55),
+            frameSize=(-0.28, 0.29, -0.85, 0.55),
             borderWidth=(0.012, 0.012),
             relief=1,
         )
         self.equipment_title = OnscreenText(
-            text="Equipped Gear",
+            text="Equipped",
             parent=self.equipment_panel,
-            pos=(0, 0.46),
+            pos=(0, 0.44),
             scale=0.06,
             fg=(0.92, 0.94, 1, 1),
             shadow=(0, 0, 0, 0.8),
@@ -313,8 +313,8 @@ class InventoryMenu:
         )
 
         slot_height = 0.15
-        spacing = 0.045
-        start_z = 0.31
+        spacing = 0.05
+        start_z = 0.27
 
         self.equipment_buttons.clear()
         self.equipment_slot_ids.clear()
@@ -333,7 +333,7 @@ class InventoryMenu:
                 pos=(0, 0, z),
                 frameColor=self._equipment_empty_color,
                 frameSize=(
-                    -0.24,
+                    -0.23,
                     0.24,
                     -slot_height / 2,
                     slot_height / 2,
@@ -363,11 +363,11 @@ class InventoryMenu:
         self._update_equipment_panel()
 
     def _create_slots(self) -> None:
-        slot_width = 0.22
-        slot_height = 0.22
+        slot_width = 0.21
+        slot_height = 0.21
         spacing = 0.03
-        start_x = -0.78
-        start_z = 0.32
+        start_x = -0.79
+        start_z = 0.61
 
         index = 0
         for _row in range(self.GRID_ROWS):
