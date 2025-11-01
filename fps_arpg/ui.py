@@ -113,25 +113,15 @@ class StatsMenu:
         self.stats = stats
         frame_kwargs: dict[str, object] = {
             "frameColor": (0.05, 0.05, 0.07, 0.85),
-            "frameSize": frame_size or (-0.75, 0.75, -0.6, 0.6),
+            "frameSize": frame_size or (-1, 1, -0.65, 0.85),
         }
         if parent is not None:
             frame_kwargs["parent"] = parent
         self.frame = DirectFrame(**frame_kwargs)
-        self.title = OnscreenText(
-            text="Operative Profile",
-            parent=self.frame,
-            pos=(0, 0.5),
-            scale=0.08,
-            fg=(0.95, 0.92, 0.8, 1),
-            shadow=(0, 0, 0, 0.8),
-            align=TextNode.ACenter,
-            mayChange=False,
-        )
         self.body = OnscreenText(
             text="",
             parent=self.frame,
-            pos=(-0.7, 0.35),
+            pos=(-0.95, 0.75),
             scale=0.055,
             fg=(0.85, 0.88, 1, 1),
             align=TextNode.ALeft,
@@ -175,7 +165,7 @@ class StatsMenu:
 class InventoryMenu:
     """Overlay that renders the current contents of an :class:`Inventory`."""
 
-    GRID_COLUMNS = 6
+    GRID_COLUMNS = 5
     GRID_ROWS = 4
 
     def __init__(
@@ -191,21 +181,11 @@ class InventoryMenu:
         self.equipment = equipment
         frame_kwargs: dict[str, object] = {
             "frameColor": (0.08, 0.07, 0.09, 0.92),
-            "frameSize": frame_size or (-0.9, 0.9, -0.7, 0.7),
+            "frameSize": frame_size or (-1, 1, -0.68, 0.82),
         }
         if parent is not None:
             frame_kwargs["parent"] = parent
         self.frame = DirectFrame(**frame_kwargs)
-        self.title = OnscreenText(
-            text="Field Inventory",
-            parent=self.frame,
-            pos=(0, 0.58),
-            scale=0.08,
-            fg=(0.95, 0.95, 0.85, 1),
-            shadow=(0, 0, 0, 0.8),
-            align=TextNode.ACenter,
-            mayChange=False,
-        )
         self.capacity_text = OnscreenText(
             text="",
             parent=self.frame,
@@ -315,9 +295,9 @@ class InventoryMenu:
     def _create_equipment_panel(self) -> None:
         self.equipment_panel = DirectFrame(
             parent=self.frame,
-            pos=(0.68, 0, 0.03),
+            pos=(0.68, 0, 0.20),
             frameColor=(0.1, 0.1, 0.14, 0.95),
-            frameSize=(-0.28, 0.28, -0.55, 0.55),
+            frameSize=(-0.28, 0.28, -0.80, 0.55),
             borderWidth=(0.012, 0.012),
             relief=1,
         )
@@ -1082,16 +1062,6 @@ class TabbedMenu:
             frameColor=(0.03, 0.04, 0.08, 0.95),
             frameSize=(-1.05, 1.05, -0.8, 0.8),
         )
-        self.title = OnscreenText(
-            text="Operative Interface",
-            parent=self.frame,
-            pos=(0, 0.63),
-            scale=0.08,
-            fg=(0.95, 0.95, 0.88, 1),
-            shadow=(0, 0, 0, 0.85),
-            align=TextNode.ACenter,
-            mayChange=False,
-        )
 
         self.content_frame = DirectFrame(
             parent=self.frame,
@@ -1118,16 +1088,6 @@ class TabbedMenu:
         self.tab_buttons: dict[str, DirectButton] = {}
         self._build_tabs()
 
-        self.footer = OnscreenText(
-            text="TAB - Toggle Menu   I - Jump to Inventory Tab",
-            parent=self.frame,
-            pos=(0, -0.72),
-            scale=0.045,
-            fg=(0.75, 0.82, 1, 1),
-            align=TextNode.ACenter,
-            mayChange=False,
-        )
-
         self.active_tab: str = self.TAB_STATS
         self.is_visible = True
         self.select_tab(self.TAB_STATS)
@@ -1146,15 +1106,15 @@ class TabbedMenu:
         )
 
         self.tab_buttons[self.TAB_STATS] = DirectButton(
-            text="Operative Stats",
-            pos=(-0.45, 0, 0.5),
+            text="Stats",
+            pos=(-0.85, 0, 0.8),
             command=self._on_tab_selected,
             extraArgs=[self.TAB_STATS],
             **button_cfg,
         )
         self.tab_buttons[self.TAB_INVENTORY] = DirectButton(
-            text="Field Inventory",
-            pos=(0.45, 0, 0.5),
+            text="Inventory",
+            pos=(-0.55, 0, 0.8),
             command=self._on_tab_selected,
             extraArgs=[self.TAB_INVENTORY],
             **button_cfg,

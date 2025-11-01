@@ -103,14 +103,6 @@ class GameWorld:
         self._accepted_events.append("r")
 
     def _setup_hud(self) -> None:
-        self.hud_text = OnscreenText(
-            text="WASD move, Mouse look, TAB menu, I inventory tab",
-            pos=(0, 0.9),
-            scale=0.05,
-            fg=(0.9, 0.9, 0.9, 1),
-            align=TextNode.ACenter,
-            mayChange=False,
-        )
 
         self.weapon_hud = OnscreenText(
             text="No weapon equipped",
@@ -213,6 +205,7 @@ class GameWorld:
                 description="A precision marksman rifle from the Aegis program.",
                 category="Primary Weapon",
                 stack_limit=1,
+                stat_bonuses={"agility": 12}
             ), 1),
             (ItemTemplate(
                 id="aegis_operative_badge",
