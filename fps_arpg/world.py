@@ -36,15 +36,16 @@ class GameWorld:
         self.is_paused = False
         self._mouse_captured = False
 
+        self.weapon_root: NodePath | None = None
+        self.weapon_model: NodePath | None = None
+        self.active_weapon: WeaponState | None = None
+        self.is_fire_held = False
+
         self.player_stats = PlayerStats()
         self.inventory = Inventory()
         self.equipment = EquipmentLoadout()
         self.equipment.add_listener(self._on_equipment_changed)
         self._seed_debug_items()
-        self.active_weapon: WeaponState | None = None
-        self.is_fire_held = False
-        self.weapon_root: NodePath | None = None
-        self.weapon_model: NodePath | None = None
 
         self.key_map: dict[str, bool] = {
             "forward": False,
