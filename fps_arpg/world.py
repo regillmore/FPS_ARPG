@@ -811,7 +811,7 @@ class GameWorld:
         else:
             offset = Vec3(0, 0, 0)
         decal.setPos(self.projectile_decal_root, position + offset)
-        decal.lookAt(self.projectile_decal_root, position + normal)
+        decal.lookAt(self.projectile_decal_root, position - normal)
         decal.setR(random.uniform(0.0, 360.0))
         decal.setTransparency(TransparencyAttrib.M_alpha)
         decal.setDepthOffset(1)
