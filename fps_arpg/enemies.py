@@ -3,9 +3,14 @@ from __future__ import annotations
 
 from panda3d.core import (
     BitMask32,
-    CardMaker,
     CollisionNode,
     CollisionSphere,
+    Geom,
+    GeomNode,
+    GeomTriangles,
+    GeomVertexData,
+    GeomVertexFormat,
+    GeomVertexWriter,
     NodePath,
     TransparencyAttrib,
     Vec3,
@@ -184,54 +189,92 @@ class TargetDummy(Enemy):
     def _build_model(self, parent: NodePath, body_color: Vec4) -> NodePath:
         root = parent.attachNewNode("target_dummy_model")
 
-        stand_cm = CardMaker("target_dummy_stand")
-        stand_cm.setFrame(-0.18, 0.18, 0.0, 0.35)
-        stand_front = root.attachNewNode(stand_cm.generate())
-        stand_front.setTwoSided(True)
-        stand_front.setColor(Vec4(0.28, 0.3, 0.32, 1.0))
-        stand_front.setPos(0, 0, 0.02)
+        base = _make_box(Vec3(0.26, 0.26, 0.05), Vec4(0.2, 0.22, 0.26, 1.0), "dummy_base")
+        base.reparentTo(root)
+        base.setPos(0.0, 0.0, 0.05)
 
-        stand_side = root.attachNewNode(stand_cm.generate())
-        stand_side.setTwoSided(True)
-        stand_side.setH(90)
-        stand_side.setColor(Vec4(0.22, 0.24, 0.26, 1.0))
-        stand_side.setPos(0, 0, 0.02)
+        support = _make_box(Vec3(0.08, 0.08, 0.32), Vec4(0.28, 0.3, 0.34, 1.0), "dummy_support")
+        support.reparentTo(root)
+        support.setPos(0.0, 0.0, 0.42)
 
-        body_cm = CardMaker("target_dummy_body")
-        body_cm.setFrame(-0.45, 0.45, 0.25, 1.7)
-        body_front = root.attachNewNode(body_cm.generate())
-        body_front.setTwoSided(True)
-        body_front.setPos(0, 0.0, 0.0)
-        body_front.setColor(body_color)
+        torso = _make_box(Vec3(0.3, 0.16, 0.42), body_color, "dummy_torso")
+        torso.reparentTo(root)
+        torso.setPos(0.0, 0.0, 1.16)
 
-        body_side = root.attachNewNode(body_cm.generate())
-        body_side.setTwoSided(True)
-        body_side.setH(90)
-        body_side.setColor(body_color)
+        shoulders = _make_box(Vec3(0.4, 0.12, 0.12), Vec4(0.76, 0.5, 0.38, 1.0), "dummy_shoulders")
+        shoulders.reparentTo(root)
+        shoulders.setPos(0.0, 0.0, 1.24)
 
-        head_cm = CardMaker("target_dummy_head")
-        head_cm.setFrame(-0.3, 0.3, 1.25, 1.85)
-        head_front = root.attachNewNode(head_cm.generate())
-        head_front.setTwoSided(True)
-        head_front.setColor(Vec4(0.9, 0.85, 0.78, 1.0))
+        head = _make_box(Vec3(0.2, 0.18, 0.22), Vec4(0.9, 0.85, 0.78, 1.0), "dummy_head")
+        head.reparentTo(root)
+        head.setPos(0.0, 0.0, 1.84)
 
-        head_side = root.attachNewNode(head_cm.generate())
-        head_side.setTwoSided(True)
-        head_side.setH(90)
-        head_side.setColor(Vec4(0.9, 0.85, 0.78, 1.0))
+        visor = _make_box(Vec3(0.14, 0.02, 0.08), Vec4(0.32, 0.36, 0.42, 1.0), "dummy_visor")
+        visor.reparentTo(root)
+        visor.setPos(0.0, 0.2, 1.86)
 
-        center_cm = CardMaker("target_dummy_center")
-        center_cm.setFrame(-0.18, 0.18, 0.85, 1.25)
-        center_front = root.attachNewNode(center_cm.generate())
-        center_front.setTwoSided(True)
-        center_front.setColor(Vec4(0.95, 0.92, 0.6, 1.0))
+        core = _make_box(Vec3(0.12, 0.025, 0.14), Vec4(0.95, 0.92, 0.6, 1.0), "dummy_core")
+        core.reparentTo(root)
+        core.setPos(0.0, 0.18, 1.1)
 
-        center_side = root.attachNewNode(center_cm.generate())
-        center_side.setTwoSided(True)
-        center_side.setH(90)
-        center_side.setColor(Vec4(0.95, 0.92, 0.6, 1.0))
+        harness = _make_box(Vec3(0.18, 0.03, 0.32), Vec4(0.24, 0.28, 0.34, 1.0), "dummy_harness")
+        harness.reparentTo(root)
+        harness.setPos(0.0, -0.18, 1.16)
 
         return root
+
+
+def _make_box(half_extents: Vec3, color: Vec4, name: str) -> NodePath:
+    """Create a coloured box primitive."""
+
+    format = GeomVertexFormat.getV3n3c4()
+    vdata = GeomVertexData(name, format, Geom.UHStatic)
+    vertex = GeomVertexWriter(vdata, "vertex")
+    normal = GeomVertexWriter(vdata, "normal")
+    color_writer = GeomVertexWriter(vdata, "color")
+
+    hx, hy, hz = half_extents
+    corners = [
+        Vec3(-hx, -hy, -hz),
+        Vec3(hx, -hy, -hz),
+        Vec3(hx, hy, -hz),
+        Vec3(-hx, hy, -hz),
+        Vec3(-hx, -hy, hz),
+        Vec3(hx, -hy, hz),
+        Vec3(hx, hy, hz),
+        Vec3(-hx, hy, hz),
+    ]
+
+    faces = [
+        ((0, 1, 2, 3), Vec3(0, 0, -1)),  # Bottom
+        ((4, 5, 6, 7), Vec3(0, 0, 1)),  # Top
+        ((2, 3, 7, 6), Vec3(0, 1, 0)),  # Front
+        ((0, 1, 5, 4), Vec3(0, -1, 0)),  # Back
+        ((1, 2, 6, 5), Vec3(1, 0, 0)),  # Right
+        ((3, 0, 4, 7), Vec3(-1, 0, 0)),  # Left
+    ]
+
+    prim = GeomTriangles(Geom.UHStatic)
+    vert_index = 0
+
+    for indices, face_normal in faces:
+        for idx in indices:
+            vertex.addData3f(corners[idx])
+            normal.addData3f(face_normal)
+            color_writer.addData4f(color)
+        prim.addVertices(vert_index, vert_index + 1, vert_index + 2)
+        prim.addVertices(vert_index, vert_index + 2, vert_index + 3)
+        vert_index += 4
+
+    prim.closePrimitive()
+
+    geom = Geom(vdata)
+    geom.addPrimitive(prim)
+
+    node = GeomNode(name)
+    node.addGeom(geom)
+
+    return NodePath(node)
 
 
 __all__ = [
