@@ -1,7 +1,7 @@
 """Prototype enemy implementations for the FPS ARPG."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from direct.showbase import ShowBaseGlobal
 from panda3d.core import (
@@ -221,7 +221,13 @@ class TargetDummy(Enemy):
 
     RESPAWN_DELAY = 4.0
 
-    def __init__(self, parent: NodePath, collision_mask: BitMask32) -> None:
+    def __init__(
+        self,
+        parent: NodePath,
+        collision_mask: BitMask32,
+        *,
+        on_death_callback: Callable[["TargetDummy"], None] | None = None,
+    ) -> None:
         super().__init__(
             "target_dummy",
             parent,
@@ -234,6 +240,7 @@ class TargetDummy(Enemy):
         self._flash_duration = 0.2
         self._respawn_timer = 0.0
         self._knocked_down = False
+        self._on_death_callback = on_death_callback
 
         collider_node = CollisionNode("target_dummy_collider")
         collider_node.addSolid(CollisionSphere(0, 0, 0.9, 0.9))
@@ -266,6 +273,8 @@ class TargetDummy(Enemy):
         self.node.setP(-25.0)
         self.node.setR(8.0)
         self.model.setColorScale(Vec4(0.35, 0.35, 0.35, 1.0))
+        if self._on_death_callback is not None:
+            self._on_death_callback(self)
 
     def _on_downed(self) -> None:
         super()._on_downed()
