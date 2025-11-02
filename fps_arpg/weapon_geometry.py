@@ -65,41 +65,41 @@ def _build_sentinel_rifle(blueprint: WeaponBlueprint) -> NodePath:
 
     body = _make_box(Vec3(0.065, 0.46, 0.09), Vec4(0.26, 0.3, 0.35, 1), "body")
     body.reparentTo(root)
-    body.setPos(-0.01, 1, 0.01)
+    body.setPos(-0.01, 0, 0.01)
 
     barrel = _make_box(Vec3(0.022, 0.34, 0.022), Vec4(0.15, 0.18, 0.22, 1), "barrel")
     barrel.reparentTo(root)
-    barrel.setPos(0, 1.5, 0.03)
+    barrel.setPos(0, 0.5, 0.03)
 
     muzzle = _make_box(Vec3(0.028, 0.08, 0.028), Vec4(0.1, 0.12, 0.15, 1), "muzzle")
     muzzle.reparentTo(root)
-    muzzle.setPos(0, 1.82, 0.03)
+    muzzle.setPos(0, 0.82, 0.03)
 
     stock = _make_box(Vec3(0.07, 0.24, 0.1), Vec4(0.2, 0.22, 0.26, 1), "stock")
     stock.reparentTo(root)
-    stock.setPos(-0.01, 0.58, -0.01)
+    stock.setPos(-0.01, -0.42, -0.01)
 
     cheek_rest = _make_box(Vec3(0.05, 0.16, 0.045), Vec4(0.28, 0.32, 0.38, 1), "cheek_rest")
     cheek_rest.reparentTo(root)
-    cheek_rest.setPos(0.02, 0.8, 0.07)
+    cheek_rest.setPos(0.02, -0.2, 0.07)
 
     grip = _make_box(Vec3(0.032, 0.14, 0.1), Vec4(0.22, 0.24, 0.28, 1), "grip")
     grip.reparentTo(root)
-    grip.setPos(-0.06, 0.98, -0.22)
+    grip.setPos(-0.06, -0.02, -0.22)
     grip.setHpr(0, -24, 0)
 
     magazine = _make_box(Vec3(0.05, 0.12, 0.12), Vec4(0.18, 0.2, 0.24, 1), "magazine")
     magazine.reparentTo(root)
-    magazine.setPos(0.02, 0.96, -0.18)
+    magazine.setPos(0.02, -0.04, -0.18)
     magazine.setHpr(0, 12, 0)
 
     optics = _make_box(Vec3(0.04, 0.2, 0.04), Vec4(0.32, 0.36, 0.42, 1), "optics")
     optics.reparentTo(root)
-    optics.setPos(0.015, 1.12, 0.14)
+    optics.setPos(0.015, 0.12, 0.14)
 
     battery = _make_box(Vec3(0.03, 0.14, 0.055), Vec4(0.22, 0.28, 0.34, 1), "battery")
     battery.reparentTo(root)
-    battery.setPos(-0.05, 1.1, -0.06)
+    battery.setPos(-0.05, 0.1, -0.06)
 
     return root
 
