@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from panda3d.core import (
     BitMask32,
+    CardMaker,
     CollisionNode,
     CollisionSphere,
     Geom,
@@ -32,6 +33,7 @@ class Enemy:
         collision_mask: BitMask32,
         *,
         max_health: float = 100.0,
+        health_bar_offset: float = 2.2,
     ) -> None:
         self.node = parent.attachNewNode(name)
         self.collision_mask = BitMask32(collision_mask)
@@ -40,6 +42,13 @@ class Enemy:
         self.is_alive = True
         self._destroyed = False
         self.collider: NodePath | None = None
+        self._health_bar_offset = float(health_bar_offset)
+        self._health_bar_root: NodePath | None = None
+        self._health_bar_fill_parent: NodePath | None = None
+        self._health_bar_visible = False
+
+        self._build_health_bar()
+        self._update_health_bar()
 
     # Lifecycle -------------------------------------------------------
     def update(self, dt: float) -> bool:
@@ -65,8 +74,78 @@ class Enemy:
                 self.collider.clearPythonTag(self.COLLIDER_TAG)
                 self.collider.removeNode()
             self.collider = None
+        if self._health_bar_root is not None:
+            if not self._health_bar_root.isEmpty():
+                self._health_bar_root.removeNode()
+            self._health_bar_root = None
+        self._health_bar_fill_parent = None
         if not self.node.isEmpty():
             self.node.removeNode()
+
+    # UI -------------------------------------------------------------
+    def _build_health_bar(self) -> None:
+        width = 1.2
+        height = 0.16
+        border = 0.04
+        fill_width = max(width - border * 2.0, 0.0)
+        fill_height = max(height - border * 2.0, 0.0)
+
+        root = self.node.attachNewNode("health_bar")
+        root.setPos(0.0, 0.0, self._health_bar_offset)
+        root.setBillboardPointWorld()
+        root.setTransparency(TransparencyAttrib.M_alpha)
+        root.setDepthTest(False)
+        root.setDepthWrite(False)
+        root.setLightOff(1)
+        root.setBin("fixed", 0)
+        root.hide()
+
+        cm_bg = CardMaker("enemy_health_bar_bg")
+        cm_bg.setFrame(-width / 2.0, width / 2.0, -height / 2.0, height / 2.0)
+        background = root.attachNewNode(cm_bg.generate())
+        background.setColor(Vec4(0.02, 0.02, 0.02, 0.75))
+        background.setTransparency(TransparencyAttrib.M_alpha)
+        background.setDepthTest(False)
+        background.setDepthWrite(False)
+        background.setLightOff(1)
+        background.setBin("fixed", 0)
+
+        fill_parent = root.attachNewNode("enemy_health_bar_fill")
+        fill_parent.setPos(-width / 2.0 + border, 0.0, 0.0)
+
+        cm_fill = CardMaker("enemy_health_bar_fill_geom")
+        cm_fill.setFrame(0.0, fill_width, -fill_height / 2.0, fill_height / 2.0)
+        fill_geom = fill_parent.attachNewNode(cm_fill.generate())
+        fill_geom.setColor(Vec4(0.83, 0.21, 0.26, 0.95))
+        fill_geom.setTransparency(TransparencyAttrib.M_alpha)
+        fill_geom.setDepthTest(False)
+        fill_geom.setDepthWrite(False)
+        fill_geom.setLightOff(1)
+        fill_geom.setBin("fixed", 1)
+
+        self._health_bar_root = root
+        self._health_bar_fill_parent = fill_parent
+        self._health_bar_visible = False
+
+    def _update_health_bar(self) -> None:
+        if (
+            self._health_bar_root is None
+            or self._health_bar_root.isEmpty()
+            or self._health_bar_fill_parent is None
+            or self._health_bar_fill_parent.isEmpty()
+        ):
+            return
+
+        ratio = 0.0 if self.max_health <= 0.0 else self.health / self.max_health
+        ratio = max(0.0, min(1.0, ratio))
+        self._health_bar_fill_parent.setScale(ratio, 1.0, 1.0)
+
+        should_show = self.is_alive and ratio < 0.999
+        if should_show:
+            self._health_bar_root.show()
+        else:
+            self._health_bar_root.hide()
+        self._health_bar_visible = should_show
 
     # Combat ---------------------------------------------------------
     def handle_projectile_hit(
@@ -88,6 +167,7 @@ class Enemy:
             self.is_alive = False
             self.on_death()
             self._on_downed()
+        self._update_health_bar()
 
     def on_damage(self, amount: float) -> None:  # pragma: no cover - hooks
         """Optional callback when the enemy takes damage."""
@@ -185,6 +265,7 @@ class TargetDummy(Enemy):
         self.node.setR(0.0)
         self.model.clearColorScale()
         self.set_collider_enabled(True)
+        self._update_health_bar()
 
     def _build_model(self, parent: NodePath, body_color: Vec4) -> NodePath:
         root = parent.attachNewNode("target_dummy_model")
