@@ -116,6 +116,8 @@ class GameWorld:
     def _setup_environment(self) -> None:
         self.map_instance = self.map_resource.build(self.root)
         self.environment_collider = self.map_instance.environment_collider
+        for light_np in self.map_instance.lights:
+            self.root.setLight(light_np)
         self.app.render.setShaderAuto()
 
     def _setup_collisions(self) -> None:

@@ -26,6 +26,7 @@ class SafehouseMapInstance:
     root: NodePath
     environment_collider: NodePath
     projectile_decal_root: NodePath
+    lights: tuple[NodePath, ...]
 
 
 class SafehouseMap:
@@ -101,13 +102,14 @@ class SafehouseMap:
         ambient_light = AmbientLight("safehouse_ambient")
         ambient_light.setColor(Vec4(0.25, 0.25, 0.28, 1))
         ambient_np = safehouse_root.attachNewNode(ambient_light)
-        safehouse_root.setLight(ambient_np)
 
         key_light = DirectionalLight("safehouse_key")
         key_light.setColor(Vec4(0.7, 0.7, 0.75, 1))
         key_light_np = safehouse_root.attachNewNode(key_light)
         key_light_np.setHpr(-35, -60, 0)
-        safehouse_root.setLight(key_light_np)
+
+        for light_np in (ambient_np, key_light_np):
+            safehouse_root.setLight(light_np)
 
         environment_node = CollisionNode("safehouse_bounds")
         environment_node.setFromCollideMask(BitMask32.allOff())
@@ -140,4 +142,5 @@ class SafehouseMap:
             root=safehouse_root,
             environment_collider=environment_collider,
             projectile_decal_root=projectile_decal_root,
+            lights=(ambient_np, key_light_np),
         )
