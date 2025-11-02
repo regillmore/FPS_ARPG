@@ -5,7 +5,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from direct.gui.DirectGui import OnscreenText
-from panda3d.core import ClockObject, NodePath, TextNode, Vec3, WindowProperties
+from panda3d.core import (
+    AmbientLight,
+    CardMaker,
+    ClockObject,
+    DirectionalLight,
+    Material,
+    NodePath,
+    TextNode,
+    Vec3,
+    Vec4,
+    WindowProperties,
+)
 
 from .equipment import EquipmentLoadout
 from .inventory import Inventory, ItemTemplate
@@ -74,10 +85,11 @@ class GameWorld:
 
     # Setup -----------------------------------------------------------
     def _setup_environment(self) -> None:
-        env = self.app.loader.loadModel("models/environment")
-        env.reparentTo(self.root)
-        env.setScale(0.12)
-        env.setPos(-8, 42, 0)
+        self.safehouse_dimensions = Vec3(20, 26, 8)
+        self.safehouse_root = self.root.attachNewNode("safehouse")
+        self._build_safehouse_shell(self.safehouse_root, self.safehouse_dimensions)
+        self._add_safehouse_details(self.safehouse_root, self.safehouse_dimensions)
+        self._configure_safehouse_lighting(self.safehouse_root)
 
         self.app.render.setShaderAuto()
 
@@ -139,6 +151,228 @@ class GameWorld:
             self.player_stats, self.inventory, self.equipment
         )
         self.tabbed_menu.hide()
+
+    def _build_safehouse_shell(self, parent: NodePath, room_size: Vec3) -> None:
+
+        concrete_base_color = Vec4(0.32, 0.33, 0.35, 1.0)
+        concrete_trim_color = Vec4(0.28, 0.29, 0.31, 1.0)
+        ceiling_color = Vec4(0.24, 0.24, 0.26, 1.0)
+
+        def make_material(name: str, base_color: Vec4) -> Material:
+            mat = Material(name)
+            mat.setDiffuse(base_color)
+            mat.setAmbient(
+                Vec4(base_color.x * 0.6, base_color.y * 0.6, base_color.z * 0.6, 1.0)
+            )
+            mat.setSpecular(Vec4(0.08, 0.08, 0.08, 1.0))
+            mat.setShininess(8.0)
+            return mat
+
+        base_material = make_material("concrete_base", concrete_base_color)
+        trim_material = make_material("concrete_trim", concrete_trim_color)
+        ceiling_material = make_material("concrete_ceiling", ceiling_color)
+
+        # Floor ----------------------------------------------------------------
+        floor_maker = CardMaker("safehouse_floor")
+        floor_maker.setFrame(
+            -room_size.x / 2,
+            room_size.x / 2,
+            -room_size.y / 2,
+            room_size.y / 2,
+        )
+        floor = parent.attachNewNode(floor_maker.generate())
+        floor.setPos(0, 0, 0)
+        floor.setColor(concrete_base_color)
+        floor.setMaterial(base_material, 1)
+        floor.setTwoSided(True)
+
+        # Ceiling --------------------------------------------------------------
+        ceiling = parent.attachNewNode(floor_maker.generate())
+        ceiling.setPos(0, 0, room_size.z)
+        ceiling.setHpr(180, 0, 0)
+        ceiling.setColor(ceiling_color)
+        ceiling.setMaterial(ceiling_material, 1)
+        ceiling.setTwoSided(True)
+
+        # Primary walls --------------------------------------------------------
+        wall_maker = CardMaker("safehouse_wall")
+        wall_maker.setFrame(
+            -room_size.x / 2,
+            room_size.x / 2,
+            -room_size.z / 2,
+            room_size.z / 2,
+        )
+
+        back_wall = parent.attachNewNode(wall_maker.generate())
+        back_wall.setPos(0, room_size.y / 2, room_size.z / 2)
+        back_wall.setP(-90)
+        back_wall.setColor(concrete_base_color)
+        back_wall.setMaterial(base_material, 1)
+        back_wall.setTwoSided(True)
+
+        front_wall = parent.attachNewNode(wall_maker.generate())
+        front_wall.setPos(0, -room_size.y / 2, room_size.z / 2)
+        front_wall.setP(90)
+        front_wall.setColor(concrete_base_color)
+        front_wall.setMaterial(base_material, 1)
+        front_wall.setTwoSided(True)
+
+        side_wall_maker = CardMaker("safehouse_side_wall")
+        side_wall_maker.setFrame(
+            -room_size.y / 2,
+            room_size.y / 2,
+            -room_size.z / 2,
+            room_size.z / 2,
+        )
+
+        left_wall = parent.attachNewNode(side_wall_maker.generate())
+        left_wall.setPos(-room_size.x / 2, 0, room_size.z / 2)
+        left_wall.setH(90)
+        left_wall.setP(-90)
+        left_wall.setColor(concrete_base_color)
+        left_wall.setMaterial(base_material, 1)
+        left_wall.setTwoSided(True)
+
+        right_wall = parent.attachNewNode(side_wall_maker.generate())
+        right_wall.setPos(room_size.x / 2, 0, room_size.z / 2)
+        right_wall.setH(-90)
+        right_wall.setP(-90)
+        right_wall.setColor(concrete_base_color)
+        right_wall.setMaterial(base_material, 1)
+        right_wall.setTwoSided(True)
+
+        # Add darker trim bands to break up the silhouette
+        trim_height = 1.2
+        trim_offset = room_size.z / 2 - trim_height / 2
+        trim_maker = CardMaker("safehouse_trim")
+        trim_maker.setFrame(-room_size.x / 2, room_size.x / 2, -trim_height / 2, trim_height / 2)
+
+        for sign in (-1, 1):
+            trim = parent.attachNewNode(trim_maker.generate())
+            trim.setPos(0, sign * (room_size.y / 2 - 0.01), trim_offset)
+            trim.setP(-90 * sign)
+            trim.setColor(concrete_trim_color)
+            trim.setMaterial(trim_material, 1)
+            trim.setTwoSided(True)
+
+        trim_side_maker = CardMaker("safehouse_side_trim")
+        trim_side_maker.setFrame(
+            -room_size.y / 2,
+            room_size.y / 2,
+            -trim_height / 2,
+            trim_height / 2,
+        )
+
+        for sign in (-1, 1):
+            side_trim = parent.attachNewNode(trim_side_maker.generate())
+            side_trim.setPos(sign * (room_size.x / 2 - 0.01), 0, trim_offset)
+            side_trim.setH(sign * 90)
+            side_trim.setP(-90)
+            side_trim.setColor(concrete_trim_color)
+            side_trim.setMaterial(trim_material, 1)
+            side_trim.setTwoSided(True)
+
+    def _add_safehouse_details(self, parent: NodePath, room_size: Vec3) -> None:
+        # Build a raised platform at the rear for staging equipment lockers
+        dais_depth = 6.0
+        dais_height = 0.35
+        dais_width = room_size.x - 8.0
+
+        dais_maker = CardMaker("safehouse_dais")
+        dais_maker.setFrame(-dais_width / 2, dais_width / 2, -dais_depth / 2, dais_depth / 2)
+        dais = parent.attachNewNode(dais_maker.generate())
+        dais.setPos(0, room_size.y / 2 - dais_depth / 2 - 1.0, dais_height)
+        dais.setColor(0.26, 0.27, 0.29, 1.0)
+        dais.setP(0)
+        dais.setTwoSided(True)
+
+        riser_height = dais_height
+        riser_maker = CardMaker("safehouse_dais_riser")
+        riser_maker.setFrame(-dais_width / 2, dais_width / 2, -riser_height / 2, riser_height / 2)
+        riser = parent.attachNewNode(riser_maker.generate())
+        riser.setPos(0, dais.getY() - dais_depth / 2, riser_height / 2)
+        riser.setP(90)
+        riser.setColor(0.22, 0.23, 0.25, 1.0)
+        riser.setTwoSided(True)
+
+        # Add a simple walkway strip around the edges to suggest embedded lighting
+        walkway_width = 1.2
+        walkway_color = (0.38, 0.4, 0.42, 1.0)
+
+        front_back_maker = CardMaker("safehouse_walkway_fb")
+        front_back_maker.setFrame(
+            -(room_size.x - 2.0) / 2,
+            (room_size.x - 2.0) / 2,
+            -walkway_width / 2,
+            walkway_width / 2,
+        )
+
+        for y_sign in (-1, 1):
+            walkway = parent.attachNewNode(front_back_maker.generate())
+            walkway.setPos(0, y_sign * (room_size.y / 2 - walkway_width / 2), 0.01)
+            walkway.setColor(walkway_color)
+            walkway.setTwoSided(True)
+
+        side_maker = CardMaker("safehouse_walkway_side")
+        side_maker.setFrame(
+            -(room_size.y - 2.0) / 2,
+            (room_size.y - 2.0) / 2,
+            -walkway_width / 2,
+            walkway_width / 2,
+        )
+
+        for x_sign in (-1, 1):
+            walkway = parent.attachNewNode(side_maker.generate())
+            walkway.setPos(x_sign * (room_size.x / 2 - walkway_width / 2), 0, 0.01)
+            walkway.setH(90)
+            walkway.setColor(walkway_color)
+            walkway.setTwoSided(True)
+
+        # Create inset floor panels to give the space more depth
+        inset_maker = CardMaker("safehouse_inset")
+        inset_maker.setFrame(-4, 4, -4, 4)
+
+        inset_offset = room_size.x / 2 - 3.5
+        inset_positions = [
+            Vec3(-inset_offset, -inset_offset, 0.02),
+            Vec3(inset_offset, -inset_offset, 0.02),
+            Vec3(-inset_offset, inset_offset, 0.02),
+        ]
+        for pos in inset_positions:
+            inset = parent.attachNewNode(inset_maker.generate())
+            inset.setPos(pos)
+            inset.setColor(0.29, 0.3, 0.32, 1.0)
+            inset.setTwoSided(True)
+
+        # Suspended ceiling light panels to accentuate the safehouse vibe
+        light_panel_maker = CardMaker("safehouse_ceiling_light")
+        light_panel_maker.setFrame(-2.4, 2.4, -0.5, 0.5)
+
+        for offset in (-5.0, 0.0, 5.0):
+            panel = parent.attachNewNode(light_panel_maker.generate())
+            panel.setPos(0, offset, room_size.z - 0.05)
+            panel.setHpr(180, 0, 0)
+            panel.setColor(0.78, 0.82, 0.88, 1.0)
+            panel.setTwoSided(True)
+
+    def _configure_safehouse_lighting(self, parent: NodePath) -> None:
+        ambient = AmbientLight("safehouse_ambient")
+        ambient.setColor((0.26, 0.28, 0.32, 1.0))
+        ambient_np = parent.attachNewNode(ambient)
+        parent.setLight(ambient_np)
+
+        key_light = DirectionalLight("safehouse_key")
+        key_light.setColor((0.62, 0.65, 0.7, 1.0))
+        key_light.setShadowCaster(False)
+        key_np = parent.attachNewNode(key_light)
+        key_np.setHpr(-35, -45, 0)
+        parent.setLight(key_np)
+
+        fill_light = DirectionalLight("safehouse_fill")
+        fill_light.setColor((0.3, 0.32, 0.35, 1.0))
+        fill_np = parent.attachNewNode(fill_light)
+        fill_np.setHpr(145, -30, 0)
+        parent.setLight(fill_np)
 
     def _seed_debug_items(self) -> None:
         """Populate the prototype inventory with a few sample items."""
