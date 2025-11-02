@@ -5,7 +5,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from direct.gui.DirectGui import OnscreenText
-from panda3d.core import ClockObject, NodePath, TextNode, Vec3, WindowProperties
+from panda3d.core import (
+    AmbientLight,
+    CardMaker,
+    ClockObject,
+    DirectionalLight,
+    NodePath,
+    TextNode,
+    Vec3,
+    Vec4,
+    WindowProperties,
+    TransparencyAttrib,
+)
 
 from .equipment import EquipmentLoadout
 from .inventory import Inventory, ItemTemplate
@@ -43,6 +54,7 @@ class GameWorld:
         self.is_fire_held = False
         self.projectile_root: NodePath | None = None
         self.projectiles: list[Projectile] = []
+        self.environment_root: NodePath | None = None
 
         self.player_stats = PlayerStats()
         self.inventory = Inventory()
@@ -74,11 +86,10 @@ class GameWorld:
 
     # Setup -----------------------------------------------------------
     def _setup_environment(self) -> None:
-        env = self.app.loader.loadModel("models/environment")
-        env.reparentTo(self.root)
-        env.setScale(0.12)
-        env.setPos(-8, 42, 0)
-
+        self.environment_root = self.root.attachNewNode("safehouse")
+        self._build_safehouse_shell(self.environment_root)
+        self._populate_safehouse(self.environment_root)
+        self._setup_safehouse_lighting(self.environment_root)
         self.app.render.setShaderAuto()
 
     def _setup_camera(self) -> None:
@@ -370,12 +381,171 @@ class GameWorld:
         if self.weapon_root is not None and not self.weapon_root.isEmpty():
             self.weapon_root.removeNode()
             self.weapon_root = None
+        if self.environment_root is not None and not self.environment_root.isEmpty():
+            self.environment_root.removeNode()
+            self.environment_root = None
 
         self.app.camera.reparentTo(self.app.render)
         self.app.camera.setPos(0, 0, 0)
         self.app.camera.setHpr(0, 0, 0)
 
         self.root.removeNode()
+
+    def _build_safehouse_shell(self, parent: NodePath) -> None:
+        """Create a compact indoor arena that acts as the safehouse shell."""
+
+        room_width = 14.0
+        room_length = 18.0
+        room_height = 6.0
+
+        box_model = self.app.loader.loadModel("models/box")
+
+        floor = box_model.copyTo(parent)
+        floor.setName("floor")
+        floor.setScale(room_width, room_length, 0.2)
+        floor.setPos(0, 0, -0.1)
+        floor.setColor(Vec4(0.12, 0.13, 0.16, 1))
+
+        ceiling = box_model.copyTo(parent)
+        ceiling.setName("ceiling")
+        ceiling.setScale(room_width, room_length, 0.2)
+        ceiling.setPos(0, 0, room_height + 0.1)
+        ceiling.setColor(Vec4(0.08, 0.08, 0.12, 1))
+
+        wall_color = Vec4(0.16, 0.18, 0.22, 1)
+        wall_specs = [
+            ((0, room_length / 2 + 0.1, room_height / 2), (room_width, 0.2, room_height)),
+            ((0, -room_length / 2 - 0.1, room_height / 2), (room_width, 0.2, room_height)),
+            ((room_width / 2 + 0.1, 0, room_height / 2), (0.2, room_length, room_height)),
+            ((-room_width / 2 - 0.1, 0, room_height / 2), (0.2, room_length, room_height)),
+        ]
+
+        for idx, (position, scale) in enumerate(wall_specs):
+            wall = box_model.copyTo(parent)
+            wall.setName(f"wall_{idx}")
+            wall.setPos(Vec3(*position))
+            wall.setScale(Vec3(*scale))
+            wall.setColor(wall_color)
+
+        bulkhead = box_model.copyTo(parent)
+        bulkhead.setName("bulkhead")
+        bulkhead.setScale(room_width - 2.0, 1.5, 0.35)
+        bulkhead.setPos(0, -room_length / 2 + 1.0, room_height - 0.6)
+        bulkhead.setColor(Vec4(0.22, 0.24, 0.28, 1))
+
+        support_color = Vec4(0.28, 0.3, 0.36, 1)
+        support_positions = [
+            (-room_width / 2 + 1.5, room_length / 2 - 1.5),
+            (room_width / 2 - 1.5, room_length / 2 - 1.5),
+            (-room_width / 2 + 1.5, -room_length / 2 + 1.5),
+            (room_width / 2 - 1.5, -room_length / 2 + 1.5),
+        ]
+
+        for idx, (x, y) in enumerate(support_positions):
+            column = box_model.copyTo(parent)
+            column.setName(f"support_{idx}")
+            column.setScale(0.9, 0.9, room_height)
+            column.setPos(x, y, room_height / 2)
+            column.setColor(support_color)
+
+        baseboard = box_model.copyTo(parent)
+        baseboard.setName("baseboard")
+        baseboard.setScale(room_width - 1.0, room_length - 1.0, 0.3)
+        baseboard.setPos(0, 0, 0.15)
+        baseboard.setColor(Vec4(0.18, 0.2, 0.24, 1))
+
+        box_model.removeNode()
+
+    def _populate_safehouse(self, parent: NodePath) -> None:
+        """Add a few simple props to make the safehouse feel inhabited."""
+
+        box_model = self.app.loader.loadModel("models/box")
+
+        console = box_model.copyTo(parent)
+        console.setName("ops_console")
+        console.setScale(3.5, 1.2, 1.4)
+        console.setPos(0, -6.5, 1.1)
+        console.setColor(Vec4(0.2, 0.32, 0.42, 1))
+
+        holo_table = box_model.copyTo(parent)
+        holo_table.setName("holo_table")
+        holo_table.setScale(2.6, 2.6, 0.5)
+        holo_table.setPos(0, 0, 1.0)
+        holo_table.setColor(Vec4(0.1, 0.35, 0.4, 1))
+
+        holo_glass = CardMaker("holo_projection")
+        holo_glass.setFrame(-1.8, 1.8, -1.8, 1.8)
+        hologram = parent.attachNewNode(holo_glass.generate())
+        hologram.setPos(0, 0, 1.8)
+        hologram.setP(-90)
+        hologram.setColor(Vec4(0.1, 0.8, 0.9, 0.35))
+        hologram.setTransparency(TransparencyAttrib.MAlpha)
+
+        bunk = box_model.copyTo(parent)
+        bunk.setName("bunk_frame")
+        bunk.setScale(3.0, 1.4, 1.0)
+        bunk.setPos(-4.5, 6.0, 0.9)
+        bunk.setColor(Vec4(0.24, 0.26, 0.32, 1))
+
+        bedding = box_model.copyTo(parent)
+        bedding.setName("bedding")
+        bedding.setScale(2.8, 1.2, 0.35)
+        bedding.setPos(-4.5, 6.0, 1.2)
+        bedding.setColor(Vec4(0.55, 0.6, 0.75, 1))
+
+        supply_crate = box_model.copyTo(parent)
+        supply_crate.setName("supply_crate")
+        supply_crate.setScale(1.6, 1.6, 1.6)
+        supply_crate.setPos(4.8, 5.5, 0.8)
+        supply_crate.setColor(Vec4(0.36, 0.33, 0.26, 1))
+
+        ammo_locker = box_model.copyTo(parent)
+        ammo_locker.setName("ammo_locker")
+        ammo_locker.setScale(1.4, 2.4, 2.8)
+        ammo_locker.setPos(6.0, -3.5, 1.4)
+        ammo_locker.setColor(Vec4(0.18, 0.28, 0.38, 1))
+
+        walkway = box_model.copyTo(parent)
+        walkway.setName("walkway")
+        walkway.setScale(3.0, 8.5, 0.1)
+        walkway.setPos(0, -2.0, 0.05)
+        walkway.setColor(Vec4(0.22, 0.24, 0.3, 1))
+
+        accent_strip_maker = CardMaker("accent_strip")
+        accent_strip_maker.setFrame(-1.5, 1.5, -0.1, 0.1)
+        for offset in (-1.8, 1.8):
+            strip = parent.attachNewNode(accent_strip_maker.generate())
+            strip.setPos(offset, -2.0, 0.2)
+            strip.setHpr(90, 0, 0)
+            strip.setColor(Vec4(0.38, 0.75, 0.85, 1))
+
+        seating = box_model.copyTo(parent)
+        seating.setName("bench")
+        seating.setScale(2.2, 0.8, 0.6)
+        seating.setPos(4.8, -5.5, 0.6)
+        seating.setColor(Vec4(0.28, 0.2, 0.18, 1))
+
+        box_model.removeNode()
+
+    def _setup_safehouse_lighting(self, parent: NodePath) -> None:
+        """Light the safehouse with a mix of ambient and accent fixtures."""
+
+        ambient = AmbientLight("safehouse_ambient")
+        ambient.setColor(Vec4(0.35, 0.38, 0.45, 1))
+        ambient_np = parent.attachNewNode(ambient)
+        parent.setLight(ambient_np)
+
+        key_light = DirectionalLight("safehouse_key")
+        key_light.setColor(Vec4(0.6, 0.65, 0.75, 1))
+        key_np = parent.attachNewNode(key_light)
+        key_np.setHpr(-45, -50, 0)
+        parent.setLight(key_np)
+
+        fill_light = DirectionalLight("safehouse_fill")
+        fill_light.setColor(Vec4(0.35, 0.4, 0.55, 1))
+        fill_np = parent.attachNewNode(fill_light)
+        fill_np.setHpr(60, -20, 0)
+        parent.setLight(fill_np)
 
     # UI actions ------------------------------------------------------
     def _toggle_stats_menu(self) -> None:
