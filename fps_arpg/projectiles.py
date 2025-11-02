@@ -39,6 +39,8 @@ class Projectile:
         self.node.reparentTo(parent)
         self.node.setPos(position)
 
+        self.collider: NodePath | None = None
+
         forward = Vec3(direction)
         if forward.length_squared() == 0:
             forward = Vec3(0, 1, 0)
@@ -66,6 +68,9 @@ class Projectile:
     def destroy(self) -> None:
         if not self.node.isEmpty():
             self.node.removeNode()
+
+    def set_collider(self, collider: NodePath | None) -> None:
+        self.collider = collider
 
 
 PROJECTILE_BLUEPRINTS: dict[str, ProjectileBlueprint] = {

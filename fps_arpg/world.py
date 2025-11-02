@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import random
+
 from direct.gui.DirectGui import OnscreenText
 from panda3d.core import (
     AmbientLight,
@@ -11,6 +13,7 @@ from panda3d.core import (
     CardMaker,
     ClockObject,
     CollisionHandlerPusher,
+    CollisionHandlerQueue,
     CollisionNode,
     CollisionPlane,
     CollisionSphere,
@@ -20,6 +23,7 @@ from panda3d.core import (
     Plane,
     Point3,
     TextNode,
+    TransparencyAttrib,
     Vec3,
     Vec4,
     WindowProperties,
@@ -44,6 +48,7 @@ class GameWorld:
     MOUSE_SENSITIVITY = 0.2
     PITCH_LIMIT = 75
     ENVIRONMENT_COLLISION_MASK = BitMask32.bit(2)
+    MAX_PROJECTILE_DECALS = 60
 
     def __init__(self, app: "GameApp") -> None:
         self.app = app
@@ -73,6 +78,10 @@ class GameWorld:
         self.is_fire_held = False
         self.projectile_root: NodePath | None = None
         self.projectiles: list[Projectile] = []
+        self.projectile_collision_handler = CollisionHandlerQueue()
+        self.projectile_colliders: dict[int, Projectile] = {}
+        self.projectile_decal_root: NodePath | None = None
+        self.projectile_decals: list[NodePath] = []
 
         self.player_stats = PlayerStats()
         self.inventory = Inventory()
@@ -234,6 +243,16 @@ class GameWorld:
     def _setup_projectiles(self) -> None:
         self.projectile_root = self.root.attachNewNode("projectiles")
         self.projectiles = []
+        self.projectile_colliders.clear()
+        self.projectile_decals = []
+        if (
+            self.safehouse_root is not None and not self.safehouse_root.isEmpty()
+        ):
+            self.projectile_decal_root = self.safehouse_root.attachNewNode(
+                "projectile_decals"
+            )
+        else:
+            self.projectile_decal_root = self.root.attachNewNode("projectile_decals")
 
     def _setup_controls(self) -> None:
         self._bind("w", "forward", True)
@@ -475,6 +494,7 @@ class GameWorld:
     def _traverse_collisions(self) -> None:
         if self.collision_traverser is not None:
             self.collision_traverser.traverse(self.root)
+            self._process_projectile_collisions()
 
     # Cleanup ---------------------------------------------------------
     def destroy(self) -> None:
@@ -507,6 +527,13 @@ class GameWorld:
         if self.projectile_root is not None and not self.projectile_root.isEmpty():
             self.projectile_root.removeNode()
             self.projectile_root = None
+        if (
+            self.projectile_decal_root is not None
+            and not self.projectile_decal_root.isEmpty()
+        ):
+            self.projectile_decal_root.removeNode()
+            self.projectile_decal_root = None
+        self.projectile_decals = []
         if self.weapon_root is not None and not self.weapon_root.isEmpty():
             self.weapon_root.removeNode()
             self.weapon_root = None
@@ -698,6 +725,7 @@ class GameWorld:
             direction,
             base_damage,
         )
+        self._attach_projectile_collider(projectile)
         self.projectiles.append(projectile)
 
     def _update_projectiles(self, dt: float) -> None:
@@ -705,12 +733,102 @@ class GameWorld:
         for projectile in self.projectiles:
             if projectile.update(dt):
                 alive.append(projectile)
+            else:
+                self._destroy_projectile(projectile, remove_from_list=False)
         self.projectiles = alive
 
     def _clear_projectiles(self) -> None:
         for projectile in self.projectiles:
-            projectile.destroy()
+            self._destroy_projectile(projectile, remove_from_list=False)
         self.projectiles.clear()
+        self.projectile_colliders.clear()
+
+    def _attach_projectile_collider(self, projectile: Projectile) -> None:
+        if self.projectile_collision_handler is None or self.collision_traverser is None:
+            return
+        collider_node = CollisionNode(f"{projectile.blueprint.id}_collider")
+        collider_node.setFromCollideMask(self.ENVIRONMENT_COLLISION_MASK)
+        collider_node.setIntoCollideMask(BitMask32.allOff())
+        radius = max(projectile.blueprint.scale * 0.6, 0.03)
+        collider_node.addSolid(CollisionSphere(0, 0, 0, radius))
+        collider = projectile.node.attachNewNode(collider_node)
+        self.collision_traverser.addCollider(collider, self.projectile_collision_handler)
+        projectile.set_collider(collider)
+        self.projectile_colliders[collider.getKey()] = projectile
+
+    def _destroy_projectile(
+        self, projectile: Projectile, *, remove_from_list: bool = True
+    ) -> None:
+        collider = projectile.collider
+        if collider is not None:
+            collider_key = collider.getKey()
+            self.projectile_colliders.pop(collider_key, None)
+            if self.collision_traverser is not None:
+                self.collision_traverser.removeCollider(collider)
+            if not collider.isEmpty():
+                collider.removeNode()
+            projectile.set_collider(None)
+        projectile.destroy()
+        if remove_from_list and projectile in self.projectiles:
+            self.projectiles.remove(projectile)
+
+    def _process_projectile_collisions(self) -> None:
+        handler = self.projectile_collision_handler
+        if handler is None or handler.getNumEntries() == 0:
+            return
+        handler.sortEntries()
+        impacted: set[Projectile] = set()
+        for index in range(handler.getNumEntries()):
+            entry = handler.getEntry(index)
+            from_np = entry.getFromNodePath()
+            projectile = self.projectile_colliders.get(from_np.getKey())
+            if projectile is None or projectile in impacted:
+                continue
+            hit_point = entry.getSurfacePoint(self.root)
+            hit_normal = entry.getSurfaceNormal(self.root)
+            self._spawn_projectile_decal(hit_point, hit_normal, projectile)
+            impacted.add(projectile)
+        try:
+            handler.clearEntries()
+        except AttributeError:
+            pass
+        for projectile in impacted:
+            self._destroy_projectile(projectile)
+
+    def _spawn_projectile_decal(
+        self, position: Point3, normal: Vec3, projectile: Projectile
+    ) -> None:
+        if self.projectile_decal_root is None or self.projectile_decal_root.isEmpty():
+            return
+        cm = CardMaker("projectile_decal")
+        size = max(projectile.blueprint.scale * 2.5, 0.15)
+        cm.setFrame(-size / 2, size / 2, -size / 2, size / 2)
+        decal = self.projectile_decal_root.attachNewNode(cm.generate())
+        offset = Vec3(normal)
+        if offset.length() > 0:
+            offset.normalize()
+            offset *= 0.01
+        else:
+            offset = Vec3(0, 0, 0)
+        decal.setPos(self.projectile_decal_root, position + offset)
+        decal.lookAt(self.projectile_decal_root, position - normal)
+        decal.setR(random.uniform(0.0, 360.0))
+        decal.setTransparency(TransparencyAttrib.M_alpha)
+        decal.setDepthOffset(1)
+        base_color = projectile.blueprint.color
+        tint = Vec4(
+            max(0.05, base_color.x * 0.45),
+            max(0.05, base_color.y * 0.45),
+            max(0.05, base_color.z * 0.45),
+            0.85,
+        )
+        decal.setColor(tint)
+        decal.setLightOff(1)
+        self.projectile_decals.append(decal)
+        if len(self.projectile_decals) > self.MAX_PROJECTILE_DECALS:
+            oldest = self.projectile_decals.pop(0)
+            if not oldest.isEmpty():
+                oldest.removeNode()
 
 
 __all__ = ["GameWorld"]
