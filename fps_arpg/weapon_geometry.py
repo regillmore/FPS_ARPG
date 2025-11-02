@@ -65,7 +65,7 @@ def _build_sentinel_rifle(blueprint: WeaponBlueprint) -> NodePath:
 
     body = _make_box(Vec3(0.065, 0.46, 0.09), Vec4(0.26, 0.3, 0.35, 1), "body")
     body.reparentTo(root)
-    body.setPos(0, 1, 0.01)
+    body.setPos(-0.01, 1, 0.01)
 
     barrel = _make_box(Vec3(0.022, 0.34, 0.022), Vec4(0.15, 0.18, 0.22, 1), "barrel")
     barrel.reparentTo(root)

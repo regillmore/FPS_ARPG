@@ -72,7 +72,7 @@ PROJECTILE_BLUEPRINTS: dict[str, ProjectileBlueprint] = {
     "standard_round": ProjectileBlueprint(
         id="standard_round",
         name="Kinetic Round",
-        speed=90.0,
+        speed=20.0,
         lifespan=3.0,
         color=Vec4(0.95, 0.85, 0.4, 0.9),
         scale=0.06,
