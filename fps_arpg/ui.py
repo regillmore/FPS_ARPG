@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import random
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from direct.gui import DirectGuiGlobals as DGG
 from direct.gui.DirectGui import DirectButton, DirectFrame, OnscreenText
 from direct.showbase import ShowBaseGlobal
-from panda3d.core import Point3, TextNode
+from panda3d.core import NodePath, Point2, Point3, TextNode, Vec3
 
 from .equipment import EquipmentLoadout
 from .inventory import Inventory, InventoryStack, ItemTemplate
@@ -15,6 +17,113 @@ from .stats import PlayerStats, build_stat_bonus_lines
 
 if TYPE_CHECKING:  # pragma: no cover - used only for type checking
     from .app import GameApp
+
+
+@dataclass
+class _DamageNumber:
+    """Active floating damage number tracked by :class:`FloatingDamageNumbers`."""
+
+    text: OnscreenText
+    world_position: Point3
+    velocity: Vec3
+    lifetime: float
+    elapsed: float = 0.0
+
+
+class FloatingDamageNumbers:
+    """Manages spawning and animating floating damage numbers above enemies."""
+
+    def __init__(self, *, parent: NodePath | None = None) -> None:
+        root_parent = parent or ShowBaseGlobal.aspect2d
+        self._root = root_parent.attachNewNode("floating_damage_numbers")
+        self._numbers: list[_DamageNumber] = []
+
+    # Lifecycle -----------------------------------------------------
+    def update(self, dt: float) -> None:
+        if dt <= 0.0:
+            return
+        alive: list[_DamageNumber] = []
+        for number in self._numbers:
+            number.elapsed += dt
+            if number.elapsed >= number.lifetime:
+                number.text.destroy()
+                continue
+            number.world_position += number.velocity * dt
+            self._apply_fade(number)
+            visible = self._update_screen_position(number)
+            if not visible:
+                number.text.hide()
+            alive.append(number)
+        self._numbers = alive
+
+    def destroy(self) -> None:
+        for number in self._numbers:
+            number.text.destroy()
+        self._numbers.clear()
+        if not self._root.isEmpty():
+            self._root.removeNode()
+
+    # Spawning ------------------------------------------------------
+    def spawn(self, amount: float, position: Point3) -> None:
+        if amount <= 0.0 or self._root.isEmpty():
+            return
+        text = OnscreenText(
+            text=self._format_amount(amount),
+            parent=self._root,
+            pos=(0, 0),
+            scale=0.05,
+            fg=(1.0, 0.78, 0.32, 1.0),
+            align=TextNode.ACenter,
+            mayChange=True,
+        )
+        jitter = Vec3(random.uniform(-0.15, 0.15), 0.0, random.uniform(-0.05, 0.05))
+        velocity = Vec3(
+            random.uniform(-0.4, 0.4),
+            0.0,
+            random.uniform(0.85, 1.15),
+        )
+        number = _DamageNumber(
+            text=text,
+            world_position=Point3(position + jitter),
+            velocity=velocity,
+            lifetime=1.1,
+        )
+        self._numbers.append(number)
+        self._apply_fade(number)
+        self._update_screen_position(number)
+
+    # Helpers -------------------------------------------------------
+    def _apply_fade(self, number: _DamageNumber) -> None:
+        ratio = max(0.0, 1.0 - (number.elapsed / max(number.lifetime, 1e-5)))
+        number.text.setAlphaScale(ratio)
+
+    def _update_screen_position(self, number: _DamageNumber) -> bool:
+        screen_pos = self._project_to_screen(number.world_position)
+        if screen_pos is None:
+            return False
+        number.text.setPos(screen_pos[0], screen_pos[1])
+        number.text.show()
+        return True
+
+    def _project_to_screen(self, world_pos: Point3) -> tuple[float, float] | None:
+        base = ShowBaseGlobal.base
+        if base is None or base.cam is None or base.camLens is None:
+            return None
+        cam_space = base.cam.getRelativePoint(ShowBaseGlobal.render2d, world_pos)
+        if cam_space.y <= 0.0:
+            return None
+        projected = Point2()
+        if not base.camLens.project(cam_space, projected):
+            return None
+        aspect_ratio = base.getAspectRatio() or 1.0
+        return projected.x * aspect_ratio, projected.y
+
+    def _format_amount(self, amount: float) -> str:
+        if amount >= 1000.0:
+            return f"{amount:,.0f}"
+        if amount >= 10.0:
+            return f"{amount:.0f}"
+        return f"{amount:.1f}"
 
 
 class MainMenu:
@@ -1194,4 +1303,10 @@ class TabbedMenu:
                 setattr(self, widget, None)
 
 
-__all__ = ["InventoryMenu", "MainMenu", "StatsMenu", "TabbedMenu"]
+__all__ = [
+    "FloatingDamageNumbers",
+    "InventoryMenu",
+    "MainMenu",
+    "StatsMenu",
+    "TabbedMenu",
+]
