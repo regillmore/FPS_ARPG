@@ -266,6 +266,8 @@ def _make_box(half_extents: Vec3, color: Vec4, name: str) -> NodePath:
         prim.addVertices(vert_index, vert_index + 2, vert_index + 3)
         vert_index += 4
 
+    prim.closePrimitive()
+
     geom = Geom(vdata)
     geom.addPrimitive(prim)
 
