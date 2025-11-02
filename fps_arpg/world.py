@@ -5,7 +5,17 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from direct.gui.DirectGui import OnscreenText
-from panda3d.core import ClockObject, NodePath, TextNode, Vec3, WindowProperties
+from panda3d.core import (
+    AmbientLight,
+    CardMaker,
+    ClockObject,
+    NodePath,
+    PointLight,
+    TextNode,
+    Vec3,
+    Vec4,
+    WindowProperties,
+)
 
 from .equipment import EquipmentLoadout
 from .inventory import Inventory, ItemTemplate
@@ -31,6 +41,8 @@ class GameWorld:
         self.root = self.app.render.attachNewNode("game_world")
         self.player_np = self.root.attachNewNode("player")
         self.player_np.setPos(0, 0, 2)
+
+        self.hideout_root: NodePath | None = None
 
         self.heading = 0.0
         self.pitch = 0.0
@@ -74,12 +86,174 @@ class GameWorld:
 
     # Setup -----------------------------------------------------------
     def _setup_environment(self) -> None:
-        env = self.app.loader.loadModel("models/environment")
-        env.reparentTo(self.root)
-        env.setScale(0.12)
-        env.setPos(-8, 42, 0)
-
         self.app.render.setShaderAuto()
+
+        self.hideout_root = self.root.attachNewNode("hideout")
+        self._build_hideout_shell()
+        self._populate_hideout_props()
+        self._setup_hideout_lighting()
+        self._add_hideout_signage()
+
+    def _build_hideout_shell(self) -> None:
+        """Construct the basic floor, walls, and architectural zones."""
+
+        floor = self._make_card(
+            "hideout_floor", width=28, depth=28, color=Vec4(0.16, 0.17, 0.21, 1)
+        )
+        floor.reparentTo(self.hideout_root)
+        floor.setPos(0, 0, 0)
+
+        central_pad = self._make_card(
+            "command_pad", width=10, depth=10, color=Vec4(0.24, 0.25, 0.3, 1)
+        )
+        central_pad.reparentTo(self.hideout_root)
+        central_pad.setPos(0, 0, 0.1)
+
+        walkway = self._make_card(
+            "walkway", width=6, depth=16, color=Vec4(0.22, 0.23, 0.27, 1)
+        )
+        walkway.reparentTo(self.hideout_root)
+        walkway.setPos(0, -6, 0.08)
+
+        dorm_floor = self._make_card(
+            "dorm_floor", width=10, depth=6, color=Vec4(0.18, 0.19, 0.24, 1)
+        )
+        dorm_floor.reparentTo(self.hideout_root)
+        dorm_floor.setPos(-9, 6, 0.05)
+
+        armory_floor = self._make_card(
+            "armory_floor", width=10, depth=6, color=Vec4(0.19, 0.2, 0.25, 1)
+        )
+        armory_floor.reparentTo(self.hideout_root)
+        armory_floor.setPos(9, 6, 0.05)
+
+        wall_color = Vec4(0.12, 0.13, 0.18, 1)
+        wall_height = 4.0
+
+        north_wall = self._make_wall("north_wall", width=28, height=wall_height, color=wall_color)
+        north_wall.reparentTo(self.hideout_root)
+        north_wall.setPos(0, 14, wall_height / 2)
+        north_wall.setP(90)
+
+        south_wall = self._make_wall("south_wall", width=28, height=wall_height, color=wall_color)
+        south_wall.reparentTo(self.hideout_root)
+        south_wall.setPos(0, -14, wall_height / 2)
+        south_wall.setHpr(180, 90, 0)
+
+        east_wall = self._make_wall("east_wall", width=28, height=wall_height, color=wall_color)
+        east_wall.reparentTo(self.hideout_root)
+        east_wall.setPos(14, 0, wall_height / 2)
+        east_wall.setHpr(90, 90, 0)
+
+        west_wall = self._make_wall("west_wall", width=28, height=wall_height, color=wall_color)
+        west_wall.reparentTo(self.hideout_root)
+        west_wall.setPos(-14, 0, wall_height / 2)
+        west_wall.setHpr(-90, 90, 0)
+
+        divider = self._make_wall("divider", width=16, height=wall_height, color=Vec4(0.15, 0.16, 0.21, 1))
+        divider.reparentTo(self.hideout_root)
+        divider.setPos(0, 4, wall_height / 2)
+        divider.setHpr(0, 90, 0)
+
+        balcony_rail = self._make_wall(
+            "balcony_rail", width=6, height=1.2, color=Vec4(0.25, 0.4, 0.45, 1)
+        )
+        balcony_rail.reparentTo(self.hideout_root)
+        balcony_rail.setPos(0, -10.5, 1)
+        balcony_rail.setHpr(0, 90, 0)
+
+    def _populate_hideout_props(self) -> None:
+        """Add simple dressing so the space feels lived in."""
+
+        crate_model = self.app.loader.loadModel("models/box")
+        crate_model.setColor(0.35, 0.25, 0.18, 1)
+
+        for offset in (-2.5, 0, 2.5):
+            crate = crate_model.copyTo(self.hideout_root)
+            crate.setScale(0.6, 1.2, 0.6)
+            crate.setPos(10 + offset, 7.5, 0.6)
+
+        locker = crate_model.copyTo(self.hideout_root)
+        locker.setScale(0.5, 1.5, 2.2)
+        locker.setPos(-11.5, 6.5, 1.1)
+        locker.setColor(0.2, 0.32, 0.38, 1)
+
+        terminal = crate_model.copyTo(self.hideout_root)
+        terminal.setScale(0.3, 0.6, 1.2)
+        terminal.setPos(0, 1.8, 1)
+        terminal.setColor(0.18, 0.45, 0.55, 1)
+
+        console_surface = self._make_card(
+            "console_surface", width=2.4, depth=1.2, color=Vec4(0.08, 0.12, 0.16, 1)
+        )
+        console_surface.reparentTo(self.hideout_root)
+        console_surface.setPos(0, 2.8, 1.3)
+        console_surface.setP(-15)
+
+        sleeping_pads = self._make_card(
+            "sleeping_pads", width=8, depth=3, color=Vec4(0.23, 0.28, 0.34, 1)
+        )
+        sleeping_pads.reparentTo(self.hideout_root)
+        sleeping_pads.setPos(-9, 6.5, 0.2)
+
+        workbench = crate_model.copyTo(self.hideout_root)
+        workbench.setScale(2.2, 1.0, 0.8)
+        workbench.setPos(9, 4.5, 0.8)
+        workbench.setColor(0.28, 0.2, 0.16, 1)
+
+        crate_model.removeNode()
+
+    def _setup_hideout_lighting(self) -> None:
+        """Create moody ambient lighting for the hideout."""
+
+        ambient = AmbientLight("hideout_ambient")
+        ambient.setColor(Vec4(0.18, 0.2, 0.24, 1))
+        ambient_np = self.hideout_root.attachNewNode(ambient)
+        self.hideout_root.setLight(ambient_np)
+
+        warm_light = PointLight("command_point_light")
+        warm_light.setColor(Vec4(0.9, 0.75, 0.5, 1))
+        warm_light.setAttenuation((1.0, 0.1, 0.02))
+        warm_np = self.hideout_root.attachNewNode(warm_light)
+        warm_np.setPos(0, 0, 3.2)
+        self.hideout_root.setLight(warm_np)
+
+        cool_light = PointLight("walkway_light")
+        cool_light.setColor(Vec4(0.5, 0.7, 1.0, 1))
+        cool_light.setAttenuation((1.0, 0.1, 0.03))
+        cool_np = self.hideout_root.attachNewNode(cool_light)
+        cool_np.setPos(0, -9, 2.6)
+        self.hideout_root.setLight(cool_np)
+
+    def _add_hideout_signage(self) -> None:
+        """Add a floating holo-sign to ground the location."""
+
+        title_node = TextNode("hideout_title")
+        title_node.setText("Vanguard Safehouse")
+        title_node.setAlign(TextNode.ACenter)
+        title_node.setTextColor(0.7, 0.9, 1.0, 1)
+        title_node.setShadow(0.04, 0.04)
+        title_node.setShadowColor(0.05, 0.15, 0.25, 1)
+        title_np = self.hideout_root.attachNewNode(title_node)
+        title_np.setScale(0.6)
+        title_np.setPos(0, -12.5, 3.5)
+        title_np.setBillboardPointEye()
+
+    def _make_card(self, name: str, *, width: float, depth: float, color: Vec4) -> NodePath:
+        cm = CardMaker(name)
+        cm.setFrame(-width / 2, width / 2, -depth / 2, depth / 2)
+        node = NodePath(cm.generate())
+        node.setColor(color)
+        node.setTwoSided(True)
+        return node
+
+    def _make_wall(self, name: str, *, width: float, height: float, color: Vec4) -> NodePath:
+        cm = CardMaker(name)
+        cm.setFrame(-width / 2, width / 2, 0, height)
+        node = NodePath(cm.generate())
+        node.setColor(color)
+        node.setTwoSided(True)
+        return node
 
     def _setup_camera(self) -> None:
         self.app.camera.reparentTo(self.player_np)
@@ -370,6 +544,9 @@ class GameWorld:
         if self.weapon_root is not None and not self.weapon_root.isEmpty():
             self.weapon_root.removeNode()
             self.weapon_root = None
+        if self.hideout_root is not None and not self.hideout_root.isEmpty():
+            self.hideout_root.removeNode()
+            self.hideout_root = None
 
         self.app.camera.reparentTo(self.app.render)
         self.app.camera.setPos(0, 0, 0)
