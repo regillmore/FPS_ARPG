@@ -84,9 +84,9 @@ class GameWorld:
 
     # Setup -----------------------------------------------------------
     def _setup_environment(self) -> None:
-        room_width = 12.0
-        room_length = 18.0
-        room_height = 5.0
+        room_width = 20.0
+        room_length = 100.0
+        room_height = 10.0
 
         safehouse_root = self.root.attachNewNode("safehouse")
 
@@ -99,6 +99,7 @@ class GameWorld:
         )
         floor = safehouse_root.attachNewNode(floor_cm.generate())
         floor.setPos(0, 0, 0)
+        floor.setHpr(0, -90, 0)
         floor.setColor(0.18, 0.18, 0.2, 1)
 
         ceiling_cm = CardMaker("safehouse_ceiling")
@@ -110,7 +111,7 @@ class GameWorld:
         )
         ceiling = safehouse_root.attachNewNode(ceiling_cm.generate())
         ceiling.setPos(0, 0, room_height)
-        ceiling.setHpr(0, 180, 0)
+        ceiling.setHpr(0, 90, 0)
         ceiling.setColor(0.16, 0.16, 0.18, 1)
 
         wall_color = Vec4(0.3, 0.32, 0.36, 1)
@@ -123,20 +124,20 @@ class GameWorld:
             return wall_np
 
         front_wall = make_wall("safehouse_wall_front", room_width, room_height)
-        front_wall.setHpr(0, 0, 90)
-        front_wall.setPos(0, room_length / 2, room_height / 2)
+        front_wall.setHpr(0, 0, 0)
+        front_wall.setPos(0, room_length / 2, 0)
 
         back_wall = make_wall("safehouse_wall_back", room_width, room_height)
-        back_wall.setHpr(180, 0, 90)
-        back_wall.setPos(0, -room_length / 2, room_height / 2)
+        back_wall.setHpr(180, 0, 0)
+        back_wall.setPos(0, -room_length / 2, 0)
 
         left_wall = make_wall("safehouse_wall_left", room_length, room_height)
-        left_wall.setHpr(90, 0, 90)
-        left_wall.setPos(-room_width / 2, 0, room_height / 2)
+        left_wall.setHpr(90, 0, 0)
+        left_wall.setPos(-room_width / 2, 0, 0)
 
         right_wall = make_wall("safehouse_wall_right", room_length, room_height)
-        right_wall.setHpr(-90, 0, 90)
-        right_wall.setPos(room_width / 2, 0, room_height / 2)
+        right_wall.setHpr(-90, 0, 0)
+        right_wall.setPos(room_width / 2, 0, 0)
 
         ambient_light = AmbientLight("safehouse_ambient")
         ambient_light.setColor(Vec4(0.25, 0.25, 0.28, 1))
