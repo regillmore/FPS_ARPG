@@ -25,6 +25,7 @@ from panda3d.core import (
     WindowProperties,
 )
 
+from .enemies import Enemy, TargetDummy
 from .equipment import EquipmentLoadout
 from .inventory import Inventory, ItemTemplate
 from .projectiles import Projectile, get_projectile_blueprint
@@ -83,6 +84,9 @@ class GameWorld:
         self.projectile_decal_root: NodePath | None = None
         self.projectile_decals: list[NodePath] = []
 
+        self.enemy_root: NodePath | None = None
+        self.enemies: list[Enemy] = []
+
         self.player_stats = PlayerStats()
         self.inventory = Inventory()
         self.equipment = EquipmentLoadout()
@@ -103,6 +107,7 @@ class GameWorld:
         self._setup_camera()
         self._setup_weapon_anchor()
         self._setup_projectiles()
+        self._setup_enemies()
         self._setup_controls()
         self._setup_hud()
         self._setup_tabbed_menu()
@@ -167,6 +172,13 @@ class GameWorld:
         else:
             self.projectile_decal_root = self.root.attachNewNode("projectile_decals")
 
+    def _setup_enemies(self) -> None:
+        if self.enemy_root is not None and not self.enemy_root.isEmpty():
+            self.enemy_root.removeNode()
+        self.enemy_root = self.root.attachNewNode("enemies")
+        self.enemies = []
+        self._spawn_safehouse_dummy()
+
     def _setup_controls(self) -> None:
         self._bind("w", "forward", True)
         self._bind("w-up", "forward", False)
@@ -187,6 +199,17 @@ class GameWorld:
         self._accepted_events.append("mouse1-up")
         self.app.accept("r", self._reload_weapon)
         self._accepted_events.append("r")
+
+    def _spawn_safehouse_dummy(self) -> None:
+        if self.enemy_root is None or self.enemy_root.isEmpty():
+            return
+        dummy = TargetDummy(self.enemy_root, self.ENVIRONMENT_COLLISION_MASK)
+        dummy.node.setPos(0.0, 18.0, 0.0)
+        dummy.node.setH(180.0)
+        self._register_enemy(dummy)
+
+    def _register_enemy(self, enemy: Enemy) -> None:
+        self.enemies.append(enemy)
 
     def _setup_hud(self) -> None:
 
@@ -361,6 +384,7 @@ class GameWorld:
             self._update_movement(dt)
             self._update_weapon(dt)
             self._update_projectiles(dt)
+            self._update_enemies(dt)
             self._traverse_collisions()
         if self.tabbed_menu.is_visible:
             self.tabbed_menu.update()
@@ -437,6 +461,7 @@ class GameWorld:
             self.weapon_model = None
         self.weapon_muzzle = None
         self._clear_projectiles()
+        self._clear_enemies()
         if self.projectile_root is not None and not self.projectile_root.isEmpty():
             self.projectile_root.removeNode()
             self.projectile_root = None
@@ -650,11 +675,28 @@ class GameWorld:
                 self._destroy_projectile(projectile, remove_from_list=False)
         self.projectiles = alive
 
+    def _update_enemies(self, dt: float) -> None:
+        alive: list[Enemy] = []
+        for enemy in self.enemies:
+            if enemy.update(dt):
+                alive.append(enemy)
+            else:
+                enemy.destroy()
+        self.enemies = alive
+
     def _clear_projectiles(self) -> None:
         for projectile in self.projectiles:
             self._destroy_projectile(projectile, remove_from_list=False)
         self.projectiles.clear()
         self.projectile_colliders.clear()
+
+    def _clear_enemies(self) -> None:
+        for enemy in self.enemies:
+            enemy.destroy()
+        self.enemies.clear()
+        if self.enemy_root is not None and not self.enemy_root.isEmpty():
+            self.enemy_root.removeNode()
+            self.enemy_root = None
 
     def _attach_projectile_collider(self, projectile: Projectile) -> None:
         if self.projectile_collision_handler is None or self.collision_traverser is None:
@@ -685,6 +727,17 @@ class GameWorld:
         if remove_from_list and projectile in self.projectiles:
             self.projectiles.remove(projectile)
 
+    def _find_enemy_on_node(self, node: NodePath) -> Enemy | None:
+        current = node
+        while not current.isEmpty() and current != self.root:
+            if current.hasPythonTag(Enemy.COLLIDER_TAG):
+                candidate = current.getPythonTag(Enemy.COLLIDER_TAG)
+                if isinstance(candidate, Enemy):
+                    return candidate
+                return None
+            current = current.getParent()
+        return None
+
     def _process_projectile_collisions(self) -> None:
         handler = self.projectile_collision_handler
         if handler is None or handler.getNumEntries() == 0:
@@ -699,7 +752,15 @@ class GameWorld:
                 continue
             hit_point = entry.getSurfacePoint(self.root)
             hit_normal = entry.getSurfaceNormal(self.root)
-            self._spawn_projectile_decal(hit_point, hit_normal, projectile)
+            enemy = self._find_enemy_on_node(entry.getIntoNodePath())
+            if enemy is not None:
+                enemy.handle_projectile_hit(
+                    projectile,
+                    Vec3(hit_point),
+                    Vec3(hit_normal),
+                )
+            else:
+                self._spawn_projectile_decal(hit_point, hit_normal, projectile)
             impacted.add(projectile)
         try:
             handler.clearEntries()
