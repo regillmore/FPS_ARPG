@@ -211,7 +211,7 @@ class Enemy:
             return
         if self.node.isEmpty():
             return
-        world_pos = self.node.getPos(ShowBaseGlobal.render)
+        world_pos = self.node.getPos(ShowBaseGlobal.render2d)
         world_pos += Vec3(0.0, 0.0, self._health_bar_offset + 0.4)
         self._damage_number_manager.spawn(amount, world_pos)
 

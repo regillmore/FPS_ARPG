@@ -101,7 +101,7 @@ class FloatingDamageNumbers:
         screen_pos = self._project_to_screen(number.world_position)
         if screen_pos is None:
             return False
-        number.text.setPos(screen_pos)
+        number.text.setPos(screen_pos[0], screen_pos[1])
         number.text.show()
         return True
 
@@ -109,7 +109,7 @@ class FloatingDamageNumbers:
         base = ShowBaseGlobal.base
         if base is None or base.cam is None or base.camLens is None:
             return None
-        cam_space = base.cam.getRelativePoint(ShowBaseGlobal.render, world_pos)
+        cam_space = base.cam.getRelativePoint(ShowBaseGlobal.render2d, world_pos)
         if cam_space.y <= 0.0:
             return None
         projected = Point2()
