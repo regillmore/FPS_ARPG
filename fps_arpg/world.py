@@ -7,10 +7,18 @@ from typing import TYPE_CHECKING
 from direct.gui.DirectGui import OnscreenText
 from panda3d.core import (
     AmbientLight,
+    BitMask32,
     CardMaker,
     ClockObject,
+    CollisionHandlerPusher,
+    CollisionNode,
+    CollisionPlane,
+    CollisionSphere,
+    CollisionTraverser,
     DirectionalLight,
     NodePath,
+    Plane,
+    Point3,
     TextNode,
     Vec3,
     Vec4,
@@ -35,12 +43,23 @@ class GameWorld:
     MOVE_SPEED = 10
     MOUSE_SENSITIVITY = 0.2
     PITCH_LIMIT = 75
+    ENVIRONMENT_COLLISION_MASK = BitMask32.bit(2)
 
     def __init__(self, app: "GameApp") -> None:
         self.app = app
         self.root = self.app.render.attachNewNode("game_world")
         self.player_np = self.root.attachNewNode("player")
         self.player_np.setPos(0, 0, 2)
+
+        self.safehouse_width = 20.0
+        self.safehouse_length = 100.0
+        self.safehouse_height = 10.0
+
+        self.collision_traverser = CollisionTraverser("game_world_traverser")
+        self.collision_handler = CollisionHandlerPusher()
+        self.player_collider: NodePath | None = None
+        self.environment_collider: NodePath | None = None
+        self.safehouse_root: NodePath | None = None
 
         self.heading = 0.0
         self.pitch = 0.0
@@ -71,6 +90,7 @@ class GameWorld:
         self._accepted_events: list[str] = []
 
         self._setup_environment()
+        self._setup_collisions()
         self._setup_camera()
         self._setup_weapon_anchor()
         self._setup_projectiles()
@@ -85,11 +105,12 @@ class GameWorld:
 
     # Setup -----------------------------------------------------------
     def _setup_environment(self) -> None:
-        room_width = 20.0
-        room_length = 100.0
-        room_height = 10.0
+        room_width = self.safehouse_width
+        room_length = self.safehouse_length
+        room_height = self.safehouse_height
 
         safehouse_root = self.root.attachNewNode("safehouse")
+        self.safehouse_root = safehouse_root
 
         floor_cm = CardMaker("safehouse_floor")
         floor_cm.setFrame(
@@ -152,6 +173,47 @@ class GameWorld:
         self.root.setLight(key_light_np)
 
         self.app.render.setShaderAuto()
+
+    def _setup_collisions(self) -> None:
+        player_collider_node = CollisionNode("player_collider")
+        player_collider_node.setFromCollideMask(self.ENVIRONMENT_COLLISION_MASK)
+        player_collider_node.setIntoCollideMask(BitMask32.allOff())
+        player_collider_node.addSolid(CollisionSphere(0, 0, 0, 0.5))
+        self.player_collider = self.player_np.attachNewNode(player_collider_node)
+        self.collision_handler.addCollider(self.player_collider, self.player_np)
+        self.collision_traverser.addCollider(self.player_collider, self.collision_handler)
+
+        if self.safehouse_root is None or self.safehouse_root.isEmpty():
+            return
+
+        room_width = self.safehouse_width
+        room_length = self.safehouse_length
+        room_height = self.safehouse_height
+
+        environment_node = CollisionNode("safehouse_bounds")
+        environment_node.setFromCollideMask(BitMask32.allOff())
+        environment_node.setIntoCollideMask(self.ENVIRONMENT_COLLISION_MASK)
+
+        environment_node.addSolid(
+            CollisionPlane(Plane(Vec3(0, -1, 0), Point3(0, room_length / 2, 0)))
+        )
+        environment_node.addSolid(
+            CollisionPlane(Plane(Vec3(0, 1, 0), Point3(0, -room_length / 2, 0)))
+        )
+        environment_node.addSolid(
+            CollisionPlane(Plane(Vec3(1, 0, 0), Point3(-room_width / 2, 0, 0)))
+        )
+        environment_node.addSolid(
+            CollisionPlane(Plane(Vec3(-1, 0, 0), Point3(room_width / 2, 0, 0)))
+        )
+        environment_node.addSolid(
+            CollisionPlane(Plane(Vec3(0, 0, 1), Point3(0, 0, 0)))
+        )
+        environment_node.addSolid(
+            CollisionPlane(Plane(Vec3(0, 0, -1), Point3(0, 0, room_height)))
+        )
+
+        self.environment_collider = self.safehouse_root.attachNewNode(environment_node)
 
     def _setup_camera(self) -> None:
         self.app.camera.reparentTo(self.player_np)
@@ -367,6 +429,7 @@ class GameWorld:
             self._update_movement(dt)
             self._update_weapon(dt)
             self._update_projectiles(dt)
+            self._traverse_collisions()
         if self.tabbed_menu.is_visible:
             self.tabbed_menu.update()
         return task.cont
@@ -409,6 +472,10 @@ class GameWorld:
         movement = direction * self.MOVE_SPEED * dt
         self.player_np.setPos(self.player_np, movement)
 
+    def _traverse_collisions(self) -> None:
+        if self.collision_traverser is not None:
+            self.collision_traverser.traverse(self.root)
+
     # Cleanup ---------------------------------------------------------
     def destroy(self) -> None:
         self.app.taskMgr.remove(self._task_name)
@@ -443,6 +510,15 @@ class GameWorld:
         if self.weapon_root is not None and not self.weapon_root.isEmpty():
             self.weapon_root.removeNode()
             self.weapon_root = None
+
+        if self.player_collider is not None and not self.player_collider.isEmpty():
+            self.collision_traverser.removeCollider(self.player_collider)
+            self.collision_handler.removeCollider(self.player_collider)
+            self.player_collider.removeNode()
+            self.player_collider = None
+        if self.environment_collider is not None and not self.environment_collider.isEmpty():
+            self.environment_collider.removeNode()
+            self.environment_collider = None
 
         self.app.camera.reparentTo(self.app.render)
         self.app.camera.setPos(0, 0, 0)
