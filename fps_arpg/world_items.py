@@ -18,7 +18,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 class ItemPickup:
     """Floating item pickup that can be collected by the player."""
 
-    PICKUP_RADIUS = 1.25
+    PICKUP_RADIUS = 3.0
     ROTATION_SPEED = 45.0
     BOB_AMPLITUDE = 0.12
     BOB_PERIOD = 1.8
