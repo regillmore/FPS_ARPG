@@ -49,6 +49,7 @@ class GameWorld:
 
         self.weapon_root: NodePath | None = None
         self.weapon_model: NodePath | None = None
+        self.weapon_muzzle: NodePath | None = None
         self.active_weapon: WeaponState | None = None
         self.is_fire_held = False
         self.projectile_root: NodePath | None = None
@@ -434,6 +435,7 @@ class GameWorld:
         if self.weapon_model is not None and not self.weapon_model.isEmpty():
             self.weapon_model.removeNode()
             self.weapon_model = None
+        self.weapon_muzzle = None
         self._clear_projectiles()
         if self.projectile_root is not None and not self.projectile_root.isEmpty():
             self.projectile_root.removeNode()
@@ -503,6 +505,26 @@ class GameWorld:
         model.setPos(0, 0, 0)
         model.setScale(1.0)
         self.weapon_model = model
+
+        muzzle_node = model.find("**/muzzle")
+        if not muzzle_node.isEmpty():
+            muzzle_tip = muzzle_node.attachNewNode("muzzle_tip")
+            bounds = muzzle_node.getTightBounds()
+            if (
+                bounds is not None
+                and bounds[0] is not None
+                and bounds[1] is not None
+            ):
+                min_bound, max_bound = bounds
+                muzzle_tip.setPos(
+                    (min_bound.x + max_bound.x) * 0.5,
+                    max_bound.y,
+                    (min_bound.z + max_bound.z) * 0.5,
+                )
+            self.weapon_muzzle = muzzle_tip
+        else:
+            self.weapon_muzzle = model.attachNewNode("muzzle_tip")
+            self.weapon_muzzle.setPos(0, 1.0, 0)
 
     def _update_weapon(self, dt: float) -> None:
         weapon = self.active_weapon
@@ -581,14 +603,18 @@ class GameWorld:
             print(f"[Projectile] Blueprint '{projectile_id}' not found")
             return
 
-        origin = self.app.camera.getPos(self.root)
-        direction = self.app.camera.getQuat(self.root).getForward()
+        if self.weapon_muzzle is not None and not self.weapon_muzzle.isEmpty():
+            origin = self.weapon_muzzle.getPos(self.root)
+            direction = self.weapon_muzzle.getQuat(self.root).getForward()
+        else:
+            origin = self.app.camera.getPos(self.root)
+            direction = self.app.camera.getQuat(self.root).getForward()
         if direction.length_squared() == 0:
             direction = Vec3(0, 1, 0)
         else:
             direction.normalize()
 
-        spawn_position = origin + direction * 0.6
+        spawn_position = origin + direction * 0.1
         projectile = Projectile(
             blueprint,
             self.projectile_root,
