@@ -33,6 +33,16 @@ from .stats import PlayerStats
 from .ui import FloatingDamageNumbers, TabbedMenu
 from .weapon_geometry import build_weapon_model
 from .weapons import WeaponBlueprint, WeaponState, get_weapon_blueprint
+from .world_items import ItemPickup
+
+
+FIELD_MEDKIT_TEMPLATE = ItemTemplate(
+    id="field_medkit",
+    name="Field Medkit",
+    description="Restores a large chunk of health when deployed.",
+    category="Consumable",
+    stack_limit=5,
+)
 from .maps import SafehouseMap, SafehouseMapInstance
 
 if TYPE_CHECKING:  # pragma: no cover - used only for type checking
@@ -87,6 +97,9 @@ class GameWorld:
         self.enemy_root: NodePath | None = None
         self.enemies: list[Enemy] = []
 
+        self.item_root: NodePath | None = None
+        self.item_pickups: list[ItemPickup] = []
+
         self.player_stats = PlayerStats()
         self.inventory = Inventory()
         self.equipment = EquipmentLoadout()
@@ -108,6 +121,7 @@ class GameWorld:
         self._setup_camera()
         self._setup_weapon_anchor()
         self._setup_projectiles()
+        self._setup_item_pickups()
         self._setup_enemies()
         self._setup_controls()
         self._setup_hud()
@@ -173,6 +187,12 @@ class GameWorld:
         else:
             self.projectile_decal_root = self.root.attachNewNode("projectile_decals")
 
+    def _setup_item_pickups(self) -> None:
+        if self.item_root is not None and not self.item_root.isEmpty():
+            self.item_root.removeNode()
+        self.item_root = self.root.attachNewNode("item_pickups")
+        self.item_pickups = []
+
     def _setup_enemies(self) -> None:
         if self.enemy_root is not None and not self.enemy_root.isEmpty():
             self.enemy_root.removeNode()
@@ -204,7 +224,11 @@ class GameWorld:
     def _spawn_safehouse_dummy(self) -> None:
         if self.enemy_root is None or self.enemy_root.isEmpty():
             return
-        dummy = TargetDummy(self.enemy_root, self.ENVIRONMENT_COLLISION_MASK)
+        dummy = TargetDummy(
+            self.enemy_root,
+            self.ENVIRONMENT_COLLISION_MASK,
+            on_death_callback=self._on_safehouse_dummy_death,
+        )
         dummy.node.setPos(0.0, 18.0, 0.0)
         dummy.node.setH(180.0)
         self._register_enemy(dummy)
@@ -213,6 +237,19 @@ class GameWorld:
         if self.damage_numbers is not None:
             enemy.set_damage_number_manager(self.damage_numbers)
         self.enemies.append(enemy)
+
+    def _on_safehouse_dummy_death(self, dummy: TargetDummy) -> None:
+        drop_position = dummy.node.getPos(self.root) + Vec3(0.0, 0.0, 0.5)
+        self._spawn_item_pickup(FIELD_MEDKIT_TEMPLATE, drop_position)
+
+    def _spawn_item_pickup(
+        self, template: ItemTemplate, position: Vec3, quantity: int = 1
+    ) -> None:
+        if self.item_root is None or self.item_root.isEmpty():
+            return
+        pickup = ItemPickup(self.item_root, template, quantity)
+        pickup.node.setPos(position)
+        self.item_pickups.append(pickup)
 
     def _setup_hud(self) -> None:
 
@@ -297,13 +334,7 @@ class GameWorld:
             self.equipment.equip(slot_id, template)
 
         samples = [
-            (ItemTemplate(
-                id="field_medkit",
-                name="Field Medkit",
-                description="Restores a large chunk of health when deployed.",
-                category="Consumable",
-                stack_limit=5,
-            ), 3),
+            (FIELD_MEDKIT_TEMPLATE, 3),
             (ItemTemplate(
                 id="focus_ampoule",
                 name="Focus Ampoule",
@@ -388,6 +419,7 @@ class GameWorld:
             self._update_weapon(dt)
             self._update_projectiles(dt)
             self._update_enemies(dt)
+            self._update_item_pickups(dt)
             self._traverse_collisions()
         if self.damage_numbers is not None:
             self.damage_numbers.update(dt)
@@ -470,6 +502,7 @@ class GameWorld:
         self.weapon_muzzle = None
         self._clear_projectiles()
         self._clear_enemies()
+        self._clear_item_pickups()
         if self.projectile_root is not None and not self.projectile_root.isEmpty():
             self.projectile_root.removeNode()
             self.projectile_root = None
@@ -692,6 +725,17 @@ class GameWorld:
                 enemy.destroy()
         self.enemies = alive
 
+    def _update_item_pickups(self, dt: float) -> None:
+        if not self.item_pickups:
+            return
+        alive: list[ItemPickup] = []
+        for pickup in self.item_pickups:
+            pickup.update(dt)
+            consumed = pickup.try_collect(self.player_np, self.inventory)
+            if not consumed and pickup.quantity > 0:
+                alive.append(pickup)
+        self.item_pickups = alive
+
     def _clear_projectiles(self) -> None:
         for projectile in self.projectiles:
             self._destroy_projectile(projectile, remove_from_list=False)
@@ -705,6 +749,14 @@ class GameWorld:
         if self.enemy_root is not None and not self.enemy_root.isEmpty():
             self.enemy_root.removeNode()
             self.enemy_root = None
+
+    def _clear_item_pickups(self) -> None:
+        for pickup in self.item_pickups:
+            pickup.destroy()
+        self.item_pickups.clear()
+        if self.item_root is not None and not self.item_root.isEmpty():
+            self.item_root.removeNode()
+            self.item_root = None
 
     def _attach_projectile_collider(self, projectile: Projectile) -> None:
         if self.projectile_collision_handler is None or self.collision_traverser is None:
