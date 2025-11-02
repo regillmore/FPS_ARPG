@@ -123,19 +123,19 @@ class GameWorld:
             return wall_np
 
         front_wall = make_wall("safehouse_wall_front", room_width, room_height)
-        front_wall.setHpr(0, 90, 0)
+        front_wall.setHpr(0, 0, 90)
         front_wall.setPos(0, room_length / 2, room_height / 2)
 
         back_wall = make_wall("safehouse_wall_back", room_width, room_height)
-        back_wall.setHpr(0, -90, 0)
+        back_wall.setHpr(180, 0, 90)
         back_wall.setPos(0, -room_length / 2, room_height / 2)
 
         left_wall = make_wall("safehouse_wall_left", room_length, room_height)
-        left_wall.setHpr(90, 90, 0)
+        left_wall.setHpr(90, 0, 90)
         left_wall.setPos(-room_width / 2, 0, room_height / 2)
 
         right_wall = make_wall("safehouse_wall_right", room_length, room_height)
-        right_wall.setHpr(-90, 90, 0)
+        right_wall.setHpr(-90, 0, 90)
         right_wall.setPos(room_width / 2, 0, room_height / 2)
 
         ambient_light = AmbientLight("safehouse_ambient")
