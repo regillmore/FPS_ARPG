@@ -5,7 +5,17 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from direct.gui.DirectGui import OnscreenText
-from panda3d.core import ClockObject, NodePath, TextNode, Vec3, WindowProperties
+from panda3d.core import (
+    AmbientLight,
+    CardMaker,
+    ClockObject,
+    DirectionalLight,
+    NodePath,
+    TextNode,
+    Vec3,
+    Vec4,
+    WindowProperties,
+)
 
 from .equipment import EquipmentLoadout
 from .inventory import Inventory, ItemTemplate
@@ -74,10 +84,71 @@ class GameWorld:
 
     # Setup -----------------------------------------------------------
     def _setup_environment(self) -> None:
-        env = self.app.loader.loadModel("models/environment")
-        env.reparentTo(self.root)
-        env.setScale(0.12)
-        env.setPos(-8, 42, 0)
+        room_width = 20.0
+        room_length = 100.0
+        room_height = 10.0
+
+        safehouse_root = self.root.attachNewNode("safehouse")
+
+        floor_cm = CardMaker("safehouse_floor")
+        floor_cm.setFrame(
+            -room_width / 2,
+            room_width / 2,
+            -room_length / 2,
+            room_length / 2,
+        )
+        floor = safehouse_root.attachNewNode(floor_cm.generate())
+        floor.setPos(0, 0, 0)
+        floor.setHpr(0, -90, 0)
+        floor.setColor(0.18, 0.18, 0.2, 1)
+
+        ceiling_cm = CardMaker("safehouse_ceiling")
+        ceiling_cm.setFrame(
+            -room_width / 2,
+            room_width / 2,
+            -room_length / 2,
+            room_length / 2,
+        )
+        ceiling = safehouse_root.attachNewNode(ceiling_cm.generate())
+        ceiling.setPos(0, 0, room_height)
+        ceiling.setHpr(0, 90, 0)
+        ceiling.setColor(0.16, 0.16, 0.18, 1)
+
+        wall_color = Vec4(0.3, 0.32, 0.36, 1)
+
+        def make_wall(name: str, width: float, height: float) -> NodePath:
+            cm = CardMaker(name)
+            cm.setFrame(-width / 2, width / 2, 0.0, height)
+            wall_np = safehouse_root.attachNewNode(cm.generate())
+            wall_np.setColor(wall_color)
+            return wall_np
+
+        front_wall = make_wall("safehouse_wall_front", room_width, room_height)
+        front_wall.setHpr(0, 0, 0)
+        front_wall.setPos(0, room_length / 2, 0)
+
+        back_wall = make_wall("safehouse_wall_back", room_width, room_height)
+        back_wall.setHpr(180, 0, 0)
+        back_wall.setPos(0, -room_length / 2, 0)
+
+        left_wall = make_wall("safehouse_wall_left", room_length, room_height)
+        left_wall.setHpr(90, 0, 0)
+        left_wall.setPos(-room_width / 2, 0, 0)
+
+        right_wall = make_wall("safehouse_wall_right", room_length, room_height)
+        right_wall.setHpr(-90, 0, 0)
+        right_wall.setPos(room_width / 2, 0, 0)
+
+        ambient_light = AmbientLight("safehouse_ambient")
+        ambient_light.setColor(Vec4(0.25, 0.25, 0.28, 1))
+        ambient_np = self.root.attachNewNode(ambient_light)
+        self.root.setLight(ambient_np)
+
+        key_light = DirectionalLight("safehouse_key")
+        key_light.setColor(Vec4(0.7, 0.7, 0.75, 1))
+        key_light_np = self.root.attachNewNode(key_light)
+        key_light_np.setHpr(-35, -60, 0)
+        self.root.setLight(key_light_np)
 
         self.app.render.setShaderAuto()
 
