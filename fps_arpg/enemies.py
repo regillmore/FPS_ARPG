@@ -1,6 +1,9 @@
 """Prototype enemy implementations for the FPS ARPG."""
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from direct.showbase import ShowBaseGlobal
 from panda3d.core import (
     BitMask32,
     CardMaker,
@@ -19,6 +22,10 @@ from panda3d.core import (
 )
 
 from .projectiles import Projectile
+
+
+if TYPE_CHECKING:  # pragma: no cover - used only for type checking
+    from .ui import FloatingDamageNumbers
 
 
 class Enemy:
@@ -46,6 +53,7 @@ class Enemy:
         self._health_bar_root: NodePath | None = None
         self._health_bar_fill_parent: NodePath | None = None
         self._health_bar_visible = False
+        self._damage_number_manager: "FloatingDamageNumbers | None" = None
 
         self._build_health_bar()
         self._update_health_bar()
@@ -162,6 +170,7 @@ class Enemy:
         if not self.is_alive or self._destroyed:
             return
         self.health = max(0.0, self.health - amount)
+        self._spawn_damage_number(amount)
         self.on_damage(amount)
         if self.health <= 0.0:
             self.is_alive = False
@@ -191,6 +200,20 @@ class Enemy:
         collider_node = self.collider.node()
         if isinstance(collider_node, CollisionNode):
             collider_node.setIntoCollideMask(mask)
+
+    def set_damage_number_manager(
+        self, manager: "FloatingDamageNumbers | None"
+    ) -> None:
+        self._damage_number_manager = manager
+
+    def _spawn_damage_number(self, amount: float) -> None:
+        if self._damage_number_manager is None or amount <= 0.0:
+            return
+        if self.node.isEmpty():
+            return
+        world_pos = self.node.getPos(ShowBaseGlobal.render)
+        world_pos += Vec3(0.0, 0.0, self._health_bar_offset + 0.4)
+        self._damage_number_manager.spawn(amount, world_pos)
 
 
 class TargetDummy(Enemy):

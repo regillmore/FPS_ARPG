@@ -30,7 +30,7 @@ from .equipment import EquipmentLoadout
 from .inventory import Inventory, ItemTemplate
 from .projectiles import Projectile, get_projectile_blueprint
 from .stats import PlayerStats
-from .ui import TabbedMenu
+from .ui import FloatingDamageNumbers, TabbedMenu
 from .weapon_geometry import build_weapon_model
 from .weapons import WeaponBlueprint, WeaponState, get_weapon_blueprint
 from .maps import SafehouseMap, SafehouseMapInstance
@@ -91,6 +91,7 @@ class GameWorld:
         self.inventory = Inventory()
         self.equipment = EquipmentLoadout()
         self.equipment.add_listener(self._on_equipment_changed)
+        self.damage_numbers = FloatingDamageNumbers()
         self._seed_debug_items()
 
         self.key_map: dict[str, bool] = {
@@ -209,6 +210,8 @@ class GameWorld:
         self._register_enemy(dummy)
 
     def _register_enemy(self, enemy: Enemy) -> None:
+        if self.damage_numbers is not None:
+            enemy.set_damage_number_manager(self.damage_numbers)
         self.enemies.append(enemy)
 
     def _setup_hud(self) -> None:
@@ -386,6 +389,8 @@ class GameWorld:
             self._update_projectiles(dt)
             self._update_enemies(dt)
             self._traverse_collisions()
+        if self.damage_numbers is not None:
+            self.damage_numbers.update(dt)
         if self.tabbed_menu.is_visible:
             self.tabbed_menu.update()
         return task.cont
@@ -456,6 +461,9 @@ class GameWorld:
         if hasattr(self, "weapon_hud") and self.weapon_hud is not None:
             self.weapon_hud.destroy()
             self.weapon_hud = None
+        if hasattr(self, "damage_numbers") and self.damage_numbers is not None:
+            self.damage_numbers.destroy()
+            self.damage_numbers = None
         if self.weapon_model is not None and not self.weapon_model.isEmpty():
             self.weapon_model.removeNode()
             self.weapon_model = None
