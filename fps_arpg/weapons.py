@@ -16,6 +16,7 @@ class WeaponBlueprint:
     reload_time: float
     damage: float
     automatic: bool = False
+    projectile_id: str | None = None
 
 
 @dataclass
@@ -119,6 +120,7 @@ WEAPON_BLUEPRINTS: dict[str, WeaponBlueprint] = {
         reload_time=2.2,
         damage=38.0,
         automatic=False,
+        projectile_id="standard_round",
     )
 }
 
