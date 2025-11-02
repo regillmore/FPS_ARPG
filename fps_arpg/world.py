@@ -9,6 +9,7 @@ from panda3d.core import ClockObject, NodePath, TextNode, Vec3, WindowProperties
 
 from .equipment import EquipmentLoadout
 from .inventory import Inventory, ItemTemplate
+from .projectiles import Projectile, get_projectile_blueprint
 from .stats import PlayerStats
 from .ui import TabbedMenu
 from .weapon_geometry import build_weapon_model
@@ -40,6 +41,8 @@ class GameWorld:
         self.weapon_model: NodePath | None = None
         self.active_weapon: WeaponState | None = None
         self.is_fire_held = False
+        self.projectile_root: NodePath | None = None
+        self.projectiles: list[Projectile] = []
 
         self.player_stats = PlayerStats()
         self.inventory = Inventory()
@@ -59,6 +62,7 @@ class GameWorld:
         self._setup_environment()
         self._setup_camera()
         self._setup_weapon_anchor()
+        self._setup_projectiles()
         self._setup_controls()
         self._setup_hud()
         self._setup_tabbed_menu()
@@ -92,6 +96,10 @@ class GameWorld:
         self.weapon_root.setPos(0.32, 0.85, -0.3)
         self.weapon_root.setHpr(5, -4, 0)
         self.weapon_root.setScale(1.0)
+
+    def _setup_projectiles(self) -> None:
+        self.projectile_root = self.root.attachNewNode("projectiles")
+        self.projectiles = []
 
     def _setup_controls(self) -> None:
         self._bind("w", "forward", True)
@@ -286,6 +294,7 @@ class GameWorld:
             self._update_mouse_look()
             self._update_movement(dt)
             self._update_weapon(dt)
+            self._update_projectiles(dt)
         if self.tabbed_menu.is_visible:
             self.tabbed_menu.update()
         return task.cont
@@ -354,6 +363,10 @@ class GameWorld:
         if self.weapon_model is not None and not self.weapon_model.isEmpty():
             self.weapon_model.removeNode()
             self.weapon_model = None
+        self._clear_projectiles()
+        if self.projectile_root is not None and not self.projectile_root.isEmpty():
+            self.projectile_root.removeNode()
+            self.projectile_root = None
         if self.weapon_root is not None and not self.weapon_root.isEmpty():
             self.weapon_root.removeNode()
             self.weapon_root = None
@@ -435,6 +448,7 @@ class GameWorld:
                 print(
                     f"[Weapon] Fired {weapon.blueprint.name} for {event.damage:.1f} damage"
                 )
+                self._spawn_projectile(weapon, event.damage)
                 self._update_weapon_hud()
             elif event.reason == "empty":
                 self._update_weapon_hud()
@@ -449,6 +463,7 @@ class GameWorld:
         event = weapon.try_fire()
         if event.fired:
             print(f"[Weapon] Fired {weapon.blueprint.name} for {event.damage:.1f} damage")
+            self._spawn_projectile(weapon, event.damage)
         elif event.reason == "empty":
             print("[Weapon] Trigger pulled on empty magazine")
         elif event.reason == "reloading":
@@ -482,6 +497,47 @@ class GameWorld:
         weapon = self.active_weapon
         status = "Reloading" if weapon.is_reloading else weapon.get_ammo_display()
         self.weapon_hud.setText(f"{weapon.blueprint.name}\n{status}")
+
+    # Projectiles ----------------------------------------------------
+    def _spawn_projectile(self, weapon: WeaponState, base_damage: float) -> None:
+        if self.projectile_root is None or self.projectile_root.isEmpty():
+            return
+        projectile_id = weapon.blueprint.projectile_id
+        if projectile_id is None:
+            return
+        blueprint = get_projectile_blueprint(projectile_id)
+        if blueprint is None:
+            print(f"[Projectile] Blueprint '{projectile_id}' not found")
+            return
+
+        origin = self.app.camera.getPos(self.root)
+        direction = self.app.camera.getQuat(self.root).getForward()
+        if direction.length_squared() == 0:
+            direction = Vec3(0, 1, 0)
+        else:
+            direction.normalize()
+
+        spawn_position = origin + direction * 0.6
+        projectile = Projectile(
+            blueprint,
+            self.projectile_root,
+            spawn_position,
+            direction,
+            base_damage,
+        )
+        self.projectiles.append(projectile)
+
+    def _update_projectiles(self, dt: float) -> None:
+        alive: list[Projectile] = []
+        for projectile in self.projectiles:
+            if projectile.update(dt):
+                alive.append(projectile)
+        self.projectiles = alive
+
+    def _clear_projectiles(self) -> None:
+        for projectile in self.projectiles:
+            projectile.destroy()
+        self.projectiles.clear()
 
 
 __all__ = ["GameWorld"]
