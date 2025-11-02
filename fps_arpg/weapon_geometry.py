@@ -126,7 +126,7 @@ def _make_box(half_extents: Vec3, color: Vec4, name: str) -> NodePath:
     ]
 
     faces = [
-        ((0, 1, 2, 3), Vec3(0, 0, -1)),  # Bottom
+        ((1, 0, 3, 2), Vec3(0, 0, -1)),  # Bottom
         ((4, 5, 6, 7), Vec3(0, 0, 1)),  # Top
         ((2, 3, 7, 6), Vec3(0, 1, 0)),  # Front
         ((0, 1, 5, 4), Vec3(0, -1, 0)),  # Back
