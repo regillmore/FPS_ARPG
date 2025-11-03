@@ -105,6 +105,7 @@ class GameWorld:
         self.equipment = EquipmentLoadout()
         self.equipment.add_listener(self._on_equipment_changed)
         self.damage_numbers = FloatingDamageNumbers()
+        self.crosshair_root: NodePath | None = None
         self._seed_debug_items()
 
         self.key_map: dict[str, bool] = {
@@ -261,7 +262,32 @@ class GameWorld:
             align=TextNode.ARight,
             mayChange=True,
         )
+        self._build_crosshair()
         self._update_weapon_hud()
+
+    def _build_crosshair(self) -> None:
+        if self.crosshair_root is not None and not self.crosshair_root.isEmpty():
+            self.crosshair_root.removeNode()
+
+        self.crosshair_root = self.app.aspect2d.attachNewNode("sentinel_crosshair")
+        self.crosshair_root.setTransparency(TransparencyAttrib.MAlpha)
+        self.crosshair_root.setBin("fixed", 0)
+
+        color = Vec4(0.95, 0.98, 1.0, 0.9)
+        thickness = 0.01
+        length = 0.06
+
+        def _make_bar(name: str, width: float, height: float) -> NodePath:
+            cm = CardMaker(name)
+            cm.setFrame(-width * 0.5, width * 0.5, -height * 0.5, height * 0.5)
+            bar = self.crosshair_root.attachNewNode(cm.generate())
+            bar.setColor(color)
+            return bar
+
+        _make_bar("sentinel_crosshair_vertical", thickness, length)
+        _make_bar("sentinel_crosshair_horizontal", length, thickness)
+
+        self.crosshair_root.hide()
 
     def _setup_tabbed_menu(self) -> None:
         self.tabbed_menu = TabbedMenu(
@@ -408,6 +434,7 @@ class GameWorld:
             self._set_mouse_capture(False)
         else:
             self._set_mouse_capture(True)
+        self._update_crosshair()
 
     # Update loop -----------------------------------------------------
     def _update_task(self, task) -> int:
@@ -493,6 +520,9 @@ class GameWorld:
         if hasattr(self, "weapon_hud") and self.weapon_hud is not None:
             self.weapon_hud.destroy()
             self.weapon_hud = None
+        if self.crosshair_root is not None and not self.crosshair_root.isEmpty():
+            self.crosshair_root.removeNode()
+            self.crosshair_root = None
         if hasattr(self, "damage_numbers") and self.damage_numbers is not None:
             self.damage_numbers.destroy()
             self.damage_numbers = None
@@ -668,10 +698,25 @@ class GameWorld:
             return
         if self.active_weapon is None:
             self.weapon_hud.setText("No weapon equipped")
+            self._update_crosshair()
             return
         weapon = self.active_weapon
         status = "Reloading" if weapon.is_reloading else weapon.get_ammo_display()
         self.weapon_hud.setText(f"{weapon.blueprint.name}\n{status}")
+        self._update_crosshair()
+
+    def _update_crosshair(self) -> None:
+        if self.crosshair_root is None or self.crosshair_root.isEmpty():
+            return
+        weapon = self.active_weapon
+        if (
+            weapon is None
+            or weapon.blueprint.id != "sentinel_rifle"
+            or self.is_paused
+        ):
+            self.crosshair_root.hide()
+            return
+        self.crosshair_root.show()
 
     # Projectiles ----------------------------------------------------
     def _spawn_projectile(self, weapon: WeaponState, base_damage: float) -> None:
