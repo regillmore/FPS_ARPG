@@ -126,6 +126,260 @@ class FloatingDamageNumbers:
         return f"{amount:.1f}"
 
 
+class _HudBar:
+    """Reusable progress bar element for the in-game HUD."""
+
+    def __init__(
+        self,
+        *,
+        parent: DirectFrame | NodePath,
+        label: str,
+        color: tuple[float, float, float, float],
+        width: float = 0.5,
+        height: float = 0.045,
+        border_color: tuple[float, float, float, float] = (0.05, 0.05, 0.08, 0.85),
+    ) -> None:
+        self.frame = DirectFrame(
+            parent=parent,
+            frameColor=border_color,
+            frameSize=(-width, width, -height, height),
+            borderWidth=(0.008, 0.008),
+            relief=1,
+        )
+
+        padding = 0.015
+        self._fill_left = -width + padding
+        self._fill_right = width - padding
+        self._fill_bottom = -height + padding
+        self._fill_top = height - padding
+        self._fill_range = self._fill_right - self._fill_left
+        self._text_scale = height * 1.35
+
+        self.fill = DirectFrame(
+            parent=self.frame,
+            frameColor=color,
+            frameSize=(
+                self._fill_left,
+                self._fill_left,
+                self._fill_bottom,
+                self._fill_top,
+            ),
+            relief=1,
+            sortOrder=1,
+        )
+
+        text_y = height * 0.55
+        self.label = OnscreenText(
+            text=label,
+            parent=self.frame,
+            pos=(self._fill_left, text_y),
+            scale=self._text_scale,
+            fg=(0.92, 0.95, 1.0, 1.0),
+            align=TextNode.ALeft,
+            mayChange=False,
+        )
+        self.value = OnscreenText(
+            text="",
+            parent=self.frame,
+            pos=(self._fill_right, text_y),
+            scale=self._text_scale,
+            fg=(0.95, 0.97, 1.0, 1.0),
+            align=TextNode.ARight,
+            mayChange=True,
+        )
+
+    def update_value(
+        self,
+        current: float,
+        maximum: float,
+        *,
+        value_text: str | None = None,
+    ) -> None:
+        ratio = 0.0
+        if maximum > 0:
+            ratio = max(0.0, min(1.0, current / maximum))
+        right_edge = self._fill_left + self._fill_range * ratio
+        self.fill["frameSize"] = (
+            self._fill_left,
+            right_edge,
+            self._fill_bottom,
+            self._fill_top,
+        )
+        if value_text is None:
+            if maximum > 0:
+                value_text = f"{int(current)} / {int(maximum)}"
+            else:
+                value_text = f"{int(current)}"
+        self.value.setText(value_text)
+
+    def set_color(self, color: tuple[float, float, float, float]) -> None:
+        self.fill["frameColor"] = color
+
+    def destroy(self) -> None:
+        for element in ("value", "label", "fill", "frame"):
+            widget = getattr(self, element, None)
+            if widget is not None:
+                widget.destroy()
+                setattr(self, element, None)
+
+
+class PlayerHUD:
+    """Heads-up display presenting vital player information."""
+
+    def __init__(
+        self,
+        stats: PlayerStats,
+        *,
+        parent: DirectFrame | NodePath | None = None,
+    ) -> None:
+        root_parent = parent or ShowBaseGlobal.aspect2d
+        self.root = DirectFrame(parent=root_parent, frameColor=(0, 0, 0, 0))
+        self.root.setBin("fixed", 5)
+
+        self.level_text = OnscreenText(
+            text="",
+            parent=self.root,
+            pos=(-1.3, 0.9),
+            scale=0.065,
+            fg=(0.92, 0.97, 1.0, 1.0),
+            shadow=(0, 0, 0, 0.85),
+            align=TextNode.ALeft,
+            mayChange=True,
+        )
+
+        self.xp_bar = _HudBar(
+            parent=self.root,
+            label="XP",
+            color=(0.4, 0.7, 1.0, 0.85),
+            width=0.6,
+            height=0.04,
+        )
+        self.xp_bar.frame.setPos(-0.7, 0.0, 0.82)
+
+        self.points_hint = OnscreenText(
+            text="",
+            parent=self.root,
+            pos=(-0.98, 0.73),
+            scale=0.05,
+            fg=(0.98, 0.83, 0.45, 1.0),
+            shadow=(0, 0, 0, 0.8),
+            align=TextNode.ALeft,
+            mayChange=True,
+        )
+        self.points_hint.hide()
+
+        self.health_bar = _HudBar(
+            parent=self.root,
+            label="HEALTH",
+            color=(0.85, 0.2, 0.28, 0.95),
+            width=0.55,
+            height=0.05,
+        )
+        self.health_bar.frame.setPos(-0.75, 0.0, -0.82)
+
+        self.focus_bar = _HudBar(
+            parent=self.root,
+            label="FOCUS",
+            color=(0.25, 0.55, 0.95, 0.95),
+            width=0.55,
+            height=0.05,
+        )
+        self.focus_bar.frame.setPos(-0.75, 0.0, -0.92)
+
+        self.weapon_text = OnscreenText(
+            text="",
+            parent=self.root,
+            pos=(1.18, -0.83),
+            scale=0.06,
+            fg=(0.85, 0.95, 1.0, 1.0),
+            shadow=(0, 0, 0, 0.85),
+            align=TextNode.ARight,
+            mayChange=True,
+        )
+
+        self.menu_hint = OnscreenText(
+            text="[TAB] Character  •  [I] Inventory",
+            parent=self.root,
+            pos=(0.0, -0.95),
+            scale=0.045,
+            fg=(0.8, 0.85, 1.0, 1.0),
+            shadow=(0, 0, 0, 0.8),
+            align=TextNode.ACenter,
+            mayChange=False,
+        )
+
+        self.update(stats)
+
+    def update(self, stats: PlayerStats) -> None:
+        self.level_text.setText(f"Level {stats.level}")
+
+        xp_cap = max(stats.xp_to_next, 1)
+        xp_display_total = stats.xp_to_next if stats.xp_to_next > 0 else xp_cap
+        xp_ratio_text = f"{stats.xp} / {xp_display_total}"
+        self.xp_bar.update_value(stats.xp, xp_cap, value_text=xp_ratio_text)
+
+        health_text = (
+            f"{int(round(stats.health))} / {int(round(stats.effective_max_health))}"
+        )
+        self.health_bar.update_value(
+            stats.health,
+            stats.effective_max_health,
+            value_text=health_text,
+        )
+
+        focus_text = (
+            f"{int(round(stats.focus))} / {int(round(stats.effective_max_focus))}"
+        )
+        self.focus_bar.update_value(
+            stats.focus,
+            stats.effective_max_focus,
+            value_text=focus_text,
+        )
+
+        if stats.points_available > 0:
+            self.points_hint.setText(
+                f"{stats.points_available} ability points available"
+            )
+            self.points_hint.show()
+        else:
+            self.points_hint.hide()
+
+    def set_weapon_status(
+        self,
+        *,
+        weapon_name: str | None,
+        status_text: str | None,
+    ) -> None:
+        if weapon_name is None:
+            self.weapon_text.setText("No weapon equipped")
+            return
+        status = status_text or ""
+        self.weapon_text.setText(f"{weapon_name}\n{status}")
+
+    def show(self) -> None:
+        self.root.show()
+
+    def hide(self) -> None:
+        self.root.hide()
+
+    def destroy(self) -> None:
+        for element in (
+            "menu_hint",
+            "weapon_text",
+            "focus_bar",
+            "health_bar",
+            "points_hint",
+            "xp_bar",
+            "level_text",
+            "root",
+        ):
+            widget = getattr(self, element, None)
+            if widget is None:
+                continue
+            if hasattr(widget, "destroy"):
+                widget.destroy()
+            setattr(self, element, None)
+
 class MainMenu:
     """Simple main menu constructed with Panda3D DirectGUI widgets."""
 
@@ -1305,6 +1559,7 @@ class TabbedMenu:
 
 __all__ = [
     "FloatingDamageNumbers",
+    "PlayerHUD",
     "InventoryMenu",
     "MainMenu",
     "StatsMenu",

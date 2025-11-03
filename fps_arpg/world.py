@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 import random
 
-from direct.gui.DirectGui import OnscreenText
 from panda3d.core import (
     BitMask32,
     CardMaker,
@@ -30,7 +29,7 @@ from .equipment import EquipmentLoadout
 from .inventory import Inventory, ItemTemplate
 from .projectiles import Projectile, get_projectile_blueprint
 from .stats import PlayerStats
-from .ui import FloatingDamageNumbers, TabbedMenu
+from .ui import FloatingDamageNumbers, PlayerHUD, TabbedMenu
 from .weapon_geometry import build_weapon_model
 from .weapons import WeaponBlueprint, WeaponState, get_weapon_blueprint
 from .world_items import ItemPickup
@@ -106,6 +105,7 @@ class GameWorld:
         self.equipment.add_listener(self._on_equipment_changed)
         self.damage_numbers = FloatingDamageNumbers()
         self.crosshair_root: NodePath | None = None
+        self.hud: PlayerHUD | None = None
         self._seed_debug_items()
 
         self.key_map: dict[str, bool] = {
@@ -254,14 +254,7 @@ class GameWorld:
 
     def _setup_hud(self) -> None:
 
-        self.weapon_hud = OnscreenText(
-            text="No weapon equipped",
-            pos=(0.9, -0.85),
-            scale=0.06,
-            fg=(0.85, 0.95, 1, 1),
-            align=TextNode.ARight,
-            mayChange=True,
-        )
+        self.hud = PlayerHUD(self.player_stats)
         self._build_crosshair()
         self._update_weapon_hud()
 
@@ -450,6 +443,8 @@ class GameWorld:
             self._traverse_collisions()
         if self.damage_numbers is not None:
             self.damage_numbers.update(dt)
+        if self.hud is not None:
+            self.hud.update(self.player_stats)
         if self.tabbed_menu.is_visible:
             self.tabbed_menu.update()
         return task.cont
@@ -517,9 +512,9 @@ class GameWorld:
         if hasattr(self, "hud_text") and self.hud_text is not None:
             self.hud_text.destroy()
             self.hud_text = None
-        if hasattr(self, "weapon_hud") and self.weapon_hud is not None:
-            self.weapon_hud.destroy()
-            self.weapon_hud = None
+        if hasattr(self, "hud") and self.hud is not None:
+            self.hud.destroy()
+            self.hud = None
         if self.crosshair_root is not None and not self.crosshair_root.isEmpty():
             self.crosshair_root.removeNode()
             self.crosshair_root = None
@@ -694,15 +689,18 @@ class GameWorld:
         self._update_weapon_hud()
 
     def _update_weapon_hud(self) -> None:
-        if not hasattr(self, "weapon_hud") or self.weapon_hud is None:
+        if self.hud is None:
             return
         if self.active_weapon is None:
-            self.weapon_hud.setText("No weapon equipped")
+            self.hud.set_weapon_status(weapon_name=None, status_text=None)
             self._update_crosshair()
             return
         weapon = self.active_weapon
         status = "Reloading" if weapon.is_reloading else weapon.get_ammo_display()
-        self.weapon_hud.setText(f"{weapon.blueprint.name}\n{status}")
+        self.hud.set_weapon_status(
+            weapon_name=weapon.blueprint.name,
+            status_text=status,
+        )
         self._update_crosshair()
 
     def _update_crosshair(self) -> None:
