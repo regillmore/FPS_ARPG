@@ -172,7 +172,7 @@ class GameWorld:
     def _setup_weapon_anchor(self) -> None:
         self.weapon_root = self.app.camera.attachNewNode("weapon_anchor")
         self.weapon_root.setPos(0.32, 1.85, -0.3)
-        #self.weapon_root.setHpr(5, -4, 0)
+        self.weapon_root.setHpr(0.4, 0.3, 0)
         self.weapon_root.setScale(1.0)
 
     def _setup_projectiles(self) -> None:
