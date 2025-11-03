@@ -27,6 +27,7 @@ class SafehouseMapInstance:
     environment_collider: NodePath
     projectile_decal_root: NodePath
     lights: tuple[NodePath, ...]
+    stash_anchor: NodePath
 
 
 class SafehouseMap:
@@ -138,9 +139,20 @@ class SafehouseMap:
 
         projectile_decal_root = safehouse_root.attachNewNode("projectile_decals")
 
+        stash_anchor = safehouse_root.attachNewNode("stash_anchor")
+        stash_anchor.setPos(-6.0, -38.0, 0.0)
+
+        pad_cm = CardMaker("safehouse_stash_pad")
+        pad_cm.setFrame(-1.3, 1.3, -1.3, 1.3)
+        stash_pad = stash_anchor.attachNewNode(pad_cm.generate())
+        stash_pad.setHpr(0, -90, 0)
+        stash_pad.setZ(0.01)
+        stash_pad.setColor(0.22, 0.24, 0.3, 1)
+
         return SafehouseMapInstance(
             root=safehouse_root,
             environment_collider=environment_collider,
             projectile_decal_root=projectile_decal_root,
             lights=(ambient_np, key_light_np),
+            stash_anchor=stash_anchor,
         )

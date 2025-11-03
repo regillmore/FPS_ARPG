@@ -24,6 +24,8 @@ from panda3d.core import (
     WindowProperties,
 )
 
+from direct.gui.DirectGui import OnscreenText
+
 from .enemies import Enemy, TargetDummy
 from .equipment import EquipmentLoadout
 from .inventory import Inventory, ItemTemplate
@@ -33,6 +35,7 @@ from .ui import FloatingDamageNumbers, PlayerHUD, TabbedMenu
 from .weapon_geometry import build_weapon_model
 from .weapons import WeaponBlueprint, WeaponState, get_weapon_blueprint
 from .world_items import ItemPickup
+from .stash import StashBox, StashOverlay, transfer_all_items
 
 
 FIELD_MEDKIT_TEMPLATE = ItemTemplate(
@@ -108,6 +111,11 @@ class GameWorld:
         self.hud: PlayerHUD | None = None
         self._seed_debug_items()
 
+        self.stash_box: StashBox | None = None
+        self.stash_overlay: StashOverlay | None = None
+        self._is_stash_open = False
+        self._stash_prompt: OnscreenText | None = None
+
         self.key_map: dict[str, bool] = {
             "forward": False,
             "back": False,
@@ -124,6 +132,7 @@ class GameWorld:
         self._setup_projectiles()
         self._setup_item_pickups()
         self._setup_enemies()
+        self._setup_stash()
         self._setup_controls()
         self._setup_hud()
         self._setup_tabbed_menu()
@@ -194,6 +203,27 @@ class GameWorld:
         self.item_root = self.root.attachNewNode("item_pickups")
         self.item_pickups = []
 
+    def _setup_stash(self) -> None:
+        if self.map_instance is None or self.map_instance.stash_anchor.isEmpty():
+            return
+
+        stash_parent = self.map_instance.stash_anchor
+        stash_inventory = Inventory(capacity=36)
+        self.stash_box = StashBox(stash_parent, stash_inventory)
+        self.stash_overlay = StashOverlay(self.inventory, stash_inventory)
+        self.stash_overlay.hide()
+        self._is_stash_open = False
+        self._stash_prompt = OnscreenText(
+            text="F - Access Safehouse Stash",
+            parent=self.app.aspect2d,
+            pos=(0, -0.9),
+            scale=0.05,
+            fg=(0.82, 0.88, 1.0, 1.0),
+            align=TextNode.ACenter,
+            mayChange=False,
+        )
+        self._stash_prompt.hide()
+
     def _setup_enemies(self) -> None:
         if self.enemy_root is not None and not self.enemy_root.isEmpty():
             self.enemy_root.removeNode()
@@ -221,6 +251,12 @@ class GameWorld:
         self._accepted_events.append("mouse1-up")
         self.app.accept("r", self._reload_weapon)
         self._accepted_events.append("r")
+        self.app.accept("f", self._handle_stash_interact)
+        self._accepted_events.append("f")
+        self.app.accept("z", self._deposit_all_to_stash)
+        self._accepted_events.append("z")
+        self.app.accept("x", self._withdraw_all_from_stash)
+        self._accepted_events.append("x")
 
     def _spawn_safehouse_dummy(self) -> None:
         if self.enemy_root is None or self.enemy_root.isEmpty():
@@ -447,6 +483,7 @@ class GameWorld:
             self.hud.update(self.player_stats)
         if self.tabbed_menu.is_visible:
             self.tabbed_menu.update()
+        self._update_stash_prompt()
         return task.cont
 
     def _update_mouse_look(self) -> None:
@@ -508,6 +545,16 @@ class GameWorld:
         if hasattr(self, "tabbed_menu") and self.tabbed_menu is not None:
             self.tabbed_menu.destroy()
             self.tabbed_menu = None
+
+        if self.stash_overlay is not None:
+            self.stash_overlay.destroy()
+            self.stash_overlay = None
+        if self.stash_box is not None:
+            self.stash_box.destroy()
+            self.stash_box = None
+        if self._stash_prompt is not None:
+            self._stash_prompt.destroy()
+            self._stash_prompt = None
 
         if hasattr(self, "hud_text") and self.hud_text is not None:
             self.hud_text.destroy()
@@ -575,6 +622,73 @@ class GameWorld:
             self._set_paused(True)
 
         self.tabbed_menu.select_tab(tab)
+
+    def _handle_stash_interact(self) -> None:
+        if self._is_stash_open:
+            self._close_stash()
+            return
+        if self.stash_box is None:
+            return
+        if not self.stash_box.is_player_in_range(self.player_np):
+            return
+        self._open_stash()
+
+    def _open_stash(self) -> None:
+        if self.stash_overlay is None or self.stash_box is None:
+            return
+        if self.tabbed_menu.is_visible:
+            self.tabbed_menu.hide()
+        self.stash_overlay.show()
+        self._is_stash_open = True
+        self._set_paused(True)
+        if self._stash_prompt is not None:
+            self._stash_prompt.hide()
+        self.stash_box.set_highlighted(True)
+
+    def _close_stash(self) -> None:
+        if not self._is_stash_open:
+            return
+        if self.stash_overlay is not None:
+            self.stash_overlay.hide()
+        self._is_stash_open = False
+        self._set_paused(False)
+        self._update_stash_prompt()
+
+    def _deposit_all_to_stash(self) -> None:
+        if not self._is_stash_open or self.stash_box is None or self.stash_overlay is None:
+            return
+        moved = transfer_all_items(self.inventory, self.stash_box.inventory)
+        if moved > 0:
+            print(f"[Stash] Deposited {moved} item(s) into the safehouse stash")
+            self.stash_overlay.refresh()
+        else:
+            print("[Stash] No items could be deposited")
+
+    def _withdraw_all_from_stash(self) -> None:
+        if not self._is_stash_open or self.stash_box is None or self.stash_overlay is None:
+            return
+        moved = transfer_all_items(self.stash_box.inventory, self.inventory)
+        if moved > 0:
+            print(f"[Stash] Retrieved {moved} item(s) from the safehouse stash")
+            self.stash_overlay.refresh()
+        else:
+            print("[Stash] No items could be withdrawn")
+
+    def _update_stash_prompt(self) -> None:
+        if self.stash_box is None:
+            return
+        if self._is_stash_open:
+            self.stash_box.set_highlighted(True)
+            if self._stash_prompt is not None:
+                self._stash_prompt.hide()
+            return
+        in_range = self.stash_box.is_player_in_range(self.player_np)
+        self.stash_box.set_highlighted(in_range)
+        if self._stash_prompt is not None:
+            if in_range:
+                self._stash_prompt.show()
+            else:
+                self._stash_prompt.hide()
 
     # Equipment events ------------------------------------------------
     def _on_equipment_changed(self, loadout: EquipmentLoadout) -> None:
