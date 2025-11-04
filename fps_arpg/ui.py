@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from direct.gui import DirectGuiGlobals as DGG
 from direct.gui.DirectGui import DirectButton, DirectFrame, OnscreenText
 from direct.showbase import ShowBaseGlobal
+from direct.showbase.DirectObject import DirectObject
 from panda3d.core import NodePath, Point2, Point3, TextNode, Vec3
 
 from .equipment import EquipmentLoadout
@@ -539,9 +540,11 @@ class InventoryMenu:
         parent: DirectFrame | None = None,
         frame_size: tuple[float, float, float, float] | None = None,
         footer_text: str | None = "I - Close",
+        on_drop_stack: Callable[[InventoryStack], bool | None] | None = None,
     ) -> None:
         self.inventory = inventory
         self.equipment = equipment
+        self._on_drop_stack = on_drop_stack
         frame_kwargs: dict[str, object] = {
             "frameColor": (0.08, 0.07, 0.09, 0.92),
             "frameSize": frame_size or (-0.95, 0.95, -0.73, 0.77),
@@ -647,6 +650,9 @@ class InventoryMenu:
             mayChange=True,
         )
         self._drag_label.hide()
+
+        self._mouse_events = DirectObject()
+        self._mouse_events.accept("mouse1-up", self._on_global_mouse_up)
 
         self._create_equipment_panel()
         self._create_slots()
@@ -825,6 +831,8 @@ class InventoryMenu:
 
     def destroy(self) -> None:
         self._cancel_drag()
+        if getattr(self, "_mouse_events", None) is not None:
+            self._mouse_events.ignoreAll()
         if getattr(self, "_drag_label", None) is not None:
             self._drag_label.destroy()
             self._drag_label = None
@@ -1268,6 +1276,7 @@ class InventoryMenu:
             f"Quantity: {stack.quantity}",
             "",
             "Click another slot to move this stack.",
+            "Click outside the menu to drop it.",
             "Right click to cancel.",
         ]
         self._extend_with_stat_bonuses(lines, stack.template)
@@ -1419,6 +1428,77 @@ class InventoryMenu:
     def _on_cancel_drag_event(self, _event: object | None = None) -> None:
         self._cancel_drag()
 
+    def _on_global_mouse_up(self) -> None:
+        if (
+            not self.is_visible
+            or self._dragged_stack is None
+            or not self._has_active_drag_source()
+        ):
+            return
+        if self._is_mouse_over_menu():
+            return
+        self._drop_active_stack_outside()
+
+    def _is_mouse_over_menu(self) -> bool:
+        base = ShowBaseGlobal.base
+        if base is None or base.mouseWatcherNode is None:
+            return True
+        if not base.mouseWatcherNode.hasMouse():
+            return True
+        aspect2d = getattr(ShowBaseGlobal, "aspect2d", None)
+        render2d = getattr(ShowBaseGlobal, "render2d", None)
+        if aspect2d is None or render2d is None:
+            return True
+
+        mouse_x = base.mouseWatcherNode.getMouseX()
+        mouse_y = base.mouseWatcherNode.getMouseY()
+        mouse_point = Point3(mouse_x, 0, mouse_y)
+        aspect_point = aspect2d.getRelativePoint(render2d, mouse_point)
+
+        left, right, bottom, top = self.frame["frameSize"]
+        corners = (
+            aspect2d.getRelativePoint(self.frame, Point3(left, 0, bottom)),
+            aspect2d.getRelativePoint(self.frame, Point3(left, 0, top)),
+            aspect2d.getRelativePoint(self.frame, Point3(right, 0, bottom)),
+            aspect2d.getRelativePoint(self.frame, Point3(right, 0, top)),
+        )
+
+        min_x = min(point.x for point in corners)
+        max_x = max(point.x for point in corners)
+        min_z = min(point.z for point in corners)
+        max_z = max(point.z for point in corners)
+
+        return min_x <= aspect_point.x <= max_x and min_z <= aspect_point.z <= max_z
+
+    def _drop_active_stack_outside(self) -> None:
+        if self._dragged_stack is None:
+            return
+
+        drop_stack = InventoryStack(
+            template=self._dragged_stack.template,
+            quantity=self._dragged_stack.quantity,
+        )
+
+        allowed = True
+        if self._on_drop_stack is not None:
+            result = self._on_drop_stack(drop_stack)
+            if result is False:
+                allowed = False
+
+        if not allowed:
+            self._cancel_drag()
+            self.update()
+            return
+
+        if (
+            self._drag_source_index is not None
+            and 0 <= self._drag_source_index < len(self.inventory.stacks)
+        ):
+            self.inventory.stacks[self._drag_source_index] = None
+
+        self._reset_drag_state()
+        self.update()
+
 
 class TabbedMenu:
     """Container that combines stats and inventory views under tab controls."""
@@ -1427,7 +1507,12 @@ class TabbedMenu:
     TAB_INVENTORY = "inventory"
 
     def __init__(
-        self, stats: PlayerStats, inventory: Inventory, equipment: EquipmentLoadout
+        self,
+        stats: PlayerStats,
+        inventory: Inventory,
+        equipment: EquipmentLoadout,
+        *,
+        on_drop_stack: Callable[[InventoryStack], bool | None] | None = None,
     ) -> None:
         self.stats = stats
         self.inventory = inventory
@@ -1455,6 +1540,7 @@ class TabbedMenu:
             equipment,
             parent=self.content_frame,
             footer_text=None,
+            on_drop_stack=on_drop_stack,
         )
 
         # Slightly reposition panels to accommodate the shared title bar.
