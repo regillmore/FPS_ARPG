@@ -64,7 +64,7 @@ class GameWorld:
     PITCH_LIMIT = 75
     ENVIRONMENT_COLLISION_MASK = BitMask32.bit(2)
     MAX_PROJECTILE_DECALS = 60
-    PICKUP_HOVER_RANGE = ItemPickup.PICKUP_RADIUS + 1.5
+    PICKUP_HOVER_RANGE = ItemPickup.PICKUP_RADIUS + 5.0
     PICKUP_AIM_THRESHOLD = 0.995
 
     def __init__(self, app: "GameApp") -> None:
