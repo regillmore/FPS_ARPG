@@ -127,6 +127,38 @@ class FloatingDamageNumbers:
         return f"{amount:.1f}"
 
 
+def build_item_detail_lines(
+    template: ItemTemplate,
+    quantity: int,
+    *,
+    stack_space_remaining: int | None = None,
+    stat_block_header: str = "Stat Effects:",
+) -> list[str]:
+    """Create description lines mirroring the inventory hover behaviour."""
+
+    lines: list[str] = [f"Category: {template.category}"]
+    if template.stack_limit > 1:
+        lines.append(f"Stack: {quantity}/{template.stack_limit}")
+        if stack_space_remaining == 0:
+            lines.append("Stack is full.")
+    else:
+        lines.append(f"Quantity: {quantity}")
+
+    if template.description:
+        lines.append("")
+        lines.append(template.description)
+
+    bonus_lines = build_stat_bonus_lines(template.stat_bonuses)
+    if bonus_lines:
+        if lines and lines[-1] != "":
+            lines.append("")
+        lines.append(stat_block_header)
+        for entry in bonus_lines:
+            lines.append(f"- {entry}")
+
+    return lines
+
+
 class _HudBar:
     """Reusable progress bar element for the in-game HUD."""
 
@@ -1304,22 +1336,12 @@ class InventoryMenu:
             self._set_empty_description()
             return
 
-        lines = [f"Category: {stack.template.category}"]
-        if stack.template.stack_limit > 1:
-            lines.append(
-                f"Stack: {stack.quantity}/{stack.template.stack_limit}"
-            )
-            if stack.space_remaining() == 0:
-                lines.append("Stack is full.")
-        else:
-            lines.append(f"Quantity: {stack.quantity}")
-
-        if stack.template.description:
-            lines.append("")
-            lines.append(stack.template.description)
-
-        self._extend_with_stat_bonuses(lines, stack.template)
-
+        lines = build_item_detail_lines(
+            stack.template,
+            stack.quantity,
+            stack_space_remaining=stack.space_remaining(),
+            stat_block_header=self._stat_block_header,
+        )
         self.detail_title.setText(f"{stack.template.name} (x{stack.quantity})")
         self.detail_body.setText("\n".join(lines))
         self.detail_window.show()
@@ -1643,6 +1665,72 @@ class TabbedMenu:
                 setattr(self, widget, None)
 
 
+class ItemHoverDisplay:
+    """Standalone detail window reused when aiming at world pickups."""
+
+    def __init__(self, *, parent: NodePath | None = None) -> None:
+        root_parent = parent or getattr(ShowBaseGlobal, "aspect2d", None)
+        if root_parent is None:
+            raise RuntimeError("ItemHoverDisplay requires a valid aspect2d parent")
+
+        self.frame = DirectFrame(
+            parent=root_parent,
+            frameColor=(0.12, 0.12, 0.16, 0.95),
+            frameSize=(-0.35, 0.35, -0.25, 0.25),
+            borderWidth=(0.01, 0.01),
+            relief=1,
+            sortOrder=120,
+        )
+        self.frame.setPos(0.65, 0, 0.35)
+
+        self.title = OnscreenText(
+            text="",
+            parent=self.frame,
+            pos=(-0.32, 0.18),
+            scale=0.055,
+            fg=(0.95, 0.95, 0.88, 1),
+            align=TextNode.ALeft,
+            mayChange=True,
+            wordwrap=16,
+        )
+        self.body = OnscreenText(
+            text="",
+            parent=self.frame,
+            pos=(-0.32, 0.05),
+            scale=0.045,
+            fg=(0.85, 0.88, 1, 1),
+            align=TextNode.ALeft,
+            mayChange=True,
+            wordwrap=18,
+        )
+
+        self.hide()
+
+    def show_item(self, template: ItemTemplate, quantity: int) -> None:
+        remaining = None
+        if template.stack_limit > 1:
+            remaining = max(template.stack_limit - min(quantity, template.stack_limit), 0)
+
+        lines = build_item_detail_lines(
+            template,
+            quantity,
+            stack_space_remaining=remaining,
+        )
+        self.title.setText(f"{template.name} (x{quantity})")
+        self.body.setText("\n".join(lines))
+        self.frame.show()
+
+    def hide(self) -> None:
+        self.frame.hide()
+
+    def destroy(self) -> None:
+        for widget in ("body", "title", "frame"):
+            element = getattr(self, widget, None)
+            if element is not None:
+                element.destroy()
+                setattr(self, widget, None)
+
+
 __all__ = [
     "FloatingDamageNumbers",
     "PlayerHUD",
@@ -1650,4 +1738,5 @@ __all__ = [
     "MainMenu",
     "StatsMenu",
     "TabbedMenu",
+    "ItemHoverDisplay",
 ]

@@ -31,7 +31,12 @@ from .equipment import EquipmentLoadout
 from .inventory import Inventory, InventoryStack, ItemTemplate
 from .projectiles import Projectile, get_projectile_blueprint
 from .stats import PlayerStats
-from .ui import FloatingDamageNumbers, PlayerHUD, TabbedMenu
+from .ui import (
+    FloatingDamageNumbers,
+    ItemHoverDisplay,
+    PlayerHUD,
+    TabbedMenu,
+)
 from .weapon_geometry import build_weapon_model
 from .weapons import WeaponBlueprint, WeaponState, get_weapon_blueprint
 from .world_items import ItemPickup
@@ -59,6 +64,8 @@ class GameWorld:
     PITCH_LIMIT = 75
     ENVIRONMENT_COLLISION_MASK = BitMask32.bit(2)
     MAX_PROJECTILE_DECALS = 60
+    PICKUP_HOVER_RANGE = ItemPickup.PICKUP_RADIUS + 1.5
+    PICKUP_AIM_THRESHOLD = 0.995
 
     def __init__(self, app: "GameApp") -> None:
         self.app = app
@@ -109,6 +116,7 @@ class GameWorld:
         self.damage_numbers = FloatingDamageNumbers()
         self.crosshair_root: NodePath | None = None
         self.hud: PlayerHUD | None = None
+        self.item_hover_display: ItemHoverDisplay | None = None
         self._seed_debug_items()
 
         self.stash_box: StashBox | None = None
@@ -293,6 +301,13 @@ class GameWorld:
         self.hud = PlayerHUD(self.player_stats)
         self._build_crosshair()
         self._update_weapon_hud()
+        if self.item_hover_display is None:
+            try:
+                self.item_hover_display = ItemHoverDisplay(parent=self.app.aspect2d)
+            except RuntimeError:
+                self.item_hover_display = None
+        if self.item_hover_display is not None:
+            self.item_hover_display.hide()
 
     def _build_crosshair(self) -> None:
         if self.crosshair_root is not None and not self.crosshair_root.isEmpty():
@@ -455,6 +470,8 @@ class GameWorld:
         self._mouse_captured = capture
         if capture:
             self.app.win.movePointer(0, self.center_x, self.center_y)
+        elif self.item_hover_display is not None:
+            self.item_hover_display.hide()
 
     def _set_paused(self, paused: bool) -> None:
         if self.is_paused == paused:
@@ -467,6 +484,8 @@ class GameWorld:
         else:
             self._set_mouse_capture(True)
         self._update_crosshair()
+        if paused and self.item_hover_display is not None:
+            self.item_hover_display.hide()
 
     # Update loop -----------------------------------------------------
     def _update_task(self, task) -> int:
@@ -565,6 +584,9 @@ class GameWorld:
         if hasattr(self, "hud") and self.hud is not None:
             self.hud.destroy()
             self.hud = None
+        if self.item_hover_display is not None:
+            self.item_hover_display.destroy()
+            self.item_hover_display = None
         if self.crosshair_root is not None and not self.crosshair_root.isEmpty():
             self.crosshair_root.removeNode()
             self.crosshair_root = None
@@ -907,14 +929,23 @@ class GameWorld:
 
     def _update_item_pickups(self, dt: float) -> None:
         if not self.item_pickups:
+            self._update_item_hover_display(None)
             return
+
+        targeted = self._find_targeted_pickup()
+
         alive: list[ItemPickup] = []
         for pickup in self.item_pickups:
             pickup.update(dt)
             consumed = pickup.try_collect(self.player_np, self.inventory)
             if not consumed and pickup.quantity > 0:
                 alive.append(pickup)
+            elif pickup is targeted:
+                targeted = None
         self.item_pickups = alive
+        if targeted not in alive:
+            targeted = None
+        self._update_item_hover_display(targeted)
 
     def _clear_projectiles(self) -> None:
         for projectile in self.projectiles:
@@ -937,6 +968,70 @@ class GameWorld:
         if self.item_root is not None and not self.item_root.isEmpty():
             self.item_root.removeNode()
             self.item_root = None
+        if self.item_hover_display is not None:
+            self.item_hover_display.hide()
+
+    def _find_targeted_pickup(self) -> ItemPickup | None:
+        if (
+            self.is_paused
+            or self.app.camera is None
+            or self.app.camera.isEmpty()
+            or self.player_np is None
+            or self.player_np.isEmpty()
+        ):
+            return None
+
+        camera_pos = self.app.camera.getPos(self.root)
+        forward = self.app.camera.getQuat(self.root).getForward()
+        if forward.length_squared() == 0:
+            return None
+        forward.normalize()
+
+        best_pickup: ItemPickup | None = None
+        best_alignment = self.PICKUP_AIM_THRESHOLD
+        best_distance = float("inf")
+
+        for pickup in self.item_pickups:
+            if pickup.quantity <= 0 or pickup.node.isEmpty():
+                continue
+            if self.player_np.getDistance(pickup.node) > self.PICKUP_HOVER_RANGE:
+                continue
+
+            offset = pickup.node.getPos(self.root) - camera_pos
+            distance = offset.length()
+            if distance <= 0.0:
+                continue
+            offset.normalize()
+            alignment = forward.dot(offset)
+            if alignment < self.PICKUP_AIM_THRESHOLD:
+                continue
+
+            if (
+                best_pickup is None
+                or alignment > best_alignment + 1e-4
+                or (
+                    abs(alignment - best_alignment) <= 1e-4
+                    and distance < best_distance
+                )
+            ):
+                best_pickup = pickup
+                best_alignment = alignment
+                best_distance = distance
+
+        return best_pickup
+
+    def _update_item_hover_display(self, pickup: ItemPickup | None) -> None:
+        if self.item_hover_display is None:
+            return
+        if (
+            pickup is None
+            or pickup.quantity <= 0
+            or pickup.node.isEmpty()
+            or self.is_paused
+        ):
+            self.item_hover_display.hide()
+            return
+        self.item_hover_display.show_item(pickup.template, pickup.quantity)
 
     def _attach_projectile_collider(self, projectile: Projectile) -> None:
         if self.projectile_collision_handler is None or self.collision_traverser is None:
