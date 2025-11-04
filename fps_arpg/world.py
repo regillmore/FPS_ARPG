@@ -28,7 +28,7 @@ from direct.gui.DirectGui import OnscreenText
 
 from .enemies import Enemy, TargetDummy
 from .equipment import EquipmentLoadout
-from .inventory import Inventory, ItemTemplate
+from .inventory import Inventory, InventoryStack, ItemTemplate
 from .projectiles import Projectile, get_projectile_blueprint
 from .stats import PlayerStats
 from .ui import FloatingDamageNumbers, PlayerHUD, TabbedMenu
@@ -320,7 +320,10 @@ class GameWorld:
 
     def _setup_tabbed_menu(self) -> None:
         self.tabbed_menu = TabbedMenu(
-            self.player_stats, self.inventory, self.equipment
+            self.player_stats,
+            self.inventory,
+            self.equipment,
+            on_drop_stack=self._drop_inventory_stack,
         )
         self.tabbed_menu.hide()
 
@@ -622,6 +625,26 @@ class GameWorld:
             self._set_paused(True)
 
         self.tabbed_menu.select_tab(tab)
+
+    def _drop_inventory_stack(self, stack: InventoryStack) -> bool:
+        if stack.quantity <= 0:
+            return False
+        if (
+            self.item_root is None
+            or self.item_root.isEmpty()
+            or self.player_np is None
+            or self.player_np.isEmpty()
+        ):
+            return False
+
+        forward_offset = Vec3(0.0, 3.0, 0.0)
+        forward_world = self.player_np.getQuat(self.root).xform(forward_offset)
+        drop_position = self.player_np.getPos(self.root) + forward_world
+        drop_position -= Vec3(0.0, 0.0, 1.0)
+        drop_position.z = max(drop_position.z, 0.5)
+
+        self._spawn_item_pickup(stack.template, drop_position, stack.quantity)
+        return True
 
     def _handle_stash_interact(self) -> None:
         if self._is_stash_open:
