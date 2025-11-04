@@ -637,7 +637,7 @@ class GameWorld:
         ):
             return False
 
-        forward_offset = Vec3(0.0, 1.5, 0.0)
+        forward_offset = Vec3(0.0, 3.0, 0.0)
         forward_world = self.player_np.getQuat(self.root).xform(forward_offset)
         drop_position = self.player_np.getPos(self.root) + forward_world
         drop_position -= Vec3(0.0, 0.0, 1.0)
