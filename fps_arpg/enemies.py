@@ -1,6 +1,7 @@
 """Prototype enemy implementations for the FPS ARPG."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from direct.showbase import ShowBaseGlobal
@@ -22,6 +23,15 @@ from panda3d.core import (
 )
 
 from .projectiles import Projectile
+
+
+@dataclass
+class _TrackSegment:
+    """Simple container describing a single animated tread segment."""
+
+    node: NodePath
+    distance: float
+    side: int
 
 
 if TYPE_CHECKING:  # pragma: no cover - used only for type checking
@@ -337,6 +347,240 @@ class TargetDummy(Enemy):
         return root
 
 
+class TrackedDummy(TargetDummy):
+    """Target dummy variant mounted on animated treads."""
+
+    TRACK_SPEED = 1.4
+
+    def __init__(
+        self,
+        parent: NodePath,
+        collision_mask: BitMask32,
+        *,
+        track_speed: float | None = None,
+        on_death_callback: Callable[["TargetDummy"], None] | None = None,
+    ) -> None:
+        self._track_segments: list[_TrackSegment] = []
+        self._track_speed = float(track_speed) if track_speed is not None else float(self.TRACK_SPEED)
+        self._track_spacing = 0.0
+        self._track_bottom_length = 0.0
+        self._track_vertical_height = 0.0
+        self._track_bottom_z = 0.0
+        self._track_loop_length = 0.0
+        self._segments_per_side = 0
+        super().__init__(
+            parent,
+            collision_mask,
+            on_death_callback=on_death_callback,
+        )
+
+    def _update(self, dt: float) -> None:
+        super()._update(dt)
+        self._update_tracks(dt)
+
+    def _build_model(self, parent: NodePath, body_color: Vec4) -> NodePath:
+        self._track_segments.clear()
+
+        root = parent.attachNewNode("tracked_dummy_model")
+
+        deck = _make_box(
+            Vec3(0.44, 0.52, 0.07),
+            Vec4(0.16, 0.18, 0.2, 1.0),
+            "tracked_dummy_deck",
+        )
+        deck.reparentTo(root)
+        deck.setZ(0.07)
+
+        chassis = _make_box(
+            Vec3(0.34, 0.4, 0.16),
+            Vec4(0.26, 0.28, 0.32, 1.0),
+            "tracked_dummy_chassis",
+        )
+        chassis.reparentTo(root)
+        chassis.setZ(0.31)
+
+        turret_ring = _make_box(
+            Vec3(0.28, 0.28, 0.06),
+            Vec4(0.32, 0.34, 0.38, 1.0),
+            "tracked_dummy_turret_ring",
+        )
+        turret_ring.reparentTo(root)
+        turret_ring.setZ(0.52)
+
+        sensor_core = _make_box(
+            Vec3(0.16, 0.16, 0.08),
+            Vec4(0.95, 0.92, 0.6, 1.0),
+            "tracked_dummy_sensor_core",
+        )
+        sensor_core.reparentTo(root)
+        sensor_core.setPos(0.0, 0.0, 0.62)
+
+        self._build_tracks(root)
+
+        stabilizer = _make_box(
+            Vec3(0.18, 0.3, 0.12),
+            Vec4(0.2, 0.22, 0.26, 1.0),
+            "tracked_dummy_stabilizer",
+        )
+        stabilizer.reparentTo(root)
+        stabilizer.setPos(0.0, -0.02, 0.82)
+
+        torso = _make_box(
+            Vec3(0.28, 0.18, 0.36),
+            body_color,
+            "tracked_dummy_torso",
+        )
+        torso.reparentTo(root)
+        torso.setPos(0.0, 0.02, 1.1)
+
+        shoulders = _make_box(
+            Vec3(0.4, 0.12, 0.12),
+            Vec4(0.76, 0.5, 0.38, 1.0),
+            "tracked_dummy_shoulders",
+        )
+        shoulders.reparentTo(root)
+        shoulders.setPos(0.0, 0.0, 1.22)
+
+        head = _make_box(
+            Vec3(0.2, 0.18, 0.22),
+            Vec4(0.9, 0.85, 0.78, 1.0),
+            "tracked_dummy_head",
+        )
+        head.reparentTo(root)
+        head.setPos(0.0, 0.0, 1.82)
+
+        visor = _make_box(
+            Vec3(0.14, 0.02, 0.08),
+            Vec4(0.26, 0.3, 0.36, 1.0),
+            "tracked_dummy_visor",
+        )
+        visor.reparentTo(root)
+        visor.setPos(0.0, 0.2, 1.84)
+
+        antenna = _make_box(
+            Vec3(0.02, 0.02, 0.32),
+            Vec4(0.3, 0.32, 0.36, 1.0),
+            "tracked_dummy_antenna",
+        )
+        antenna.reparentTo(root)
+        antenna.setPos(-0.16, -0.08, 1.82)
+
+        return root
+
+    def _build_tracks(self, root: NodePath) -> None:
+        track_color = Vec4(0.14, 0.16, 0.19, 1.0)
+        housing_color = Vec4(0.22, 0.24, 0.28, 1.0)
+        roller_color = Vec4(0.32, 0.34, 0.38, 1.0)
+
+        self._track_spacing = 0.46
+        self._track_bottom_length = 1.08
+        self._track_vertical_height = 0.44
+        track_thickness = 0.1
+        self._track_bottom_z = track_thickness / 2.0
+        self._track_loop_length = 2.0 * (self._track_bottom_length + self._track_vertical_height)
+        self._segments_per_side = 12
+
+        guard = _make_box(
+            Vec3(0.06, self._track_bottom_length / 2.0 + 0.08, self._track_vertical_height / 2.0 + 0.12),
+            housing_color,
+            "tracked_dummy_track_guard",
+        )
+        guard.reparentTo(root)
+        guard.setPos(self._track_spacing - 0.08, 0.0, self._track_bottom_z + self._track_vertical_height / 2.0 + 0.06)
+
+        guard_mirror = guard.copyTo(root)
+        guard_mirror.setX(-guard.getX())
+
+        for offset in (-1.0, 1.0):
+            roller = _make_box(
+                Vec3(0.08, 0.12, 0.08),
+                roller_color,
+                "tracked_dummy_drive_wheel",
+            )
+            roller.reparentTo(root)
+            roller.setPos(offset * self._track_spacing, self._track_bottom_length / 2.0 + 0.02, self._track_bottom_z + self._track_vertical_height)
+
+            idler = roller.copyTo(root)
+            idler.setY(-roller.getY())
+
+        if self._segments_per_side <= 0 or self._track_loop_length <= 0.0:
+            return
+
+        segment_half_extents = Vec3(0.05, 0.14, track_thickness / 2.0)
+        segment_spacing = self._track_loop_length / self._segments_per_side
+
+        for side in (-1, 1):
+            side_name = "left" if side < 0 else "right"
+            for index in range(self._segments_per_side):
+                distance = index * segment_spacing
+                segment = _make_box(
+                    segment_half_extents,
+                    track_color,
+                    f"tracked_dummy_{side_name}_tread_{index}",
+                )
+                segment.reparentTo(root)
+                tread = _TrackSegment(segment, distance, side)
+                self._track_segments.append(tread)
+                self._apply_track_pose(tread)
+
+    def _apply_track_pose(self, segment: _TrackSegment) -> None:
+        position, hpr = self._compute_track_pose(segment.distance)
+        segment.node.setPos(segment.side * self._track_spacing, position.y, position.z)
+        segment.node.setHpr(*hpr)
+
+    def _compute_track_pose(self, distance: float) -> tuple[Vec3, tuple[float, float, float]]:
+        if self._track_loop_length <= 0.0:
+            return Vec3(0.0, 0.0, self._track_bottom_z), (0.0, 0.0, 0.0)
+
+        bottom_len = self._track_bottom_length
+        vertical_height = self._track_vertical_height
+        loop = self._track_loop_length
+        bottom_z = self._track_bottom_z
+        top_z = bottom_z + vertical_height
+        half_bottom = bottom_len / 2.0
+
+        progress = distance % loop
+
+        if progress < bottom_len:
+            y = -half_bottom + progress
+            z = bottom_z
+            hpr = (0.0, 0.0, 0.0)
+        elif progress < bottom_len + vertical_height:
+            climb = progress - bottom_len
+            y = half_bottom
+            z = bottom_z + climb
+            hpr = (0.0, -90.0, 0.0)
+        elif progress < bottom_len + vertical_height + bottom_len:
+            traverse = progress - bottom_len - vertical_height
+            y = half_bottom - traverse
+            z = top_z
+            hpr = (180.0, 0.0, 0.0)
+        else:
+            descend = progress - (bottom_len * 2.0 + vertical_height)
+            y = -half_bottom
+            z = top_z - descend
+            hpr = (0.0, 90.0, 0.0)
+
+        return Vec3(0.0, y, z), hpr
+
+    def _update_tracks(self, dt: float) -> None:
+        if not self.is_alive or self._track_loop_length <= 0.0:
+            return
+        if not self._track_segments:
+            return
+        if self._track_speed == 0.0:
+            return
+
+        for segment in self._track_segments:
+            segment.distance = (segment.distance + self._track_speed * dt) % self._track_loop_length
+            self._apply_track_pose(segment)
+
+    def _reset(self) -> None:
+        super()._reset()
+        for segment in self._track_segments:
+            self._apply_track_pose(segment)
+
+
 def _make_box(half_extents: Vec3, color: Vec4, name: str) -> NodePath:
     """Create a coloured box primitive."""
 
@@ -393,4 +637,5 @@ def _make_box(half_extents: Vec3, color: Vec4, name: str) -> NodePath:
 __all__ = [
     "Enemy",
     "TargetDummy",
+    "TrackedDummy",
 ]
