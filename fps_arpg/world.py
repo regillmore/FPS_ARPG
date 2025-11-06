@@ -26,7 +26,7 @@ from panda3d.core import (
 
 from direct.gui.DirectGui import OnscreenText
 
-from .enemies import Enemy, TargetDummy
+from .enemies import Enemy, TargetDummy, TrackedDummy
 from .equipment import EquipmentLoadout
 from .inventory import Inventory, InventoryStack, ItemTemplate
 from .projectiles import Projectile, get_projectile_blueprint
@@ -238,6 +238,7 @@ class GameWorld:
         self.enemy_root = self.root.attachNewNode("enemies")
         self.enemies = []
         self._spawn_safehouse_dummy()
+        self._spawn_safehouse_tracked_dummy()
 
     def _setup_controls(self) -> None:
         self._bind("w", "forward", True)
@@ -277,6 +278,19 @@ class GameWorld:
         dummy.node.setPos(0.0, 18.0, 0.0)
         dummy.node.setH(180.0)
         self._register_enemy(dummy)
+
+    def _spawn_safehouse_tracked_dummy(self) -> None:
+        if self.enemy_root is None or self.enemy_root.isEmpty():
+            return
+
+        tracked_dummy = TrackedDummy(
+            self.enemy_root,
+            self.ENVIRONMENT_COLLISION_MASK,
+            on_death_callback=self._on_safehouse_dummy_death,
+        )
+        tracked_dummy.node.setPos(3.5, 20.0, 0.0)
+        tracked_dummy.node.setH(180.0)
+        self._register_enemy(tracked_dummy)
 
     def _register_enemy(self, enemy: Enemy) -> None:
         if self.damage_numbers is not None:
