@@ -60,7 +60,7 @@ class GameWorld:
     """Simple first-playable test area with FPS-style controls."""
 
     MOVE_SPEED = 10
-    MOUSE_SENSITIVITY = 0.2
+    MOUSE_SENSITIVITY = 0.1
     PITCH_LIMIT = 75
     ENVIRONMENT_COLLISION_MASK = BitMask32.bit(2)
     MAX_PROJECTILE_DECALS = 60

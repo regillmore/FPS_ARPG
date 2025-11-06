@@ -77,7 +77,7 @@ class StashBox:
 
     node: NodePath
     inventory: Inventory
-    interact_radius: float = 2.5
+    interact_radius: float = 8.0
 
     def __post_init__(self) -> None:
         self._highlighted = False
