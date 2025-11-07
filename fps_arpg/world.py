@@ -190,9 +190,9 @@ class GameWorld:
             frame_color=Vec4(0.12, 0.08, 0.08, 1.0),
         )
 
-        portal_a.root.setPos(-8.6, -18.0, 0.0)
-        portal_a.root.setHpr(90.0, 0.0, 0.0)
-        portal_b.root.setPos(8.6, 22.0, 0.0)
+        portal_a.root.setPos(9.7, 15.0, 0.3)
+        portal_a.root.setHpr(-90.0, 0.0, 0.0)
+        portal_b.root.setPos(9.7, 20.0, 0.3)
         portal_b.root.setHpr(-90.0, 0.0, 0.0)
 
         portal_a.link(portal_b)

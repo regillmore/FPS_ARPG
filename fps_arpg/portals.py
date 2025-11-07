@@ -66,7 +66,7 @@ class PortalDoorway:
         prev_local = self.root.getRelativePoint(reference, previous_world_pos)
         curr_local = self.root.getRelativePoint(reference, current_world_pos)
 
-        if not (prev_local.y > 0 >= curr_local.y):
+        if not (curr_local.y > -0.5 >= prev_local.y):
             return False
 
         half_width = self.width * 0.5 + self.HORIZONTAL_MARGIN
@@ -94,7 +94,7 @@ class PortalDoorway:
 
         local_point = self.root.getRelativePoint(reference, world_position)
         mirrored_point = Point3(local_point.x, -local_point.y, local_point.z)
-        mirrored_point.y = max(self.EXIT_FORWARD_OFFSET, mirrored_point.y)
+        mirrored_point.y = min(self.EXIT_FORWARD_OFFSET, mirrored_point.y)
 
         exit_world = reference.getRelativePoint(self.linked.root, mirrored_point)
 
@@ -104,7 +104,7 @@ class PortalDoorway:
         relative_heading = heading - source_hpr.x
         relative_pitch = pitch - source_hpr.y
 
-        new_heading = target_hpr.x + relative_heading
+        new_heading = target_hpr.x + relative_heading + 180
         new_pitch = target_hpr.y + relative_pitch
 
         return PortalTeleportResult(
