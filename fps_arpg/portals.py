@@ -228,8 +228,8 @@ def build_portal_doorway(
     *,
     width: float = 2.5,
     height: float = 4.5,
-    surface_color: Vec4 = Vec4(0.2, 0.4, 0.9, 0.65),
-    frame_color: Vec4 = Vec4(0.12, 0.12, 0.16, 1.0),
+    surface_color: Vec4 = Vec4(1.0, 1.0, 1.0, 0.65),
+    frame_color: Vec4 = Vec4(0.18, 0.18, 0.2, 1.0),
 ) -> PortalDoorway:
     """Construct a simple rectangular doorway with a glowing surface."""
 
@@ -297,7 +297,7 @@ def build_portal_doorway(
     )
     glow_card = glow.attachNewNode(glow_cm.generate())
     glow_card.setTransparency(TransparencyAttrib.MAlpha)
-    glow_card.setColor(surface_color[0], surface_color[1], surface_color[2], 0.25)
+    glow_card.setColor(1.0, 1.0, 1.0, 0.25)
     glow_card.setDepthWrite(False)
     glow_card.setLightOff(True)
 

@@ -178,16 +178,12 @@ class GameWorld:
             "safehouse_portal_a",
             width=2.8,
             height=4.6,
-            surface_color=Vec4(0.2, 0.55, 0.95, 0.7),
-            frame_color=Vec4(0.1, 0.1, 0.13, 1.0),
         )
         portal_b = build_portal_doorway(
             self.portal_root,
             "safehouse_portal_b",
             width=2.8,
             height=4.6,
-            surface_color=Vec4(0.95, 0.45, 0.2, 0.7),
-            frame_color=Vec4(0.12, 0.08, 0.08, 1.0),
         )
 
         portal_a.root.setPos(9.7, 15.0, 0.3)
