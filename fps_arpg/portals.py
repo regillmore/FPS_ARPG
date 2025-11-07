@@ -141,9 +141,9 @@ class PortalDoorway:
         if self.linked is None or self._camera is None:
             return
 
-        lens = self._camera.node().getLens()
-        if lens is not None:
-            lens.copyFrom(camera_lens)
+        current_lens = self._camera.node().getLens()
+        if current_lens is not camera_lens:
+            self._camera.node().setLens(camera_lens)
 
         viewer_world = camera_np.getPos(reference)
         local_point = self.root.getRelativePoint(reference, viewer_world)
