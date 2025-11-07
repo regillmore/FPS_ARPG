@@ -102,7 +102,8 @@ class PortalDoorway:
         plane = Plane(Vec3(0.0, -1.0, 0.0), Point3(0.0, 0.02, 0.0))
         clip_node = PlaneNode(f"{self.root.getName()}_clip_plane", plane)
         clip_np = self.linked.root.attachNewNode(clip_node)
-        clip_attr = ClipPlaneAttrib.make(ClipPlaneAttrib.OAddPlane, clip_np)
+        clip_attr = ClipPlaneAttrib.make()
+        clip_attr = clip_attr.addOnPlane(clip_np)
         portal_camera.node().setInitialState(RenderState.make(clip_attr))
 
         self._clip_plane = clip_np
