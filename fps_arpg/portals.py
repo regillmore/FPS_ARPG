@@ -3,15 +3,28 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from panda3d.core import (
     CardMaker,
+    ClipPlaneAttrib,
+    GraphicsEngine,
+    GraphicsOutput,
+    Lens,
     NodePath,
+    Plane,
+    PlaneNode,
     Point3,
+    RenderState,
+    SamplerState,
+    Texture,
     TransparencyAttrib,
+    Vec3,
     Vec4,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - used only for type checking
+    from direct.showbase.ShowBase import ShowBase
 
 
 @dataclass
@@ -45,12 +58,106 @@ class PortalDoorway:
         self.surface = surface
         self.frame = frame
         self.linked: Optional["PortalDoorway"] = None
+        self._base_surface_color = surface.getColor()
+        self._buffer: Optional[GraphicsOutput] = None
+        self._texture: Optional[Texture] = None
+        self._camera: Optional[NodePath] = None
+        self._clip_plane: Optional[NodePath] = None
+        self._graphics_engine: Optional[GraphicsEngine] = None
 
     def link(self, other: "PortalDoorway") -> None:
         """Create a bidirectional link between two doorways."""
 
         self.linked = other
         other.linked = self
+
+    # ------------------------------------------------------------------
+    def enable_see_through(self, app: "ShowBase") -> None:
+        """Allocate the render target and camera used for see-through views."""
+
+        if self.linked is None:
+            return
+        if self._buffer is not None:
+            return
+
+        buffer_name = f"{self.root.getName()}_portal_buffer"
+        buffer = app.win.makeTextureBuffer(buffer_name, 0, 0)
+        buffer.setClearColorActive(True)
+        buffer.setClearColor(app.win.getClearColor())
+        buffer.setSort(-100)
+
+        texture = buffer.getTexture()
+        if texture is not None:
+            texture.setMinfilter(SamplerState.FTLinear)
+            texture.setMagfilter(SamplerState.FTLinear)
+            texture.setWrapU(SamplerState.WMClamp)
+            texture.setWrapV(SamplerState.WMClamp)
+            self.surface.setTexture(texture, 1)
+            self.surface.setColor(1.0, 1.0, 1.0, 1.0)
+
+        portal_camera = app.makeCamera(buffer, lens=app.camLens.makeCopy())
+        portal_camera.reparentTo(app.render)
+
+        # Ensure the portal camera never sees geometry behind the linked doorway.
+        plane = Plane(Vec3(0.0, -1.0, 0.0), Point3(0.0, 0.02, 0.0))
+        clip_node = PlaneNode(f"{self.root.getName()}_clip_plane", plane)
+        clip_np = self.linked.root.attachNewNode(clip_node)
+        clip_attr = ClipPlaneAttrib.make(ClipPlaneAttrib.OAddPlane, clip_np)
+        portal_camera.node().setInitialState(RenderState.make(clip_attr))
+
+        self._clip_plane = clip_np
+        self._camera = portal_camera
+        self._buffer = buffer
+        self._texture = texture
+        self._graphics_engine = app.graphicsEngine
+        self.surface.setTransparency(TransparencyAttrib.MAlpha)
+        self.surface.setTwoSided(True)
+
+    def disable_see_through(self) -> None:
+        """Tear down any render targets created for the portal."""
+
+        if self._camera is not None and not self._camera.isEmpty():
+            self._camera.removeNode()
+        self._camera = None
+
+        if self._clip_plane is not None and not self._clip_plane.isEmpty():
+            self._clip_plane.removeNode()
+        self._clip_plane = None
+
+        if self._texture is not None and not self.surface.isEmpty():
+            self.surface.clearTexture()
+            self.surface.setColor(self._base_surface_color)
+        self._texture = None
+
+        if self._buffer is not None and self._graphics_engine is not None:
+            self._graphics_engine.removeWindow(self._buffer)
+        self._buffer = None
+        self._graphics_engine = None
+
+    def update_view(self, camera_np: NodePath, camera_lens: Lens, reference: NodePath) -> None:
+        """Position the portal camera so it mimics the viewer through the link."""
+
+        if self.linked is None or self._camera is None:
+            return
+
+        lens = self._camera.node().getLens()
+        if lens is not None:
+            lens.copyFrom(camera_lens)
+
+        viewer_world = camera_np.getPos(reference)
+        local_point = self.root.getRelativePoint(reference, viewer_world)
+        mirrored_point = Point3(local_point.x, -local_point.y, local_point.z)
+        mirrored_point += Vec3(0.0, 0.05, 0.0)
+        target_world = reference.getRelativePoint(self.linked.root, mirrored_point)
+        self._camera.setPos(reference, target_world)
+
+        viewer_hpr = camera_np.getHpr(reference)
+        source_hpr = self.root.getHpr(reference)
+        target_hpr = self.linked.root.getHpr(reference)
+        relative_hpr = viewer_hpr - source_hpr
+        new_hpr = target_hpr + relative_hpr
+        new_hpr.x += 180.0
+        self._camera.setHpr(reference, new_hpr)
 
     def detect_crossing(
         self,
@@ -176,6 +283,7 @@ def build_portal_doorway(
     surface.setColor(surface_color)
     surface.setDepthWrite(False)
     surface.setLightOff(True)
+    surface.setTwoSided(True)
 
     glow = root.attachNewNode(f"{name}_glow")
     glow_cm = CardMaker(f"{name}_glow_card")
