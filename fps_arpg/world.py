@@ -178,16 +178,12 @@ class GameWorld:
             "safehouse_portal_a",
             width=2.8,
             height=4.6,
-            surface_color=Vec4(0.2, 0.55, 0.95, 0.7),
-            frame_color=Vec4(0.1, 0.1, 0.13, 1.0),
         )
         portal_b = build_portal_doorway(
             self.portal_root,
             "safehouse_portal_b",
             width=2.8,
             height=4.6,
-            surface_color=Vec4(0.95, 0.45, 0.2, 0.7),
-            frame_color=Vec4(0.12, 0.08, 0.08, 1.0),
         )
 
         portal_a.root.setPos(9.7, 15.0, 0.3)
@@ -198,6 +194,8 @@ class GameWorld:
         portal_a.link(portal_b)
 
         self.portals = [portal_a, portal_b]
+        for portal in self.portals:
+            portal.enable_see_through(self.app)
 
     def _setup_collisions(self) -> None:
         player_collider_node = CollisionNode("player_collider")
@@ -589,9 +587,21 @@ class GameWorld:
         movement = direction * self.MOVE_SPEED * dt
         self.player_np.setPos(self.player_np, movement)
 
+    def _update_portal_views(self) -> None:
+        if not self.portals or self.app.camera.isEmpty():
+            return
+
+        viewer = self.app.camera
+        lens = self.app.camLens
+        reference = self.app.render
+        for portal in self.portals:
+            portal.update_view(viewer, lens, reference)
+
     def _update_portals(self, dt: float) -> None:
         if not self.portals:
             return
+
+        self._update_portal_views()
 
         if self._last_player_world_pos is None:
             self._last_player_world_pos = self.player_np.getPos(self.app.render)
@@ -665,6 +675,8 @@ class GameWorld:
             self._stash_prompt.destroy()
             self._stash_prompt = None
 
+        for portal in self.portals:
+            portal.disable_see_through()
         if self.portal_root is not None and not self.portal_root.isEmpty():
             self.portal_root.removeNode()
             self.portal_root = None
