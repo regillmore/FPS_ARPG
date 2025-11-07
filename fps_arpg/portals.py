@@ -99,7 +99,7 @@ class PortalDoorway:
         portal_camera.reparentTo(app.render)
 
         # Ensure the portal camera never sees geometry behind the linked doorway.
-        plane = Plane(Vec3(0.0, -1.0, 0.0), Point3(0.0, 0.02, 0.0))
+        plane = Plane(Vec3(0.0, 1.0, 0.0), Point3(0.0, 0.02, 0.0))
         clip_node = PlaneNode(f"{self.root.getName()}_clip_plane", plane)
         clip_np = self.linked.root.attachNewNode(clip_node)
         clip_attr = ClipPlaneAttrib.make()
