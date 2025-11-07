@@ -30,6 +30,7 @@ from .enemies import Enemy, TargetDummy
 from .equipment import EquipmentLoadout
 from .inventory import Inventory, InventoryStack, ItemTemplate
 from .projectiles import Projectile, get_projectile_blueprint
+from .portals import PortalDoorway, build_portal_doorway
 from .stats import PlayerStats
 from .ui import (
     FloatingDamageNumbers,
@@ -66,6 +67,7 @@ class GameWorld:
     MAX_PROJECTILE_DECALS = 60
     PICKUP_HOVER_RANGE = ItemPickup.PICKUP_RADIUS + 5.0
     PICKUP_AIM_THRESHOLD = 0.995
+    PORTAL_COOLDOWN = 0.25
 
     def __init__(self, app: "GameApp") -> None:
         self.app = app
@@ -124,6 +126,12 @@ class GameWorld:
         self._is_stash_open = False
         self._stash_prompt: OnscreenText | None = None
 
+        self.portal_root: NodePath | None = None
+        self.portals: list[PortalDoorway] = []
+        self._recent_portal: PortalDoorway | None = None
+        self._portal_cooldown = 0.0
+        self._last_player_world_pos: Point3 | None = None
+
         self.key_map: dict[str, bool] = {
             "forward": False,
             "back": False,
@@ -134,6 +142,7 @@ class GameWorld:
         self._accepted_events: list[str] = []
 
         self._setup_environment()
+        self._setup_portals()
         self._setup_collisions()
         self._setup_camera()
         self._setup_weapon_anchor()
@@ -157,6 +166,38 @@ class GameWorld:
         for light_np in self.map_instance.lights:
             self.root.setLight(light_np)
         self.app.render.setShaderAuto()
+
+    def _setup_portals(self) -> None:
+        if self.map_instance is None or self.map_instance.root.isEmpty():
+            return
+
+        self.portal_root = self.map_instance.root.attachNewNode("portals")
+
+        portal_a = build_portal_doorway(
+            self.portal_root,
+            "safehouse_portal_a",
+            width=2.8,
+            height=4.6,
+            surface_color=Vec4(0.2, 0.55, 0.95, 0.7),
+            frame_color=Vec4(0.1, 0.1, 0.13, 1.0),
+        )
+        portal_b = build_portal_doorway(
+            self.portal_root,
+            "safehouse_portal_b",
+            width=2.8,
+            height=4.6,
+            surface_color=Vec4(0.95, 0.45, 0.2, 0.7),
+            frame_color=Vec4(0.12, 0.08, 0.08, 1.0),
+        )
+
+        portal_a.root.setPos(-8.6, -18.0, 0.0)
+        portal_a.root.setHpr(90.0, 0.0, 0.0)
+        portal_b.root.setPos(8.6, 22.0, 0.0)
+        portal_b.root.setHpr(-90.0, 0.0, 0.0)
+
+        portal_a.link(portal_b)
+
+        self.portals = [portal_a, portal_b]
 
     def _setup_collisions(self) -> None:
         player_collider_node = CollisionNode("player_collider")
@@ -185,6 +226,7 @@ class GameWorld:
         self.center_y = int(self.app.win.getYSize() / 2)
 
         self._set_mouse_capture(True)
+        self._last_player_world_pos = self.player_np.getPos(self.app.render)
 
     def _setup_weapon_anchor(self) -> None:
         self.weapon_root = self.app.camera.attachNewNode("weapon_anchor")
@@ -499,6 +541,7 @@ class GameWorld:
             self._update_enemies(dt)
             self._update_item_pickups(dt)
             self._traverse_collisions()
+            self._update_portals(dt)
         if self.damage_numbers is not None:
             self.damage_numbers.update(dt)
         if self.hud is not None:
@@ -546,6 +589,50 @@ class GameWorld:
         movement = direction * self.MOVE_SPEED * dt
         self.player_np.setPos(self.player_np, movement)
 
+    def _update_portals(self, dt: float) -> None:
+        if not self.portals:
+            return
+
+        if self._last_player_world_pos is None:
+            self._last_player_world_pos = self.player_np.getPos(self.app.render)
+            return
+
+        if self._portal_cooldown > 0.0:
+            self._portal_cooldown = max(0.0, self._portal_cooldown - dt)
+            if self._portal_cooldown <= 0.0:
+                self._recent_portal = None
+
+        current_pos = self.player_np.getPos(self.app.render)
+
+        for portal in self.portals:
+            if portal.linked is None:
+                continue
+            if self._portal_cooldown > 0.0 and portal is self._recent_portal:
+                continue
+            if not portal.detect_crossing(
+                self._last_player_world_pos, current_pos, self.app.render
+            ):
+                continue
+
+            result = portal.compute_destination(
+                current_pos, self.heading, self.pitch, self.app.render
+            )
+            if result is None:
+                continue
+
+            self.player_np.setPos(self.app.render, result.position)
+            self.heading = ((result.heading + 180.0) % 360.0) - 180.0
+            self.pitch = max(-self.PITCH_LIMIT, min(self.PITCH_LIMIT, result.pitch))
+            self.player_np.setH(self.heading)
+            self.app.camera.setP(self.pitch)
+
+            current_pos = self.player_np.getPos(self.app.render)
+            self._portal_cooldown = self.PORTAL_COOLDOWN
+            self._recent_portal = portal.linked
+            break
+
+        self._last_player_world_pos = current_pos
+
     def _traverse_collisions(self) -> None:
         if self.collision_traverser is not None:
             self.collision_traverser.traverse(self.root)
@@ -577,6 +664,14 @@ class GameWorld:
         if self._stash_prompt is not None:
             self._stash_prompt.destroy()
             self._stash_prompt = None
+
+        if self.portal_root is not None and not self.portal_root.isEmpty():
+            self.portal_root.removeNode()
+            self.portal_root = None
+        self.portals = []
+        self._recent_portal = None
+        self._portal_cooldown = 0.0
+        self._last_player_world_pos = None
 
         if hasattr(self, "hud_text") and self.hud_text is not None:
             self.hud_text.destroy()
