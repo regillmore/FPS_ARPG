@@ -50,13 +50,11 @@ class PortalDoorway:
         width: float,
         height: float,
         surface: NodePath,
-        frame: NodePath,
     ) -> None:
         self.root = root
         self.width = width
         self.height = height
         self.surface = surface
-        self.frame = frame
         self.linked: Optional["PortalDoorway"] = None
         self._base_surface_color = surface.getColor()
         self._buffer: Optional[GraphicsOutput] = None
@@ -98,21 +96,11 @@ class PortalDoorway:
         portal_camera = app.makeCamera(buffer, lens=app.camLens.makeCopy())
         portal_camera.reparentTo(app.render)
 
-        # Ensure the portal camera never sees geometry behind the linked doorway.
-        plane = Plane(Vec3(0.0, 1.0, 0.0), Point3(0.0, 0.02, 0.0))
-        clip_node = PlaneNode(f"{self.root.getName()}_clip_plane", plane)
-        clip_np = self.linked.root.attachNewNode(clip_node)
-        clip_attr = ClipPlaneAttrib.make()
-        clip_attr = clip_attr.addOnPlane(clip_np)
-        portal_camera.node().setInitialState(RenderState.make(clip_attr))
-
-        self._clip_plane = clip_np
         self._camera = portal_camera
         self._buffer = buffer
         self._texture = texture
         self._graphics_engine = app.graphicsEngine
         self.surface.setTransparency(TransparencyAttrib.MAlpha)
-        self.surface.setTwoSided(True)
 
     def disable_see_through(self) -> None:
         """Tear down any render targets created for the portal."""
@@ -145,10 +133,7 @@ class PortalDoorway:
         if current_lens is not camera_lens:
             self._camera.node().setLens(camera_lens)
 
-        viewer_world = camera_np.getPos(reference)
-        local_point = self.root.getRelativePoint(reference, viewer_world)
-        mirrored_point = Point3(local_point.x, -local_point.y, local_point.z)
-        mirrored_point += Vec3(0.0, 0.05, 0.0)
+        mirrored_point = Point3(0.0, 0.0, 0.0)
         target_world = reference.getRelativePoint(self.linked.root, mirrored_point)
         self._camera.setPos(reference, target_world)
 
@@ -229,53 +214,10 @@ def build_portal_doorway(
     width: float = 2.5,
     height: float = 4.5,
     surface_color: Vec4 = Vec4(1.0, 1.0, 1.0, 0.65),
-    frame_color: Vec4 = Vec4(0.18, 0.18, 0.2, 1.0),
 ) -> PortalDoorway:
     """Construct a simple rectangular doorway with a glowing surface."""
 
     root = parent.attachNewNode(name)
-
-    frame = root.attachNewNode(f"{name}_frame")
-    frame_thickness = 0.18
-
-    def make_frame_card(card_name: str, x1: float, x2: float, z1: float, z2: float) -> NodePath:
-        cm = CardMaker(card_name)
-        cm.setFrame(x1, x2, z1, z2)
-        np = frame.attachNewNode(cm.generate())
-        np.setTransparency(TransparencyAttrib.MAlpha)
-        np.setColor(frame_color)
-        return np
-
-    # Top and bottom segments
-    make_frame_card(
-        f"{name}_frame_top",
-        -width * 0.5 - frame_thickness,
-        width * 0.5 + frame_thickness,
-        height,
-        height + frame_thickness,
-    )
-    make_frame_card(
-        f"{name}_frame_bottom",
-        -width * 0.5 - frame_thickness,
-        width * 0.5 + frame_thickness,
-        -frame_thickness,
-        0.0,
-    )
-    # Left and right verticals
-    make_frame_card(
-        f"{name}_frame_left",
-        -width * 0.5 - frame_thickness,
-        -width * 0.5,
-        0.0,
-        height,
-    )
-    make_frame_card(
-        f"{name}_frame_right",
-        width * 0.5,
-        width * 0.5 + frame_thickness,
-        0.0,
-        height,
-    )
 
     surface_cm = CardMaker(f"{name}_surface")
     surface_cm.setFrame(-width * 0.5, width * 0.5, 0.0, height)
@@ -284,27 +226,10 @@ def build_portal_doorway(
     surface.setColor(surface_color)
     surface.setDepthWrite(False)
     surface.setLightOff(True)
-    surface.setTwoSided(True)
-
-    glow = root.attachNewNode(f"{name}_glow")
-    glow_cm = CardMaker(f"{name}_glow_card")
-    glow_scale = 1.1
-    glow_cm.setFrame(
-        -width * 0.5 * glow_scale,
-        width * 0.5 * glow_scale,
-        -0.15,
-        height + 0.2,
-    )
-    glow_card = glow.attachNewNode(glow_cm.generate())
-    glow_card.setTransparency(TransparencyAttrib.MAlpha)
-    glow_card.setColor(1.0, 1.0, 1.0, 0.25)
-    glow_card.setDepthWrite(False)
-    glow_card.setLightOff(True)
 
     return PortalDoorway(
         root=root,
         width=width,
         height=height,
         surface=surface,
-        frame=frame,
     )
