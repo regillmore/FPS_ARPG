@@ -397,17 +397,59 @@ async function main() {
       slot.addEventListener('blur', () => hideItemDetail());
     }
 
+    const SLOT_META_ATTRIBUTES = new Set(['data-slot-kind', 'data-slot-allowed']);
+
+    const normalizeType = (value) =>
+      typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+    const getSlotItemType = (slot) => normalizeType(slot?.dataset.itemType);
+
+    const getAllowedTypes = (slot) => {
+      if (!slot) {
+        return null;
+      }
+      const raw = slot.dataset.slotAllowed;
+      if (!raw) {
+        return null;
+      }
+      const parsed = raw
+        .split(',')
+        .map((part) => normalizeType(part))
+        .filter(Boolean);
+      if (parsed.length === 0 || parsed.includes('any')) {
+        return null;
+      }
+      return parsed;
+    };
+
+    const canSlotAcceptItem = (slot, itemType) => {
+      if (!slot) {
+        return false;
+      }
+      const allowedTypes = getAllowedTypes(slot);
+      if (!allowedTypes) {
+        return true;
+      }
+      const normalizedItemType = normalizeType(itemType);
+      if (!normalizedItemType) {
+        // Allow clearing the slot (moving to an empty target).
+        return true;
+      }
+      return allowedTypes.includes(normalizedItemType);
+    };
+
     let draggingSlot = null;
     let dragPreview;
     let dragSourceState;
     let dropTarget = null;
     let draggingPointerId = null;
+    let draggingItemType = '';
     const dragOffset = { x: 0, y: 0 };
 
     const getSlotState = (slot) => {
       const dataAttributes = {};
       for (const attr of Array.from(slot.attributes)) {
-        if (attr.name.startsWith('data-')) {
+        if (attr.name.startsWith('data-') && !SLOT_META_ATTRIBUTES.has(attr.name)) {
           dataAttributes[attr.name] = attr.value;
         }
       }
@@ -419,7 +461,7 @@ async function main() {
 
     const applySlotState = (slot, state) => {
       for (const attr of Array.from(slot.attributes)) {
-        if (attr.name.startsWith('data-')) {
+        if (attr.name.startsWith('data-') && !SLOT_META_ATTRIBUTES.has(attr.name)) {
           slot.removeAttribute(attr.name);
         }
       }
@@ -437,8 +479,22 @@ async function main() {
       dragPreview.style.top = `${clientY - dragOffset.y}px`;
     };
 
+    const isValidDropTarget = (candidate) => {
+      if (!candidate || candidate === draggingSlot) {
+        return false;
+      }
+      if (!canSlotAcceptItem(candidate, draggingItemType)) {
+        return false;
+      }
+      const candidateItemType = getSlotItemType(candidate);
+      if (!canSlotAcceptItem(draggingSlot, candidateItemType)) {
+        return false;
+      }
+      return true;
+    };
+
     const setDropTarget = (candidate) => {
-      const nextTarget = candidate && candidate !== draggingSlot ? candidate : null;
+      const nextTarget = isValidDropTarget(candidate) ? candidate : null;
       if (dropTarget === nextTarget) {
         return;
       }
@@ -475,6 +531,7 @@ async function main() {
       dragPreview = undefined;
       dragSourceState = undefined;
       dropTarget = null;
+      draggingItemType = '';
     };
 
     const handlePointerMove = (event) => {
@@ -494,14 +551,20 @@ async function main() {
       const target = dropTarget && dropTarget !== draggingSlot ? dropTarget : null;
       const originSlot = draggingSlot;
       if (target && dragSourceState) {
-        const targetState = getSlotState(target);
-        applySlotState(target, dragSourceState);
-        applySlotState(draggingSlot, targetState);
-        if (hideItemDetail) {
-          hideItemDetail(true);
-          requestAnimationFrame(() => {
-            showItemDetail(target);
-          });
+        const targetItemType = getSlotItemType(target);
+        if (
+          canSlotAcceptItem(target, draggingItemType) &&
+          canSlotAcceptItem(draggingSlot, targetItemType)
+        ) {
+          const targetState = getSlotState(target);
+          applySlotState(target, dragSourceState);
+          applySlotState(draggingSlot, targetState);
+          if (hideItemDetail) {
+            hideItemDetail(true);
+            requestAnimationFrame(() => {
+              showItemDetail(target);
+            });
+          }
         }
       } else if (hideItemDetail && originSlot.matches(':hover')) {
         hideItemDetail(true);
@@ -518,6 +581,7 @@ async function main() {
     };
 
     const handlePointerDown = (event) => {
+      draggingItemType = '';
       if (!event.isPrimary || event.button !== 0) {
         return;
       }
@@ -533,6 +597,9 @@ async function main() {
         slot.setPointerCapture(event.pointerId);
       }
       dragSourceState = getSlotState(slot);
+      draggingItemType = normalizeType(
+        dragSourceState.dataAttributes['data-item-type']
+      );
       draggingSlot.classList.add('is-drag-source');
       const rect = slot.getBoundingClientRect();
       dragPreview = slot.cloneNode(true);
