@@ -1,0 +1,298 @@
+import { mat4LookAt, mat4Multiply, mat4Perspective } from './math.js';
+import { FirstPersonController } from './fpsController.js';
+
+async function initWebGPU(canvas) {
+  if (!('gpu' in navigator)) {
+    throw new Error('WebGPU is not supported in this browser.');
+  }
+
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) {
+    throw new Error('Failed to acquire GPU adapter.');
+  }
+
+  const device = await adapter.requestDevice();
+  const context = canvas.getContext('webgpu');
+  const format = navigator.gpu.getPreferredCanvasFormat();
+
+  let configured = false;
+
+  function resize() {
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.floor(canvas.clientWidth * devicePixelRatio));
+    const height = Math.max(1, Math.floor(canvas.clientHeight * devicePixelRatio));
+    if (!configured || canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+      context.configure({
+        device,
+        format,
+        alphaMode: 'opaque',
+        width,
+        height
+      });
+      configured = true;
+    }
+  }
+
+  resize();
+  window.addEventListener('resize', resize);
+
+  return { device, context, format, resize };
+}
+
+function createRoomGeometry(device) {
+  const minX = -5;
+  const maxX = 5;
+  const minY = 0;
+  const maxY = 4;
+  const minZ = -5;
+  const maxZ = 5;
+
+  const faces = [
+    // Floor
+    {
+      color: [0.45, 0.45, 0.5],
+      corners: [
+        [minX, minY, minZ],
+        [maxX, minY, minZ],
+        [maxX, minY, maxZ],
+        [minX, minY, maxZ]
+      ]
+    },
+    // Ceiling
+    {
+      color: [0.35, 0.35, 0.4],
+      corners: [
+        [minX, maxY, maxZ],
+        [maxX, maxY, maxZ],
+        [maxX, maxY, minZ],
+        [minX, maxY, minZ]
+      ]
+    },
+    // Back wall (-Z)
+    {
+      color: [0.4, 0.4, 0.55],
+      corners: [
+        [maxX, minY, minZ],
+        [minX, minY, minZ],
+        [minX, maxY, minZ],
+        [maxX, maxY, minZ]
+      ]
+    },
+    // Front wall (+Z)
+    {
+      color: [0.4, 0.45, 0.6],
+      corners: [
+        [minX, minY, maxZ],
+        [maxX, minY, maxZ],
+        [maxX, maxY, maxZ],
+        [minX, maxY, maxZ]
+      ]
+    },
+    // Left wall (-X)
+    {
+      color: [0.5, 0.45, 0.4],
+      corners: [
+        [minX, minY, minZ],
+        [minX, minY, maxZ],
+        [minX, maxY, maxZ],
+        [minX, maxY, minZ]
+      ]
+    },
+    // Right wall (+X)
+    {
+      color: [0.45, 0.5, 0.4],
+      corners: [
+        [maxX, minY, maxZ],
+        [maxX, minY, minZ],
+        [maxX, maxY, minZ],
+        [maxX, maxY, maxZ]
+      ]
+    }
+  ];
+
+  const vertexStride = 6;
+  const vertices = new Float32Array(faces.length * 6 * vertexStride);
+  let offset = 0;
+
+  const pushVertex = (corner, color) => {
+    vertices[offset++] = corner[0];
+    vertices[offset++] = corner[1];
+    vertices[offset++] = corner[2];
+    vertices[offset++] = color[0];
+    vertices[offset++] = color[1];
+    vertices[offset++] = color[2];
+  };
+
+  for (const face of faces) {
+    const [a, b, c, d] = face.corners;
+    pushVertex(a, face.color);
+    pushVertex(b, face.color);
+    pushVertex(c, face.color);
+    pushVertex(a, face.color);
+    pushVertex(c, face.color);
+    pushVertex(d, face.color);
+  }
+
+  const vertexBuffer = device.createBuffer({
+    size: vertices.byteLength,
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    mappedAtCreation: true
+  });
+  new Float32Array(vertexBuffer.getMappedRange()).set(vertices);
+  vertexBuffer.unmap();
+
+  return {
+    vertexBuffer,
+    vertexCount: vertices.length / vertexStride,
+    bounds: { minX, maxX, minY, maxY, minZ, maxZ }
+  };
+}
+
+function createPipeline(device, format) {
+  const shaderModule = device.createShaderModule({
+    code: `
+struct Uniforms {
+  viewProj : mat4x4<f32>,
+};
+
+@binding(0) @group(0) var<uniform> uniforms : Uniforms;
+
+struct VertexOutput {
+  @builtin(position) position : vec4<f32>,
+  @location(0) color : vec3<f32>,
+};
+
+@vertex
+fn vs_main(@location(0) position : vec3<f32>, @location(1) color : vec3<f32>) -> VertexOutput {
+  var output : VertexOutput;
+  output.position = uniforms.viewProj * vec4<f32>(position, 1.0);
+  output.color = color;
+  return output;
+}
+
+@fragment
+fn fs_main(@location(0) color : vec3<f32>) -> @location(0) vec4<f32> {
+  return vec4<f32>(color, 1.0);
+}
+    `
+  });
+
+  const pipeline = device.createRenderPipeline({
+    layout: 'auto',
+    vertex: {
+      module: shaderModule,
+      entryPoint: 'vs_main',
+      buffers: [
+        {
+          arrayStride: 24,
+          attributes: [
+            { shaderLocation: 0, offset: 0, format: 'float32x3' },
+            { shaderLocation: 1, offset: 12, format: 'float32x3' }
+          ]
+        }
+      ]
+    },
+    fragment: {
+      module: shaderModule,
+      entryPoint: 'fs_main',
+      targets: [{ format }]
+    },
+    primitive: {
+      topology: 'triangle-list',
+      cullMode: 'front'
+    },
+    depthStencil: undefined
+  });
+
+  return pipeline;
+}
+
+async function main() {
+  const canvas = document.getElementById('gfx');
+  const overlay = document.getElementById('overlay');
+  try {
+    const { device, context, format, resize } = await initWebGPU(canvas);
+    const pipeline = createPipeline(device, format);
+    const { vertexBuffer, vertexCount, bounds } = createRoomGeometry(device);
+
+    const uniformBuffer = device.createBuffer({
+      size: 64,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+
+    const uniformBindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        {
+          binding: 0,
+          resource: {
+            buffer: uniformBuffer
+          }
+        }
+      ]
+    });
+
+    const projection = new Float32Array(16);
+    const view = new Float32Array(16);
+    const viewProj = new Float32Array(16);
+
+    const controller = new FirstPersonController(canvas);
+    let lastTime = performance.now();
+
+    function frame(now) {
+      const deltaTime = Math.min((now - lastTime) / 1000, 0.2);
+      lastTime = now;
+
+      controller.update(deltaTime);
+
+      const padding = 0.25;
+      controller.position[0] = Math.min(Math.max(controller.position[0], bounds.minX + padding), bounds.maxX - padding);
+      controller.position[1] = Math.min(Math.max(controller.position[1], bounds.minY + padding), bounds.maxY - padding);
+      controller.position[2] = Math.min(Math.max(controller.position[2], bounds.minZ + padding), bounds.maxZ - padding);
+
+      resize();
+
+      const aspect = canvas.width / canvas.height;
+      mat4Perspective(projection, Math.PI / 3, aspect, 0.1, 100.0);
+      const eye = controller.position;
+      const center = controller.getViewTarget();
+      mat4LookAt(view, eye, center, [0, 1, 0]);
+      mat4Multiply(viewProj, projection, view);
+
+      device.queue.writeBuffer(uniformBuffer, 0, viewProj.buffer, viewProj.byteOffset, viewProj.byteLength);
+
+      const encoder = device.createCommandEncoder();
+      const textureView = context.getCurrentTexture().createView();
+
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [
+          {
+            view: textureView,
+            clearValue: { r: 0.05, g: 0.06, b: 0.08, a: 1.0 },
+            loadOp: 'clear',
+            storeOp: 'store'
+          }
+        ]
+      });
+
+      pass.setPipeline(pipeline);
+      pass.setBindGroup(0, uniformBindGroup);
+      pass.setVertexBuffer(0, vertexBuffer);
+      pass.draw(vertexCount, 1, 0, 0);
+      pass.end();
+
+      device.queue.submit([encoder.finish()]);
+      requestAnimationFrame(frame);
+    }
+
+    requestAnimationFrame(frame);
+    overlay.textContent = 'Click the canvas to capture the mouse and explore the room. WASD to move, Space/Shift to move vertically.';
+  } catch (error) {
+    console.error(error);
+    overlay.textContent = error.message;
+  }
+}
+
+main();
