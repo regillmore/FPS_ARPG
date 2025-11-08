@@ -72,6 +72,10 @@ export class FirstPersonController {
     }
   }
 
+  resetMovement() {
+    this.#resetMovement();
+  }
+
   update(deltaTime) {
     const cosYaw = Math.cos(this.yaw);
     const sinYaw = Math.sin(this.yaw);

@@ -5,36 +5,291 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>WebGPU FPS Prototype</title>
   <style>
+    :root {
+      color-scheme: dark;
+      --overlay-bg: rgba(5, 7, 10, 0.82);
+      --panel-bg: rgba(12, 18, 28, 0.95);
+      --panel-border: rgba(120, 160, 255, 0.35);
+      --text-muted: #c4c8d0;
+    }
+
     html, body {
       margin: 0;
       height: 100%;
       overflow: hidden;
       background: #050505;
       color: #f0f0f0;
-      font-family: system-ui, sans-serif;
+      font-family: "Segoe UI", system-ui, sans-serif;
     }
+
     #overlay {
       position: absolute;
       top: 1rem;
       left: 1rem;
-      background: rgba(0, 0, 0, 0.6);
+      background: var(--overlay-bg);
       padding: 0.75rem 1rem;
       border-radius: 0.5rem;
       pointer-events: none;
+      max-width: min(420px, 40vw);
+      line-height: 1.4;
     }
+
     canvas {
       width: 100vw;
       height: 100vh;
       display: block;
+    }
+
+    .pause-menu {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: clamp(1rem, 2vw, 2.5rem);
+      background: rgba(2, 5, 8, 0.55);
+      backdrop-filter: blur(6px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+    }
+
+    .pause-menu.is-open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .pause-menu__container {
+      width: min(960px, 90vw);
+      max-height: min(75vh, 640px);
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 1rem;
+      padding: clamp(1.5rem, 3vw, 2.5rem);
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 1rem;
+      box-shadow: 0 1.5rem 3.5rem rgba(0, 0, 0, 0.55);
+      color: #e8ecf5;
+    }
+
+    .pause-menu__header h2 {
+      margin: 0 0 0.25rem 0;
+      font-size: clamp(1.5rem, 2.4vw, 2rem);
+      letter-spacing: 0.04em;
+    }
+
+    .pause-menu__header p {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .pause-menu__tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 0.25rem;
+    }
+
+    .pause-menu__tab {
+      position: relative;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font: inherit;
+      padding: 0.5rem 0.9rem;
+      border-radius: 0.65rem;
+      cursor: pointer;
+      transition: color 120ms ease, background 120ms ease;
+    }
+
+    .pause-menu__tab:hover,
+    .pause-menu__tab:focus-visible {
+      color: #f5f8ff;
+      background: rgba(255, 255, 255, 0.05);
+      outline: none;
+    }
+
+    .pause-menu__tab.is-active {
+      color: #f5f8ff;
+      background: rgba(138, 180, 255, 0.16);
+      box-shadow: inset 0 0 0 1px rgba(138, 180, 255, 0.4);
+    }
+
+    .pause-menu__content {
+      overflow: auto;
+      padding-right: 0.25rem;
+    }
+
+    .pause-menu__panel {
+      display: grid;
+      gap: 1rem;
+      align-content: start;
+      color: var(--text-muted);
+      font-size: 0.98rem;
+      line-height: 1.6;
+    }
+
+    .pause-menu__panel h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      color: #f5f8ff;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .stat-card {
+      padding: 0.9rem;
+      border-radius: 0.75rem;
+      background: rgba(8, 12, 20, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      color: #f5f8ff;
+    }
+
+    .stat-card span {
+      display: block;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.2rem;
+    }
+
+    .inventory-list,
+    .bestiary-list,
+    .achievement-list {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .inventory-item,
+    .bestiary-entry,
+    .achievement-entry {
+      padding: 0.85rem 1rem;
+      border-radius: 0.75rem;
+      background: rgba(8, 12, 20, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      color: #f5f8ff;
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .inventory-item strong,
+    .bestiary-entry strong,
+    .achievement-entry strong {
+      font-size: 1.05rem;
+      letter-spacing: 0.02em;
+    }
+
+    .achievement-entry[data-status="locked"] {
+      opacity: 0.6;
+    }
+
+    [role="tabpanel"][hidden] {
+      display: none;
     }
   </style>
 </head>
 <body>
   <div id="overlay">
     <div><strong>WebGPU FPS Prototype</strong></div>
-    <div>Click to capture the mouse, then use WASD to move, Space/Shift for vertical movement.</div>
+    <div>Click to capture the mouse, then use WASD to move, Space/Shift for vertical movement. Press Esc to open the pause menu.</div>
   </div>
   <canvas id="gfx"></canvas>
+  <div id="pause-menu" class="pause-menu" aria-hidden="true">
+    <div class="pause-menu__container" role="dialog" aria-modal="true" aria-labelledby="pause-menu-title">
+      <div class="pause-menu__header">
+        <h2 id="pause-menu-title">Pause Menu</h2>
+        <p>Review your hunter at a glance, then click outside to return.</p>
+      </div>
+      <div class="pause-menu__tabs" role="tablist" aria-label="Pause menu sections">
+        <button class="pause-menu__tab is-active" role="tab" id="tab-stats" aria-selected="true" aria-controls="panel-stats" data-tab="stats">Player Stats</button>
+        <button class="pause-menu__tab" role="tab" id="tab-inventory" aria-selected="false" aria-controls="panel-inventory" data-tab="inventory" tabindex="-1">Inventory</button>
+        <button class="pause-menu__tab" role="tab" id="tab-bestiary" aria-selected="false" aria-controls="panel-bestiary" data-tab="bestiary" tabindex="-1">Bestiary</button>
+        <button class="pause-menu__tab" role="tab" id="tab-achievements" aria-selected="false" aria-controls="panel-achievements" data-tab="achievements" tabindex="-1">Achievements</button>
+      </div>
+      <div class="pause-menu__content">
+        <section class="pause-menu__panel" role="tabpanel" id="panel-stats" aria-labelledby="tab-stats" data-tab="stats">
+          <h3>Current Vitality</h3>
+          <div class="stat-grid">
+            <div class="stat-card"><span>Health</span>1320 / 1500</div>
+            <div class="stat-card"><span>Focus</span>420 / 500</div>
+            <div class="stat-card"><span>Shield</span>275 / 400</div>
+            <div class="stat-card"><span>Experience</span>Lvl 12 Vanguard</div>
+          </div>
+          <h3>Core Attributes</h3>
+          <div class="stat-grid">
+            <div class="stat-card"><span>Power</span>68</div>
+            <div class="stat-card"><span>Agility</span>54</div>
+            <div class="stat-card"><span>Resilience</span>61</div>
+            <div class="stat-card"><span>Insight</span>47</div>
+          </div>
+        </section>
+        <section class="pause-menu__panel" role="tabpanel" id="panel-inventory" aria-labelledby="tab-inventory" data-tab="inventory" hidden>
+          <h3>Loadout</h3>
+          <div class="inventory-list">
+            <div class="inventory-item">
+              <strong>VX-19 Duskrender</strong>
+              <span>Legendary pulse rifle with adaptive rounds that overcharge shields.</span>
+            </div>
+            <div class="inventory-item">
+              <strong>Graviknife Sidearm</strong>
+              <span>Sidearm that stores headshot charges to unleash a homing blade.</span>
+            </div>
+            <div class="inventory-item">
+              <strong>Stormbound Aegis</strong>
+              <span>Reactive barrier generator. Deploy to stagger enemies on break.</span>
+            </div>
+            <div class="inventory-item">
+              <strong>Field Medkit x3</strong>
+              <span>Rapidly heals 40% health over 5 seconds. Shares cooldown.</span>
+            </div>
+          </div>
+        </section>
+        <section class="pause-menu__panel" role="tabpanel" id="panel-bestiary" aria-labelledby="tab-bestiary" data-tab="bestiary" hidden>
+          <h3>Encounter Intel</h3>
+          <div class="bestiary-list">
+            <div class="bestiary-entry">
+              <strong>Vorvex Skirmisher</strong>
+              <span>Fast melee hunter. Counter with stagger or mobility cooldowns.</span>
+            </div>
+            <div class="bestiary-entry">
+              <strong>Obelith Conduit</strong>
+              <span>Anchored caster that shields allies. Prioritize for burst damage.</span>
+            </div>
+            <div class="bestiary-entry">
+              <strong>Null Swarm</strong>
+              <span>Nanite storm that drains shields. Area denial works best.</span>
+            </div>
+          </div>
+        </section>
+        <section class="pause-menu__panel" role="tabpanel" id="panel-achievements" aria-labelledby="tab-achievements" data-tab="achievements" hidden>
+          <h3>Operation Progress</h3>
+          <div class="achievement-list">
+            <div class="achievement-entry" data-status="unlocked">
+              <strong>First Resonance</strong>
+              <span>Completed the introductory strike without losing shields.</span>
+            </div>
+            <div class="achievement-entry" data-status="unlocked">
+              <strong>Armory Curator</strong>
+              <span>Collected 25 unique weapon schematics.</span>
+            </div>
+            <div class="achievement-entry" data-status="locked">
+              <strong>Nightfall Paragon</strong>
+              <span>Complete the "Echoes Below" incursion on Master difficulty.</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>
