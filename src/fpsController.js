@@ -9,6 +9,7 @@ const KEY_BINDINGS = {
 };
 
 export class FirstPersonController {
+  #onMouseMove;
   constructor(canvas) {
     this.canvas = canvas;
     this.position = new Float32Array([0, 1.6, 0]);
