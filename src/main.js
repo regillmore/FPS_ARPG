@@ -253,6 +253,10 @@ async function main() {
       if (document.pointerLockElement === canvas) {
         document.exitPointerLock();
       }
+    } else if (document.pointerLockElement !== canvas) {
+      canvas.requestPointerLock().catch(() => {
+        // Ignore failures (for example, if the browser rejects the request).
+      });
     }
   }
 
