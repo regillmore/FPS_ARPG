@@ -401,6 +401,7 @@ async function main() {
     let dragPreview;
     let dragSourceState;
     let dropTarget = null;
+    let draggingPointerId = null;
     const dragOffset = { x: 0, y: 0 };
 
     const getSlotState = (slot) => {
@@ -455,6 +456,12 @@ async function main() {
         dropTarget.classList.remove('is-drop-target');
       }
       if (draggingSlot) {
+        if (
+          draggingPointerId !== null &&
+          draggingSlot.hasPointerCapture(draggingPointerId)
+        ) {
+          draggingSlot.releasePointerCapture(draggingPointerId);
+        }
         draggingSlot.classList.remove('is-drag-source');
       }
       if (dragPreview) {
@@ -464,6 +471,7 @@ async function main() {
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerCancel);
       draggingSlot = null;
+      draggingPointerId = null;
       dragPreview = undefined;
       dragSourceState = undefined;
       dropTarget = null;
@@ -518,6 +526,12 @@ async function main() {
         return;
       }
       draggingSlot = slot;
+      draggingPointerId = event.pointerId;
+      if (slot.hasPointerCapture && !slot.hasPointerCapture(event.pointerId)) {
+        slot.setPointerCapture(event.pointerId);
+      } else if (slot.setPointerCapture) {
+        slot.setPointerCapture(event.pointerId);
+      }
       dragSourceState = getSlotState(slot);
       draggingSlot.classList.add('is-drag-source');
       const rect = slot.getBoundingClientRect();
