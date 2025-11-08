@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebGPU FPS Prototype</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #050505;
+      color: #f0f0f0;
+      font-family: system-ui, sans-serif;
+    }
+    #overlay {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      pointer-events: none;
+    }
+    canvas {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <div><strong>WebGPU FPS Prototype</strong></div>
+    <div>Click to capture the mouse, then use WASD to move, Space/Shift for vertical movement.</div>
+  </div>
+  <canvas id="gfx"></canvas>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
