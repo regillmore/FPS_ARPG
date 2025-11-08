@@ -216,12 +216,18 @@ async function main() {
   const tabButtons = Array.from(pauseMenu.querySelectorAll('[role="tab"]'));
   const tabPanels = Array.from(pauseMenu.querySelectorAll('[role="tabpanel"]'));
   const tablist = pauseMenu.querySelector('[role="tablist"]');
+  const itemSlots = Array.from(pauseMenu.querySelectorAll('.item-slot'));
+  const itemDetail = pauseMenu.querySelector('#item-detail');
   let activeTab = 'stats';
   let paused = false;
   let controller;
+  let clearItemDetail;
 
   function setActiveTab(tabId, { focus = false } = {}) {
     activeTab = tabId;
+    if (clearItemDetail && tabId !== 'inventory') {
+      clearItemDetail();
+    }
     for (const button of tabButtons) {
       const isActive = button.dataset.tab === tabId;
       button.classList.toggle('is-active', isActive);
@@ -239,9 +245,97 @@ async function main() {
 
   setActiveTab(activeTab);
 
+  if (itemDetail) {
+    const detailContent = itemDetail.querySelector('.item-detail__content');
+    const detailPlaceholder = itemDetail.querySelector('.item-detail__placeholder');
+    const detailTag = itemDetail.querySelector('.item-detail__tag');
+    const detailName = itemDetail.querySelector('.item-detail__name');
+    const detailDescription = itemDetail.querySelector('.item-detail__description');
+
+    const showItemDetail = (slot) => {
+      if (!detailContent || !detailPlaceholder || !detailTag || !detailName || !detailDescription) {
+        return;
+      }
+
+      const tagText = slot.querySelector('.item-slot__tag')?.textContent?.trim();
+      const itemName = slot.querySelector('strong')?.textContent?.trim();
+      const isEmpty = slot.dataset.slot === 'empty';
+      const description = slot.dataset.description;
+      const rarity = slot.dataset.rarity;
+      const fallbackName = isEmpty ? slot.textContent.trim() : '';
+
+      detailPlaceholder.hidden = true;
+
+      if (rarity) {
+        itemDetail.setAttribute('data-rarity', rarity);
+      } else {
+        itemDetail.removeAttribute('data-rarity');
+      }
+
+      if (tagText) {
+        detailTag.textContent = tagText;
+        detailTag.hidden = false;
+      } else {
+        detailTag.hidden = true;
+        detailTag.textContent = '';
+      }
+
+      const nameText = itemName || fallbackName;
+      if (nameText) {
+        detailName.textContent = nameText;
+        detailName.hidden = false;
+      } else {
+        detailName.hidden = true;
+        detailName.textContent = '';
+      }
+
+      if (description) {
+        detailDescription.textContent = description;
+        detailDescription.hidden = false;
+      } else if (isEmpty) {
+        detailDescription.textContent = 'This slot is currently empty.';
+        detailDescription.hidden = false;
+      } else {
+        detailDescription.textContent = '';
+        detailDescription.hidden = true;
+      }
+
+      detailContent.dataset.state = 'active';
+    };
+
+    const clearDetail = () => {
+      if (!detailContent || !detailPlaceholder || !detailTag || !detailName || !detailDescription) {
+        return;
+      }
+
+      detailContent.dataset.state = 'idle';
+      detailPlaceholder.hidden = false;
+      itemDetail.removeAttribute('data-rarity');
+      detailTag.hidden = true;
+      detailTag.textContent = '';
+      detailName.hidden = true;
+      detailName.textContent = '';
+      detailDescription.hidden = true;
+      detailDescription.textContent = '';
+    };
+
+    clearItemDetail = clearDetail;
+
+    for (const slot of itemSlots) {
+      slot.setAttribute('tabindex', '0');
+      slot.addEventListener('mouseenter', () => showItemDetail(slot));
+      slot.addEventListener('focus', () => showItemDetail(slot));
+      slot.addEventListener('mouseleave', clearDetail);
+      slot.addEventListener('blur', clearDetail);
+    }
+  }
+
   function setPaused(next) {
     if (paused === next) return;
     paused = next;
+    if (!next && clearItemDetail) {
+      clearItemDetail();
+    }
     pauseMenu.classList.toggle('is-open', paused);
     pauseMenu.setAttribute('aria-hidden', String(!paused));
     overlay.style.display = paused ? 'none' : '';

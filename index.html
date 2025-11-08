@@ -235,12 +235,6 @@
       letter-spacing: 0.03em;
     }
 
-    .item-slot span {
-      color: var(--text-muted);
-      font-size: 0.8rem;
-      line-height: 1.5;
-    }
-
     .item-slot__tag {
       position: absolute;
       top: 0.6rem;
@@ -281,6 +275,68 @@
       color: rgba(180, 196, 230, 0.7);
       font-size: 0.85rem;
       letter-spacing: 0.08em;
+    }
+
+    .inventory-detail {
+      padding: 1.1rem 1.25rem;
+      border-radius: 0.9rem;
+      background: rgba(12, 18, 28, 0.9);
+      border: 1px solid rgba(108, 152, 255, 0.2);
+      min-height: 190px;
+      display: grid;
+      gap: 0.65rem;
+      align-content: start;
+      box-shadow: inset 0 0 0 1px rgba(0, 20, 60, 0.25);
+    }
+
+    .inventory-detail h4 {
+      margin-bottom: 0.4rem;
+    }
+
+    .item-detail__tag {
+      display: inline-block;
+      padding: 0.3rem 0.7rem;
+      border-radius: 999px;
+      font-size: 0.65rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #f5f8ff;
+      background: rgba(108, 152, 255, 0.18);
+      border: 1px solid rgba(138, 180, 255, 0.35);
+      width: fit-content;
+    }
+
+    .item-detail__name {
+      font-size: 1.05rem;
+      letter-spacing: 0.04em;
+    }
+
+    .item-detail__description,
+    .item-detail__placeholder {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+
+    .inventory-detail[data-rarity="legendary"] {
+      border-color: rgba(255, 180, 80, 0.4);
+      box-shadow: inset 0 0 0 1px rgba(255, 180, 80, 0.2), 0 0.45rem 1.25rem rgba(255, 180, 80, 0.18);
+    }
+
+    .inventory-detail[data-rarity="legendary"] .item-detail__tag {
+      background: rgba(255, 200, 120, 0.18);
+      border-color: rgba(255, 205, 140, 0.45);
+      color: #ffe7c0;
+    }
+
+    .inventory-detail[data-rarity="rare"] {
+      border-color: rgba(120, 160, 255, 0.35);
+      box-shadow: inset 0 0 0 1px rgba(120, 160, 255, 0.25);
+    }
+
+    .inventory-detail[data-rarity="rare"] .item-detail__tag {
+      background: rgba(120, 160, 255, 0.18);
+      border-color: rgba(140, 180, 255, 0.35);
     }
 
     [role="tabpanel"][hidden] {
@@ -329,20 +385,17 @@
             <div class="inventory-section">
               <h4>Equipped Gear</h4>
               <div class="gear-grid">
-                <div class="item-slot" data-rarity="legendary">
+                <div class="item-slot" data-rarity="legendary" data-description="Pulse rifle that overcharges shields, amplifying stagger damage.">
                   <span class="item-slot__tag">Primary</span>
                   <strong>VX-19 Duskrender</strong>
-                  <span>Pulse rifle that overcharges shields, amplifying stagger damage.</span>
                 </div>
-                <div class="item-slot" data-rarity="rare">
+                <div class="item-slot" data-rarity="rare" data-description="Stores headshot charges to unleash a tracking kinetic blade.">
                   <span class="item-slot__tag">Sidearm</span>
                   <strong>Graviknife Sidearm</strong>
-                  <span>Stores headshot charges to unleash a tracking kinetic blade.</span>
                 </div>
-                <div class="item-slot" data-rarity="rare">
+                <div class="item-slot" data-rarity="rare" data-description="Barrier generator that detonates on break to stagger hostiles.">
                   <span class="item-slot__tag">Power</span>
                   <strong>Stormbound Aegis</strong>
-                  <span>Barrier generator that detonates on break to stagger hostiles.</span>
                 </div>
                 <div class="item-slot" data-slot="empty">
                   Empty Module Slot
@@ -352,20 +405,17 @@
             <div class="inventory-section">
               <h4>Pack Inventory</h4>
               <div class="inventory-grid">
-                <div class="item-slot" data-rarity="rare">
+                <div class="item-slot" data-rarity="rare" data-description="Rapidly mends 40% health over 5 seconds. Shares cooldown.">
                   <span class="item-slot__tag">Consumable</span>
                   <strong>Field Medkit x3</strong>
-                  <span>Rapidly mends 40% health over 5 seconds. Shares cooldown.</span>
                 </div>
-                <div class="item-slot" data-rarity="rare">
+                <div class="item-slot" data-rarity="rare" data-description="Releases a chain lightning burst that weakens armored targets.">
                   <span class="item-slot__tag">Grenade</span>
                   <strong>Arcwave Charge</strong>
-                  <span>Releases a chain lightning burst that weakens armored targets.</span>
                 </div>
-                <div class="item-slot" data-rarity="legendary">
+                <div class="item-slot" data-rarity="legendary" data-description="Triggers a short rewind on shield break, restoring lost stamina.">
                   <span class="item-slot__tag">Artifact</span>
                   <strong>Chrono Loop</strong>
-                  <span>Triggers a short rewind on shield break, restoring lost stamina.</span>
                 </div>
                 <div class="item-slot" data-slot="empty">
                   Empty Pack Slot
@@ -375,6 +425,15 @@
                 </div>
               </div>
             </div>
+            <aside class="inventory-detail" id="item-detail">
+              <h4>Item Details</h4>
+              <div class="item-detail__content" data-state="idle" aria-live="polite" aria-atomic="true">
+                <p class="item-detail__placeholder">Hover or focus an item to view its description.</p>
+                <span class="item-detail__tag" hidden></span>
+                <strong class="item-detail__name" hidden></strong>
+                <p class="item-detail__description" hidden></p>
+              </div>
+            </aside>
           </div>
         </section>
         <section class="pause-menu__panel" role="tabpanel" id="panel-bestiary" aria-labelledby="tab-bestiary" data-tab="bestiary" hidden>
