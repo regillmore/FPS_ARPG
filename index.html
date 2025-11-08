@@ -70,6 +70,7 @@
       border-radius: 1rem;
       box-shadow: 0 1.5rem 3.5rem rgba(0, 0, 0, 0.55);
       color: #e8ecf5;
+      position: relative;
     }
 
     .pause-menu__header h2 {
@@ -235,12 +236,6 @@
       letter-spacing: 0.03em;
     }
 
-    .item-slot span {
-      color: var(--text-muted);
-      font-size: 0.8rem;
-      line-height: 1.5;
-    }
-
     .item-slot__tag {
       position: absolute;
       top: 0.6rem;
@@ -281,6 +276,82 @@
       color: rgba(180, 196, 230, 0.7);
       font-size: 0.85rem;
       letter-spacing: 0.08em;
+    }
+
+    #item-detail-popover {
+      padding: 1.05rem 1.2rem;
+      border-radius: 0.9rem;
+      background: rgba(12, 18, 28, 0.94);
+      border: 1px solid rgba(120, 160, 255, 0.24);
+      box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.45);
+      display: grid;
+      gap: 0.6rem;
+      width: min(300px, 42vw);
+      color: #f5f8ff;
+      position: fixed;
+      z-index: 20;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(6px) scale(0.98);
+      transition: opacity 140ms ease, transform 140ms ease;
+      left: -9999px;
+      top: -9999px;
+    }
+
+    #item-detail-popover:popover-open,
+    #item-detail-popover.is-visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+    }
+
+    #item-detail-popover [hidden] {
+      display: none !important;
+    }
+
+    .item-popover__tag {
+      display: inline-block;
+      padding: 0.3rem 0.7rem;
+      border-radius: 999px;
+      font-size: 0.65rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #f5f8ff;
+      background: rgba(108, 152, 255, 0.18);
+      border: 1px solid rgba(138, 180, 255, 0.35);
+      width: fit-content;
+    }
+
+    .item-popover__name {
+      font-size: 1.05rem;
+      letter-spacing: 0.04em;
+    }
+
+    .item-popover__description {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+
+    #item-detail-popover[data-rarity="legendary"] {
+      border-color: rgba(255, 180, 80, 0.4);
+      box-shadow: 0 1.5rem 3rem rgba(255, 180, 80, 0.22);
+    }
+
+    #item-detail-popover[data-rarity="legendary"] .item-popover__tag {
+      background: rgba(255, 200, 120, 0.18);
+      border-color: rgba(255, 205, 140, 0.45);
+      color: #ffe7c0;
+    }
+
+    #item-detail-popover[data-rarity="rare"] {
+      border-color: rgba(120, 160, 255, 0.35);
+      box-shadow: 0 1.5rem 3rem rgba(120, 160, 255, 0.2);
+    }
+
+    #item-detail-popover[data-rarity="rare"] .item-popover__tag {
+      background: rgba(120, 160, 255, 0.18);
+      border-color: rgba(140, 180, 255, 0.35);
     }
 
     [role="tabpanel"][hidden] {
@@ -329,20 +400,17 @@
             <div class="inventory-section">
               <h4>Equipped Gear</h4>
               <div class="gear-grid">
-                <div class="item-slot" data-rarity="legendary">
+                <div class="item-slot" data-rarity="legendary" data-description="Pulse rifle that overcharges shields, amplifying stagger damage.">
                   <span class="item-slot__tag">Primary</span>
                   <strong>VX-19 Duskrender</strong>
-                  <span>Pulse rifle that overcharges shields, amplifying stagger damage.</span>
                 </div>
-                <div class="item-slot" data-rarity="rare">
+                <div class="item-slot" data-rarity="rare" data-description="Stores headshot charges to unleash a tracking kinetic blade.">
                   <span class="item-slot__tag">Sidearm</span>
                   <strong>Graviknife Sidearm</strong>
-                  <span>Stores headshot charges to unleash a tracking kinetic blade.</span>
                 </div>
-                <div class="item-slot" data-rarity="rare">
+                <div class="item-slot" data-rarity="rare" data-description="Barrier generator that detonates on break to stagger hostiles.">
                   <span class="item-slot__tag">Power</span>
                   <strong>Stormbound Aegis</strong>
-                  <span>Barrier generator that detonates on break to stagger hostiles.</span>
                 </div>
                 <div class="item-slot" data-slot="empty">
                   Empty Module Slot
@@ -352,20 +420,17 @@
             <div class="inventory-section">
               <h4>Pack Inventory</h4>
               <div class="inventory-grid">
-                <div class="item-slot" data-rarity="rare">
+                <div class="item-slot" data-rarity="rare" data-description="Rapidly mends 40% health over 5 seconds. Shares cooldown.">
                   <span class="item-slot__tag">Consumable</span>
                   <strong>Field Medkit x3</strong>
-                  <span>Rapidly mends 40% health over 5 seconds. Shares cooldown.</span>
                 </div>
-                <div class="item-slot" data-rarity="rare">
+                <div class="item-slot" data-rarity="rare" data-description="Releases a chain lightning burst that weakens armored targets.">
                   <span class="item-slot__tag">Grenade</span>
                   <strong>Arcwave Charge</strong>
-                  <span>Releases a chain lightning burst that weakens armored targets.</span>
                 </div>
-                <div class="item-slot" data-rarity="legendary">
+                <div class="item-slot" data-rarity="legendary" data-description="Triggers a short rewind on shield break, restoring lost stamina.">
                   <span class="item-slot__tag">Artifact</span>
                   <strong>Chrono Loop</strong>
-                  <span>Triggers a short rewind on shield break, restoring lost stamina.</span>
                 </div>
                 <div class="item-slot" data-slot="empty">
                   Empty Pack Slot
@@ -413,6 +478,19 @@
         </section>
       </div>
     </div>
+  </div>
+  <div
+    id="item-detail-popover"
+    class="item-popover"
+    popover="manual"
+    role="tooltip"
+    aria-hidden="true"
+    aria-live="polite"
+    aria-atomic="true"
+  >
+    <span class="item-popover__tag" hidden></span>
+    <strong class="item-popover__name" hidden></strong>
+    <p class="item-popover__description" hidden></p>
   </div>
   <script type="module" src="./src/main.js"></script>
 </body>

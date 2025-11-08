@@ -216,12 +216,21 @@ async function main() {
   const tabButtons = Array.from(pauseMenu.querySelectorAll('[role="tab"]'));
   const tabPanels = Array.from(pauseMenu.querySelectorAll('[role="tabpanel"]'));
   const tablist = pauseMenu.querySelector('[role="tablist"]');
+  const pauseContent = pauseMenu.querySelector('.pause-menu__content');
+  const itemSlots = Array.from(pauseMenu.querySelectorAll('.item-slot'));
+  const itemPopover = document.getElementById('item-detail-popover');
   let activeTab = 'stats';
   let paused = false;
   let controller;
+  let hideItemDetail;
+  let activeItemSlot = null;
+  let hidePopoverTimeout;
 
   function setActiveTab(tabId, { focus = false } = {}) {
     activeTab = tabId;
+    if (hideItemDetail && tabId !== 'inventory') {
+      hideItemDetail(true);
+    }
     for (const button of tabButtons) {
       const isActive = button.dataset.tab === tabId;
       button.classList.toggle('is-active', isActive);
@@ -239,9 +248,179 @@ async function main() {
 
   setActiveTab(activeTab);
 
+  if (itemPopover) {
+    const popoverTag = itemPopover.querySelector('.item-popover__tag');
+    const popoverName = itemPopover.querySelector('.item-popover__name');
+    const popoverDescription = itemPopover.querySelector('.item-popover__description');
+    const supportsPopover = typeof itemPopover.showPopover === 'function';
+
+    const cancelScheduledHide = () => {
+      if (hidePopoverTimeout) {
+        clearTimeout(hidePopoverTimeout);
+        hidePopoverTimeout = undefined;
+      }
+    };
+
+    const closePopover = () => {
+      if (supportsPopover) {
+        if (itemPopover.matches(':popover-open')) {
+          itemPopover.hidePopover();
+        }
+      } else {
+        itemPopover.classList.remove('is-visible');
+      }
+      itemPopover.setAttribute('aria-hidden', 'true');
+    };
+
+    const positionPopover = () => {
+      if (!activeItemSlot) {
+        return;
+      }
+      const slotRect = activeItemSlot.getBoundingClientRect();
+      const popRect = itemPopover.getBoundingClientRect();
+      const gap = 16;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      let left = slotRect.right + gap;
+      if (left + popRect.width > viewportWidth - gap) {
+        left = slotRect.left - gap - popRect.width;
+      }
+      left = Math.max(gap, Math.min(left, viewportWidth - popRect.width - gap));
+
+      let top = slotRect.top + slotRect.height / 2 - popRect.height / 2;
+      top = Math.max(gap, Math.min(top, viewportHeight - popRect.height - gap));
+
+      itemPopover.style.left = `${Math.round(left)}px`;
+      itemPopover.style.top = `${Math.round(top)}px`;
+    };
+
+    const openPopover = () => {
+      if (supportsPopover) {
+        if (!itemPopover.matches(':popover-open')) {
+          itemPopover.showPopover();
+        }
+      } else {
+        itemPopover.classList.add('is-visible');
+      }
+      itemPopover.setAttribute('aria-hidden', 'false');
+      requestAnimationFrame(positionPopover);
+    };
+
+    const performHide = () => {
+      cancelScheduledHide();
+      activeItemSlot = null;
+      itemPopover.removeAttribute('data-rarity');
+      if (popoverTag) {
+        popoverTag.textContent = '';
+        popoverTag.hidden = true;
+      }
+      if (popoverName) {
+        popoverName.textContent = '';
+        popoverName.hidden = true;
+      }
+      if (popoverDescription) {
+        popoverDescription.textContent = '';
+        popoverDescription.hidden = true;
+      }
+      closePopover();
+      itemPopover.style.left = '-9999px';
+      itemPopover.style.top = '-9999px';
+    };
+
+    hideItemDetail = (immediate = false) => {
+      if (immediate) {
+        performHide();
+        return;
+      }
+      cancelScheduledHide();
+      hidePopoverTimeout = window.setTimeout(performHide, 160);
+    };
+
+    const showItemDetail = (slot) => {
+      if (!popoverTag || !popoverName || !popoverDescription) {
+        return;
+      }
+
+      activeItemSlot = slot;
+      cancelScheduledHide();
+
+      const tagText = slot.querySelector('.item-slot__tag')?.textContent?.trim();
+      const itemName = slot.querySelector('strong')?.textContent?.trim();
+      const isEmpty = slot.dataset.slot === 'empty';
+      const description = slot.dataset.description;
+      const fallbackName = isEmpty ? slot.textContent.trim() : '';
+      const rarity = slot.dataset.rarity;
+
+      if (rarity) {
+        itemPopover.setAttribute('data-rarity', rarity);
+      } else {
+        itemPopover.removeAttribute('data-rarity');
+      }
+
+      if (tagText) {
+        popoverTag.textContent = tagText;
+        popoverTag.hidden = false;
+      } else {
+        popoverTag.textContent = '';
+        popoverTag.hidden = true;
+      }
+
+      const nameText = itemName || fallbackName;
+      if (nameText) {
+        popoverName.textContent = nameText;
+        popoverName.hidden = false;
+      } else {
+        popoverName.textContent = '';
+        popoverName.hidden = true;
+      }
+
+      if (description) {
+        popoverDescription.textContent = description;
+        popoverDescription.hidden = false;
+      } else if (isEmpty) {
+        popoverDescription.textContent = 'This slot is currently empty.';
+        popoverDescription.hidden = false;
+      } else {
+        popoverDescription.textContent = '';
+        popoverDescription.hidden = true;
+      }
+
+      openPopover();
+    };
+
+    for (const slot of itemSlots) {
+      slot.setAttribute('tabindex', '0');
+      slot.addEventListener('mouseenter', () => showItemDetail(slot));
+      slot.addEventListener('focus', () => showItemDetail(slot));
+      slot.addEventListener('mouseleave', () => hideItemDetail());
+      slot.addEventListener('blur', () => hideItemDetail());
+    }
+
+    itemPopover.addEventListener('mouseenter', cancelScheduledHide);
+    itemPopover.addEventListener('mouseleave', () => hideItemDetail());
+
+    window.addEventListener('resize', () => {
+      if (activeItemSlot) {
+        requestAnimationFrame(positionPopover);
+      }
+    });
+
+    if (pauseContent) {
+      pauseContent.addEventListener('scroll', () => {
+        if (activeItemSlot) {
+          requestAnimationFrame(positionPopover);
+        }
+      });
+    }
+  }
+
   function setPaused(next) {
     if (paused === next) return;
     paused = next;
+    if (!next && hideItemDetail) {
+      hideItemDetail(true);
+    }
     pauseMenu.classList.toggle('is-open', paused);
     pauseMenu.setAttribute('aria-hidden', String(!paused));
     overlay.style.display = paused ? 'none' : '';
