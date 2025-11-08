@@ -397,6 +397,170 @@ async function main() {
       slot.addEventListener('blur', () => hideItemDetail());
     }
 
+    let draggingSlot = null;
+    let dragPreview;
+    let dragSourceState;
+    let dropTarget = null;
+    let draggingPointerId = null;
+    const dragOffset = { x: 0, y: 0 };
+
+    const getSlotState = (slot) => {
+      const dataAttributes = {};
+      for (const attr of Array.from(slot.attributes)) {
+        if (attr.name.startsWith('data-')) {
+          dataAttributes[attr.name] = attr.value;
+        }
+      }
+      return {
+        html: slot.innerHTML,
+        dataAttributes
+      };
+    };
+
+    const applySlotState = (slot, state) => {
+      for (const attr of Array.from(slot.attributes)) {
+        if (attr.name.startsWith('data-')) {
+          slot.removeAttribute(attr.name);
+        }
+      }
+      for (const [name, value] of Object.entries(state.dataAttributes)) {
+        slot.setAttribute(name, value);
+      }
+      slot.innerHTML = state.html;
+    };
+
+    const updatePreviewPosition = (clientX, clientY) => {
+      if (!dragPreview) {
+        return;
+      }
+      dragPreview.style.left = `${clientX - dragOffset.x}px`;
+      dragPreview.style.top = `${clientY - dragOffset.y}px`;
+    };
+
+    const setDropTarget = (candidate) => {
+      const nextTarget = candidate && candidate !== draggingSlot ? candidate : null;
+      if (dropTarget === nextTarget) {
+        return;
+      }
+      if (dropTarget) {
+        dropTarget.classList.remove('is-drop-target');
+      }
+      dropTarget = nextTarget;
+      if (dropTarget) {
+        dropTarget.classList.add('is-drop-target');
+      }
+    };
+
+    const endDrag = () => {
+      if (dropTarget) {
+        dropTarget.classList.remove('is-drop-target');
+      }
+      if (draggingSlot) {
+        if (
+          draggingPointerId !== null &&
+          draggingSlot.hasPointerCapture(draggingPointerId)
+        ) {
+          draggingSlot.releasePointerCapture(draggingPointerId);
+        }
+        draggingSlot.classList.remove('is-drag-source');
+      }
+      if (dragPreview) {
+        dragPreview.remove();
+      }
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerCancel);
+      draggingSlot = null;
+      draggingPointerId = null;
+      dragPreview = undefined;
+      dragSourceState = undefined;
+      dropTarget = null;
+    };
+
+    const handlePointerMove = (event) => {
+      if (!draggingSlot) {
+        return;
+      }
+      updatePreviewPosition(event.clientX, event.clientY);
+      const element = document.elementFromPoint(event.clientX, event.clientY);
+      setDropTarget(element ? element.closest('.item-slot') : null);
+    };
+
+    const handlePointerUp = (event) => {
+      if (!draggingSlot) {
+        return;
+      }
+      updatePreviewPosition(event.clientX, event.clientY);
+      const target = dropTarget && dropTarget !== draggingSlot ? dropTarget : null;
+      const originSlot = draggingSlot;
+      if (target && dragSourceState) {
+        const targetState = getSlotState(target);
+        applySlotState(target, dragSourceState);
+        applySlotState(draggingSlot, targetState);
+        if (hideItemDetail) {
+          hideItemDetail(true);
+          requestAnimationFrame(() => {
+            showItemDetail(target);
+          });
+        }
+      } else if (hideItemDetail && originSlot.matches(':hover')) {
+        hideItemDetail(true);
+        requestAnimationFrame(() => {
+          showItemDetail(originSlot);
+        });
+      }
+      endDrag();
+      event.preventDefault();
+    };
+
+    const handlePointerCancel = () => {
+      endDrag();
+    };
+
+    const handlePointerDown = (event) => {
+      if (!event.isPrimary || event.button !== 0) {
+        return;
+      }
+      const slot = event.currentTarget;
+      if (!slot || slot.dataset.slot === 'empty') {
+        return;
+      }
+      draggingSlot = slot;
+      draggingPointerId = event.pointerId;
+      if (slot.hasPointerCapture && !slot.hasPointerCapture(event.pointerId)) {
+        slot.setPointerCapture(event.pointerId);
+      } else if (slot.setPointerCapture) {
+        slot.setPointerCapture(event.pointerId);
+      }
+      dragSourceState = getSlotState(slot);
+      draggingSlot.classList.add('is-drag-source');
+      const rect = slot.getBoundingClientRect();
+      dragPreview = slot.cloneNode(true);
+      dragPreview.classList.add('item-slot--drag-preview');
+      dragPreview.classList.remove('is-drag-source');
+      dragPreview.classList.remove('is-drop-target');
+      dragPreview.removeAttribute('tabindex');
+      dragPreview.style.pointerEvents = 'none';
+      dragPreview.style.width = `${rect.width}px`;
+      dragPreview.style.height = `${rect.height}px`;
+      document.body.appendChild(dragPreview);
+      dragOffset.x = event.clientX - rect.left;
+      dragOffset.y = event.clientY - rect.top;
+      updatePreviewPosition(event.clientX, event.clientY);
+      setDropTarget(null);
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
+      window.addEventListener('pointercancel', handlePointerCancel);
+      if (hideItemDetail) {
+        hideItemDetail(true);
+      }
+      event.preventDefault();
+    };
+
+    for (const slot of itemSlots) {
+      slot.addEventListener('pointerdown', handlePointerDown);
+    }
+
     itemPopover.addEventListener('mouseenter', cancelScheduledHide);
     itemPopover.addEventListener('mouseleave', () => hideItemDetail());
 
