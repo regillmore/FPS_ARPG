@@ -216,17 +216,20 @@ async function main() {
   const tabButtons = Array.from(pauseMenu.querySelectorAll('[role="tab"]'));
   const tabPanels = Array.from(pauseMenu.querySelectorAll('[role="tabpanel"]'));
   const tablist = pauseMenu.querySelector('[role="tablist"]');
+  const pauseContent = pauseMenu.querySelector('.pause-menu__content');
   const itemSlots = Array.from(pauseMenu.querySelectorAll('.item-slot'));
-  const itemDetail = pauseMenu.querySelector('#item-detail');
+  const itemPopover = document.getElementById('item-detail-popover');
   let activeTab = 'stats';
   let paused = false;
   let controller;
-  let clearItemDetail;
+  let hideItemDetail;
+  let activeItemSlot = null;
+  let hidePopoverTimeout;
 
   function setActiveTab(tabId, { focus = false } = {}) {
     activeTab = tabId;
-    if (clearItemDetail && tabId !== 'inventory') {
-      clearItemDetail();
+    if (hideItemDetail && tabId !== 'inventory') {
+      hideItemDetail(true);
     }
     for (const button of tabButtons) {
       const isActive = button.dataset.tab === tabId;
@@ -245,96 +248,178 @@ async function main() {
 
   setActiveTab(activeTab);
 
-  if (itemDetail) {
-    const detailContent = itemDetail.querySelector('.item-detail__content');
-    const detailPlaceholder = itemDetail.querySelector('.item-detail__placeholder');
-    const detailTag = itemDetail.querySelector('.item-detail__tag');
-    const detailName = itemDetail.querySelector('.item-detail__name');
-    const detailDescription = itemDetail.querySelector('.item-detail__description');
+  if (itemPopover) {
+    const popoverTag = itemPopover.querySelector('.item-popover__tag');
+    const popoverName = itemPopover.querySelector('.item-popover__name');
+    const popoverDescription = itemPopover.querySelector('.item-popover__description');
+    const supportsPopover = typeof itemPopover.showPopover === 'function';
 
-    const showItemDetail = (slot) => {
-      if (!detailContent || !detailPlaceholder || !detailTag || !detailName || !detailDescription) {
+    const cancelScheduledHide = () => {
+      if (hidePopoverTimeout) {
+        clearTimeout(hidePopoverTimeout);
+        hidePopoverTimeout = undefined;
+      }
+    };
+
+    const closePopover = () => {
+      if (supportsPopover) {
+        if (itemPopover.matches(':popover-open')) {
+          itemPopover.hidePopover();
+        }
+      } else {
+        itemPopover.classList.remove('is-visible');
+      }
+      itemPopover.setAttribute('aria-hidden', 'true');
+    };
+
+    const positionPopover = () => {
+      if (!activeItemSlot) {
         return;
       }
+      const slotRect = activeItemSlot.getBoundingClientRect();
+      const popRect = itemPopover.getBoundingClientRect();
+      const gap = 16;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      let left = slotRect.right + gap;
+      if (left + popRect.width > viewportWidth - gap) {
+        left = slotRect.left - gap - popRect.width;
+      }
+      left = Math.max(gap, Math.min(left, viewportWidth - popRect.width - gap));
+
+      let top = slotRect.top + slotRect.height / 2 - popRect.height / 2;
+      top = Math.max(gap, Math.min(top, viewportHeight - popRect.height - gap));
+
+      itemPopover.style.left = `${Math.round(left)}px`;
+      itemPopover.style.top = `${Math.round(top)}px`;
+    };
+
+    const openPopover = () => {
+      if (supportsPopover) {
+        if (!itemPopover.matches(':popover-open')) {
+          itemPopover.showPopover();
+        }
+      } else {
+        itemPopover.classList.add('is-visible');
+      }
+      itemPopover.setAttribute('aria-hidden', 'false');
+      requestAnimationFrame(positionPopover);
+    };
+
+    const performHide = () => {
+      cancelScheduledHide();
+      activeItemSlot = null;
+      itemPopover.removeAttribute('data-rarity');
+      if (popoverTag) {
+        popoverTag.textContent = '';
+        popoverTag.hidden = true;
+      }
+      if (popoverName) {
+        popoverName.textContent = '';
+        popoverName.hidden = true;
+      }
+      if (popoverDescription) {
+        popoverDescription.textContent = '';
+        popoverDescription.hidden = true;
+      }
+      closePopover();
+      itemPopover.style.left = '-9999px';
+      itemPopover.style.top = '-9999px';
+    };
+
+    hideItemDetail = (immediate = false) => {
+      if (immediate) {
+        performHide();
+        return;
+      }
+      cancelScheduledHide();
+      hidePopoverTimeout = window.setTimeout(performHide, 160);
+    };
+
+    const showItemDetail = (slot) => {
+      if (!popoverTag || !popoverName || !popoverDescription) {
+        return;
+      }
+
+      activeItemSlot = slot;
+      cancelScheduledHide();
 
       const tagText = slot.querySelector('.item-slot__tag')?.textContent?.trim();
       const itemName = slot.querySelector('strong')?.textContent?.trim();
       const isEmpty = slot.dataset.slot === 'empty';
       const description = slot.dataset.description;
-      const rarity = slot.dataset.rarity;
       const fallbackName = isEmpty ? slot.textContent.trim() : '';
-
-      detailPlaceholder.hidden = true;
+      const rarity = slot.dataset.rarity;
 
       if (rarity) {
-        itemDetail.setAttribute('data-rarity', rarity);
+        itemPopover.setAttribute('data-rarity', rarity);
       } else {
-        itemDetail.removeAttribute('data-rarity');
+        itemPopover.removeAttribute('data-rarity');
       }
 
       if (tagText) {
-        detailTag.textContent = tagText;
-        detailTag.hidden = false;
+        popoverTag.textContent = tagText;
+        popoverTag.hidden = false;
       } else {
-        detailTag.hidden = true;
-        detailTag.textContent = '';
+        popoverTag.textContent = '';
+        popoverTag.hidden = true;
       }
 
       const nameText = itemName || fallbackName;
       if (nameText) {
-        detailName.textContent = nameText;
-        detailName.hidden = false;
+        popoverName.textContent = nameText;
+        popoverName.hidden = false;
       } else {
-        detailName.hidden = true;
-        detailName.textContent = '';
+        popoverName.textContent = '';
+        popoverName.hidden = true;
       }
 
       if (description) {
-        detailDescription.textContent = description;
-        detailDescription.hidden = false;
+        popoverDescription.textContent = description;
+        popoverDescription.hidden = false;
       } else if (isEmpty) {
-        detailDescription.textContent = 'This slot is currently empty.';
-        detailDescription.hidden = false;
+        popoverDescription.textContent = 'This slot is currently empty.';
+        popoverDescription.hidden = false;
       } else {
-        detailDescription.textContent = '';
-        detailDescription.hidden = true;
+        popoverDescription.textContent = '';
+        popoverDescription.hidden = true;
       }
 
-      detailContent.dataset.state = 'active';
+      openPopover();
     };
-
-    const clearDetail = () => {
-      if (!detailContent || !detailPlaceholder || !detailTag || !detailName || !detailDescription) {
-        return;
-      }
-
-      detailContent.dataset.state = 'idle';
-      detailPlaceholder.hidden = false;
-      itemDetail.removeAttribute('data-rarity');
-      detailTag.hidden = true;
-      detailTag.textContent = '';
-      detailName.hidden = true;
-      detailName.textContent = '';
-      detailDescription.hidden = true;
-      detailDescription.textContent = '';
-    };
-
-    clearItemDetail = clearDetail;
 
     for (const slot of itemSlots) {
       slot.setAttribute('tabindex', '0');
       slot.addEventListener('mouseenter', () => showItemDetail(slot));
       slot.addEventListener('focus', () => showItemDetail(slot));
-      slot.addEventListener('mouseleave', clearDetail);
-      slot.addEventListener('blur', clearDetail);
+      slot.addEventListener('mouseleave', () => hideItemDetail());
+      slot.addEventListener('blur', () => hideItemDetail());
+    }
+
+    itemPopover.addEventListener('mouseenter', cancelScheduledHide);
+    itemPopover.addEventListener('mouseleave', () => hideItemDetail());
+
+    window.addEventListener('resize', () => {
+      if (activeItemSlot) {
+        requestAnimationFrame(positionPopover);
+      }
+    });
+
+    if (pauseContent) {
+      pauseContent.addEventListener('scroll', () => {
+        if (activeItemSlot) {
+          requestAnimationFrame(positionPopover);
+        }
+      });
     }
   }
 
   function setPaused(next) {
     if (paused === next) return;
     paused = next;
-    if (!next && clearItemDetail) {
-      clearItemDetail();
+    if (!next && hideItemDetail) {
+      hideItemDetail(true);
     }
     pauseMenu.classList.toggle('is-open', paused);
     pauseMenu.setAttribute('aria-hidden', String(!paused));
