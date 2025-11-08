@@ -212,6 +212,98 @@ fn fs_main(@location(0) color : vec3<f32>) -> @location(0) vec4<f32> {
 async function main() {
   const canvas = document.getElementById('gfx');
   const overlay = document.getElementById('overlay');
+  const pauseMenu = document.getElementById('pause-menu');
+  const tabButtons = Array.from(pauseMenu.querySelectorAll('[role="tab"]'));
+  const tabPanels = Array.from(pauseMenu.querySelectorAll('[role="tabpanel"]'));
+  const tablist = pauseMenu.querySelector('[role="tablist"]');
+  let activeTab = 'stats';
+  let paused = false;
+  let controller;
+
+  function setActiveTab(tabId, { focus = false } = {}) {
+    activeTab = tabId;
+    for (const button of tabButtons) {
+      const isActive = button.dataset.tab === tabId;
+      button.classList.toggle('is-active', isActive);
+      button.setAttribute('aria-selected', String(isActive));
+      button.setAttribute('tabindex', isActive ? '0' : '-1');
+      if (isActive && focus) {
+        button.focus({ preventScroll: true });
+      }
+    }
+    for (const panel of tabPanels) {
+      const isActive = panel.dataset.tab === tabId;
+      panel.toggleAttribute('hidden', !isActive);
+    }
+  }
+
+  setActiveTab(activeTab);
+
+  function setPaused(next) {
+    if (paused === next) return;
+    paused = next;
+    pauseMenu.classList.toggle('is-open', paused);
+    pauseMenu.setAttribute('aria-hidden', String(!paused));
+    overlay.style.display = paused ? 'none' : '';
+    if (paused) {
+      setActiveTab(activeTab, { focus: true });
+      if (controller) {
+        controller.resetMovement();
+      }
+      if (document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+      }
+    }
+  }
+
+  for (const button of tabButtons) {
+    button.addEventListener('click', () => {
+      setActiveTab(button.dataset.tab, { focus: true });
+    });
+  }
+
+  if (tablist) {
+    tablist.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+        return;
+      }
+
+      event.preventDefault();
+      const currentIndex = tabButtons.findIndex((btn) => btn.dataset.tab === activeTab);
+      if (event.key === 'Home') {
+        setActiveTab(tabButtons[0].dataset.tab, { focus: true });
+        return;
+      }
+      if (event.key === 'End') {
+        setActiveTab(tabButtons[tabButtons.length - 1].dataset.tab, { focus: true });
+        return;
+      }
+
+      const direction = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+      const nextIndex = (currentIndex + direction + tabButtons.length) % tabButtons.length;
+      setActiveTab(tabButtons[nextIndex].dataset.tab, { focus: true });
+    });
+  }
+
+  pauseMenu.addEventListener('click', (event) => {
+    if (event.target === pauseMenu) {
+      setPaused(false);
+    }
+  });
+
+  window.addEventListener('keydown', (event) => {
+    if (event.code === 'Escape') {
+      event.preventDefault();
+      setPaused(!paused);
+    }
+  });
+
+  document.addEventListener('pointerlockchange', () => {
+    if (document.pointerLockElement !== canvas && controller && !paused) {
+      setPaused(true);
+    }
+  });
+
   try {
     const { device, context, format, resize } = await initWebGPU(canvas);
     const pipeline = createPipeline(device, format);
@@ -238,14 +330,16 @@ async function main() {
     const view = new Float32Array(16);
     const viewProj = new Float32Array(16);
 
-    const controller = new FirstPersonController(canvas);
+    controller = new FirstPersonController(canvas);
     let lastTime = performance.now();
 
     function frame(now) {
       const deltaTime = Math.min((now - lastTime) / 1000, 0.2);
       lastTime = now;
 
-      controller.update(deltaTime);
+      if (!paused) {
+        controller.update(deltaTime);
+      }
 
       const padding = 0.25;
       controller.position[0] = Math.min(Math.max(controller.position[0], bounds.minX + padding), bounds.maxX - padding);
@@ -288,10 +382,14 @@ async function main() {
     }
 
     requestAnimationFrame(frame);
-    overlay.textContent = 'Click the canvas to capture the mouse and explore the room. WASD to move, Space/Shift to move vertically.';
+    overlay.innerHTML = `
+      <div><strong>WebGPU FPS Prototype</strong></div>
+      <div>Click to capture the mouse, then use WASD to move, Space/Shift for vertical movement. Press Esc to open the pause menu.</div>
+    `;
   } catch (error) {
     console.error(error);
     overlay.textContent = error.message;
+    overlay.style.display = '';
   }
 }
 
