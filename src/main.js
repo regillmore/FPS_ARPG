@@ -298,7 +298,7 @@ async function main() {
   window.addEventListener('keydown', (event) => {
     if (event.code === 'Escape') {
       event.preventDefault();
-      setPaused(!paused);
+      setPaused(true);
     }
   });
 
