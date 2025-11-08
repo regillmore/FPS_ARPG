@@ -91,12 +91,12 @@ export class FirstPersonController {
       vz -= forward[2];
     }
     if (this.movement.left) {
-      vx -= right[0];
-      vz -= right[2];
-    }
-    if (this.movement.right) {
       vx += right[0];
       vz += right[2];
+    }
+    if (this.movement.right) {
+      vx -= right[0];
+      vz -= right[2];
     }
     if (this.movement.up) {
       vy += 1;
