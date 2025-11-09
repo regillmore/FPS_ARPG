@@ -391,15 +391,6 @@ async function main() {
       openPopover();
     };
 
-    for (const slot of itemSlots) {
-      refreshEmptySlotLabel(slot);
-      slot.setAttribute('tabindex', '0');
-      slot.addEventListener('mouseenter', () => showItemDetail(slot));
-      slot.addEventListener('focus', () => showItemDetail(slot));
-      slot.addEventListener('mouseleave', () => hideItemDetail());
-      slot.addEventListener('blur', () => hideItemDetail());
-    }
-
     const SLOT_META_ATTRIBUTES = new Set(['data-slot-kind', 'data-slot-allowed']);
 
     const normalizeType = (value) =>
@@ -483,6 +474,15 @@ async function main() {
       }
       return allowedTypes.includes(normalizedItemType);
     };
+
+    for (const slot of itemSlots) {
+      refreshEmptySlotLabel(slot);
+      slot.setAttribute('tabindex', '0');
+      slot.addEventListener('mouseenter', () => showItemDetail(slot));
+      slot.addEventListener('focus', () => showItemDetail(slot));
+      slot.addEventListener('mouseleave', () => hideItemDetail());
+      slot.addEventListener('blur', () => hideItemDetail());
+    }
 
     let draggingSlot = null;
     let dragPreview;
