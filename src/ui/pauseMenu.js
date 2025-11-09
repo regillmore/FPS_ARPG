@@ -221,6 +221,9 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     };
 
     const showItemDetail = (slot) => {
+      if (isDragging) {
+        return;
+      }
       cancelScheduledHide();
       activeItemSlot = slot;
       if (!slot) {
@@ -376,6 +379,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     let dropTarget = null;
     let draggingPointerId = null;
     let draggingItemType = '';
+    let isDragging = false;
     const dragOffset = { x: 0, y: 0 };
 
     const getSlotState = (slot) => {
@@ -490,6 +494,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       dragSourceState = undefined;
       dropTarget = null;
       draggingItemType = '';
+      isDragging = false;
     };
 
     const handlePointerMove = (event) => {
@@ -530,15 +535,20 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
 
       dragPreview = slot.cloneNode(true);
       dragPreview.classList.add('item-slot--drag-preview');
+      const rect = slot.getBoundingClientRect();
+      dragPreview.style.width = `${rect.width}px`;
+      dragPreview.style.height = `${rect.height}px`;
       document.body.appendChild(dragPreview);
 
-      const rect = slot.getBoundingClientRect();
       dragOffset.x = event.clientX - rect.left;
       dragOffset.y = event.clientY - rect.top;
       updatePreviewPosition(event.clientX, event.clientY);
 
       slot.classList.add('is-drag-source');
       slot.setPointerCapture?.(draggingPointerId);
+
+      hideItemDetail?.(true);
+      isDragging = true;
 
       window.addEventListener('pointermove', handlePointerMove);
       window.addEventListener('pointerup', handlePointerUp);
