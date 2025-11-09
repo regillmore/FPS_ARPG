@@ -14,6 +14,7 @@ const DEFAULT_WEAPON_OFFSET = {
 
 const DEFAULT_WEAPON_ROLL = 0.0;
 const WORLD_UP = [0, 1, 0];
+const PRIMARY_WEAPON_SLOT_SELECTOR = '.item-slot[data-slot-kind="gear"][data-slot-allowed="primary"]';
 
 async function main() {
   const canvas = document.getElementById('gfx');
@@ -31,11 +32,90 @@ async function main() {
     const { device, context, format, resize } = await initWebGPU(canvas);
     const pipeline = createBasicPipeline(device, format);
     const { vertexBuffer, vertexCount, bounds } = createRoomGeometry(device);
-    const defaultWeapon = getWeapon('pea-shooter');
-    const weaponGeometry = defaultWeapon ? defaultWeapon.createGeometry(device) : null;
-    if (!weaponGeometry) {
-      console.warn('Failed to create geometry for the default Pea Shooter weapon.');
+    const primaryWeaponSlot = document.querySelector(PRIMARY_WEAPON_SLOT_SELECTOR);
+    const fallbackWeapon = getWeapon('pea-shooter');
+
+    let weaponGeometry = null;
+    let equippedWeaponDefinition = null;
+
+    let overlayWeaponLine = null;
+    if (overlay) {
+      overlay.innerHTML = `
+        <div><strong>WebGPU FPS Prototype</strong></div>
+        <div>Click to capture the mouse, then use WASD to move, Space/Shift for vertical movement. Press Esc to open the pause menu.</div>
+        <div data-overlay-role="equipped-weapon"></div>
+      `;
+      overlayWeaponLine = overlay.querySelector('[data-overlay-role="equipped-weapon"]');
     }
+
+    const updateOverlayWeaponLine = () => {
+      if (!overlayWeaponLine) {
+        return;
+      }
+      if (equippedWeaponDefinition) {
+        overlayWeaponLine.textContent = `Equipped: ${equippedWeaponDefinition.displayName}`;
+        overlayWeaponLine.style.display = '';
+      } else {
+        overlayWeaponLine.textContent = '';
+        overlayWeaponLine.style.display = 'none';
+      }
+    };
+
+    const setEquippedWeaponDefinition = (weaponDefinition) => {
+      if (equippedWeaponDefinition === weaponDefinition) {
+        updateOverlayWeaponLine();
+        return;
+      }
+
+      if (weaponGeometry?.vertexBuffer) {
+        weaponGeometry.vertexBuffer.destroy?.();
+      }
+
+      weaponGeometry = null;
+      equippedWeaponDefinition = weaponDefinition ?? null;
+
+      if (equippedWeaponDefinition) {
+        weaponGeometry = equippedWeaponDefinition.createGeometry(device);
+        if (!weaponGeometry) {
+          console.warn(`Failed to create geometry for weapon "${equippedWeaponDefinition.id}".`);
+        }
+      }
+
+      updateOverlayWeaponLine();
+    };
+
+    const resolveWeaponForSlot = (slot) => {
+      if (!slot) {
+        return fallbackWeapon ?? null;
+      }
+      if (slot.dataset.slot === 'empty') {
+        return null;
+      }
+      const weaponId = slot.dataset.weaponId;
+      if (!weaponId) {
+        return null;
+      }
+      const weapon = getWeapon(weaponId);
+      if (!weapon) {
+        console.warn(`Unknown weapon id "${weaponId}".`);
+        return null;
+      }
+      return weapon;
+    };
+
+    const syncPrimaryWeapon = () => {
+      const nextWeapon = resolveWeaponForSlot(primaryWeaponSlot);
+      setEquippedWeaponDefinition(nextWeapon);
+    };
+
+    syncPrimaryWeapon();
+
+    window.addEventListener('player-slot-change', (event) => {
+      const slot = event.detail?.slot ?? null;
+      if (slot === primaryWeaponSlot) {
+        syncPrimaryWeapon();
+      }
+    });
 
     const worldUniformBuffer = device.createBuffer({
       size: 64,
@@ -278,16 +358,6 @@ async function main() {
 
     requestAnimationFrame(frame);
 
-    if (overlay) {
-      const weaponLine = defaultWeapon
-        ? `<div>Equipped: ${defaultWeapon.displayName}</div>`
-        : '';
-      overlay.innerHTML = `
-        <div><strong>WebGPU FPS Prototype</strong></div>
-        <div>Click to capture the mouse, then use WASD to move, Space/Shift for vertical movement. Press Esc to open the pause menu.</div>
-        ${weaponLine}
-      `;
-    }
   } catch (error) {
     console.error(error);
     if (overlay) {
