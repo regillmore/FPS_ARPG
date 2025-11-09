@@ -222,7 +222,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     };
 
     const showItemDetail = (slot) => {
-      if (isDragging) {
+      if (isDragging || !paused) {
         return;
       }
       cancelScheduledHide();
