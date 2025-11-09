@@ -212,6 +212,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       const hide = () => {
         activeItemSlot = null;
         setPopoverVisibility(false);
+        delete itemPopover.dataset.rarity;
       };
       if (force) {
         hide();
@@ -228,6 +229,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       activeItemSlot = slot;
       if (!slot) {
         setPopoverVisibility(false);
+        delete itemPopover.dataset.rarity;
         return;
       }
 
@@ -235,6 +237,13 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       const name = slot.querySelector('strong')?.textContent || slot.dataset.emptyLabel || '';
       const description = slot.dataset.description || '';
       const bonuses = slot.dataset.bonuses;
+      const rarity = slot.dataset.rarity || '';
+
+      if (rarity) {
+        itemPopover.dataset.rarity = rarity;
+      } else {
+        delete itemPopover.dataset.rarity;
+      }
 
       if (popoverTag) {
         popoverTag.textContent = tagLabel;
