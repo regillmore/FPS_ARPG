@@ -264,6 +264,11 @@
       letter-spacing: 0.03em;
     }
 
+    .item-slot__placeholder {
+      display: block;
+      font-weight: 600;
+    }
+
     .item-slot__tag {
       position: absolute;
       top: 0.6rem;
@@ -428,43 +433,82 @@
             <div class="inventory-section">
               <h4>Equipped Gear</h4>
               <div class="gear-grid">
-                <div class="item-slot" data-rarity="legendary" data-description="Pulse rifle that overcharges shields, amplifying stagger damage.">
+                <div
+                  class="item-slot"
+                  data-slot-kind="gear"
+                  data-slot-allowed="primary"
+                  data-item-type="primary"
+                  data-rarity="legendary"
+                  data-description="Pulse rifle that overcharges shields, amplifying stagger damage."
+                >
                   <span class="item-slot__tag">Primary</span>
                   <strong>VX-19 Duskrender</strong>
                 </div>
-                <div class="item-slot" data-rarity="rare" data-description="Stores headshot charges to unleash a tracking kinetic blade.">
+                <div
+                  class="item-slot"
+                  data-slot-kind="gear"
+                  data-slot-allowed="sidearm"
+                  data-item-type="sidearm"
+                  data-rarity="rare"
+                  data-description="Stores headshot charges to unleash a tracking kinetic blade."
+                >
                   <span class="item-slot__tag">Sidearm</span>
                   <strong>Graviknife Sidearm</strong>
                 </div>
-                <div class="item-slot" data-rarity="rare" data-description="Barrier generator that detonates on break to stagger hostiles.">
+                <div
+                  class="item-slot"
+                  data-slot-kind="gear"
+                  data-slot-allowed="power"
+                  data-item-type="power"
+                  data-rarity="rare"
+                  data-description="Barrier generator that detonates on break to stagger hostiles."
+                >
                   <span class="item-slot__tag">Power</span>
                   <strong>Stormbound Aegis</strong>
                 </div>
-                <div class="item-slot" data-slot="empty">
-                  Empty Module Slot
+                <div class="item-slot" data-slot-kind="gear" data-slot-allowed="grenade" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Module Slot</span>
                 </div>
               </div>
             </div>
             <div class="inventory-section">
               <h4>Pack Inventory</h4>
               <div class="inventory-grid">
-                <div class="item-slot" data-rarity="rare" data-description="Rapidly mends 40% health over 5 seconds. Shares cooldown.">
+                <div
+                  class="item-slot"
+                  data-slot-kind="inventory"
+                  data-item-type="consumable"
+                  data-rarity="rare"
+                  data-description="Rapidly mends 40% health over 5 seconds. Shares cooldown."
+                >
                   <span class="item-slot__tag">Consumable</span>
                   <strong>Field Medkit x3</strong>
                 </div>
-                <div class="item-slot" data-rarity="rare" data-description="Releases a chain lightning burst that weakens armored targets.">
+                <div
+                  class="item-slot"
+                  data-slot-kind="inventory"
+                  data-item-type="grenade"
+                  data-rarity="rare"
+                  data-description="Releases a chain lightning burst that weakens armored targets."
+                >
                   <span class="item-slot__tag">Grenade</span>
                   <strong>Arcwave Charge</strong>
                 </div>
-                <div class="item-slot" data-rarity="legendary" data-description="Triggers a short rewind on shield break, restoring lost stamina.">
+                <div
+                  class="item-slot"
+                  data-slot-kind="inventory"
+                  data-item-type="artifact"
+                  data-rarity="legendary"
+                  data-description="Triggers a short rewind on shield break, restoring lost stamina."
+                >
                   <span class="item-slot__tag">Artifact</span>
                   <strong>Chrono Loop</strong>
                 </div>
-                <div class="item-slot" data-slot="empty">
-                  Empty Pack Slot
+                <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
                 </div>
-                <div class="item-slot" data-slot="empty">
-                  Empty Pack Slot
+                <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
                 </div>
               </div>
             </div>

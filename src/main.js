@@ -349,7 +349,9 @@ async function main() {
       const itemName = slot.querySelector('strong')?.textContent?.trim();
       const isEmpty = slot.dataset.slot === 'empty';
       const description = slot.dataset.description;
-      const fallbackName = isEmpty ? slot.textContent.trim() : '';
+      const fallbackName = isEmpty
+        ? slot.dataset.emptyLabel || slot.textContent.trim()
+        : '';
       const rarity = slot.dataset.rarity;
 
       if (rarity) {
@@ -389,7 +391,92 @@ async function main() {
       openPopover();
     };
 
+    const SLOT_META_ATTRIBUTES = new Set(['data-slot-kind', 'data-slot-allowed']);
+
+    const normalizeType = (value) =>
+      typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+    const getSlotItemType = (slot) => normalizeType(slot?.dataset.itemType);
+
+    const getAllowedTypes = (slot) => {
+      if (!slot) {
+        return null;
+      }
+      const raw = slot.dataset.slotAllowed;
+      if (!raw) {
+        return null;
+      }
+      const parsed = raw
+        .split(',')
+        .map((part) => normalizeType(part))
+        .filter(Boolean);
+      if (parsed.length === 0 || parsed.includes('any')) {
+        return null;
+      }
+      return parsed;
+    };
+
+    function formatItemTypeLabel(value) {
+      return value
+        .split(/[-_\s]+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+    }
+
+    function formatAllowedTypeLabel(slot) {
+      const allowed = getAllowedTypes(slot);
+      if (!allowed || allowed.length === 0) {
+        return '';
+      }
+      return allowed.map((type) => formatItemTypeLabel(type)).join(' / ');
+    }
+
+    function refreshEmptySlotLabel(slot) {
+      if (!slot) {
+        return;
+      }
+      if (slot.dataset.slot !== 'empty') {
+        delete slot.dataset.emptyLabel;
+        return;
+      }
+      if (slot.dataset.slotKind !== 'gear') {
+        delete slot.dataset.emptyLabel;
+        return;
+      }
+
+      const allowedLabel = formatAllowedTypeLabel(slot);
+      const tagLabel = allowedLabel || 'Gear';
+      const placeholderLabel = `Empty ${tagLabel} Slot`;
+      const description = allowedLabel
+        ? `Accepts: ${allowedLabel} gear.`
+        : 'Equip compatible gear in this slot.';
+
+      slot.innerHTML = `<span class="item-slot__tag">${tagLabel}</span><span class="item-slot__placeholder">${placeholderLabel}</span>`;
+
+      slot.dataset.emptyLabel = placeholderLabel;
+      slot.dataset.description = description;
+      delete slot.dataset.itemType;
+    }
+
+    const canSlotAcceptItem = (slot, itemType) => {
+      if (!slot) {
+        return false;
+      }
+      const allowedTypes = getAllowedTypes(slot);
+      if (!allowedTypes) {
+        return true;
+      }
+      const normalizedItemType = normalizeType(itemType);
+      if (!normalizedItemType) {
+        // Allow clearing the slot (moving to an empty target).
+        return true;
+      }
+      return allowedTypes.includes(normalizedItemType);
+    };
+
     for (const slot of itemSlots) {
+      refreshEmptySlotLabel(slot);
       slot.setAttribute('tabindex', '0');
       slot.addEventListener('mouseenter', () => showItemDetail(slot));
       slot.addEventListener('focus', () => showItemDetail(slot));
@@ -402,31 +489,56 @@ async function main() {
     let dragSourceState;
     let dropTarget = null;
     let draggingPointerId = null;
+    let draggingItemType = '';
     const dragOffset = { x: 0, y: 0 };
 
     const getSlotState = (slot) => {
       const dataAttributes = {};
       for (const attr of Array.from(slot.attributes)) {
-        if (attr.name.startsWith('data-')) {
+        if (attr.name.startsWith('data-') && !SLOT_META_ATTRIBUTES.has(attr.name)) {
           dataAttributes[attr.name] = attr.value;
         }
       }
       return {
         html: slot.innerHTML,
-        dataAttributes
+        dataAttributes,
+        slotKind: slot?.dataset.slotKind || ''
       };
     };
 
     const applySlotState = (slot, state) => {
       for (const attr of Array.from(slot.attributes)) {
-        if (attr.name.startsWith('data-')) {
+        if (attr.name.startsWith('data-') && !SLOT_META_ATTRIBUTES.has(attr.name)) {
           slot.removeAttribute(attr.name);
         }
       }
+      const isEmptyState = state.dataAttributes['data-slot'] === 'empty';
+      const slotKind = slot?.dataset.slotKind || '';
+      const originKind = state.slotKind;
       for (const [name, value] of Object.entries(state.dataAttributes)) {
+        if (
+          isEmptyState &&
+          originKind &&
+          originKind !== slotKind &&
+          name !== 'data-slot'
+        ) {
+          continue;
+        }
         slot.setAttribute(name, value);
       }
-      slot.innerHTML = state.html;
+
+      if (
+        isEmptyState &&
+        originKind &&
+        originKind !== slotKind &&
+        slotKind === 'inventory'
+      ) {
+        slot.innerHTML = '<span class="item-slot__placeholder">Empty Pack Slot</span>';
+        slot.dataset.description = 'This pack slot is empty.';
+      } else {
+        slot.innerHTML = state.html;
+      }
+      refreshEmptySlotLabel(slot);
     };
 
     const updatePreviewPosition = (clientX, clientY) => {
@@ -437,8 +549,22 @@ async function main() {
       dragPreview.style.top = `${clientY - dragOffset.y}px`;
     };
 
+    const isValidDropTarget = (candidate) => {
+      if (!candidate || candidate === draggingSlot) {
+        return false;
+      }
+      if (!canSlotAcceptItem(candidate, draggingItemType)) {
+        return false;
+      }
+      const candidateItemType = getSlotItemType(candidate);
+      if (!canSlotAcceptItem(draggingSlot, candidateItemType)) {
+        return false;
+      }
+      return true;
+    };
+
     const setDropTarget = (candidate) => {
-      const nextTarget = candidate && candidate !== draggingSlot ? candidate : null;
+      const nextTarget = isValidDropTarget(candidate) ? candidate : null;
       if (dropTarget === nextTarget) {
         return;
       }
@@ -475,6 +601,7 @@ async function main() {
       dragPreview = undefined;
       dragSourceState = undefined;
       dropTarget = null;
+      draggingItemType = '';
     };
 
     const handlePointerMove = (event) => {
@@ -494,14 +621,20 @@ async function main() {
       const target = dropTarget && dropTarget !== draggingSlot ? dropTarget : null;
       const originSlot = draggingSlot;
       if (target && dragSourceState) {
-        const targetState = getSlotState(target);
-        applySlotState(target, dragSourceState);
-        applySlotState(draggingSlot, targetState);
-        if (hideItemDetail) {
-          hideItemDetail(true);
-          requestAnimationFrame(() => {
-            showItemDetail(target);
-          });
+        const targetItemType = getSlotItemType(target);
+        if (
+          canSlotAcceptItem(target, draggingItemType) &&
+          canSlotAcceptItem(draggingSlot, targetItemType)
+        ) {
+          const targetState = getSlotState(target);
+          applySlotState(target, dragSourceState);
+          applySlotState(draggingSlot, targetState);
+          if (hideItemDetail) {
+            hideItemDetail(true);
+            requestAnimationFrame(() => {
+              showItemDetail(target);
+            });
+          }
         }
       } else if (hideItemDetail && originSlot.matches(':hover')) {
         hideItemDetail(true);
@@ -518,6 +651,7 @@ async function main() {
     };
 
     const handlePointerDown = (event) => {
+      draggingItemType = '';
       if (!event.isPrimary || event.button !== 0) {
         return;
       }
@@ -533,6 +667,9 @@ async function main() {
         slot.setPointerCapture(event.pointerId);
       }
       dragSourceState = getSlotState(slot);
+      draggingItemType = normalizeType(
+        dragSourceState.dataAttributes['data-item-type']
+      );
       draggingSlot.classList.add('is-drag-source');
       const rect = slot.getBoundingClientRect();
       dragPreview = slot.cloneNode(true);
