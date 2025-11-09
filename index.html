@@ -226,11 +226,11 @@
     .gear-grid {
       display: grid;
       gap: 0.75rem;
-      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
     }
 
     .gear-grid {
-      grid-template-columns: repeat(2, minmax(110px, 1fr));
+      grid-template-columns: repeat(8, minmax(100px, 1fr));
     }
 
     .item-slot {
@@ -239,7 +239,7 @@
       border-radius: 0.85rem;
       background: rgba(12, 18, 28, 0.88);
       border: 1px solid rgba(120, 160, 255, 0.16);
-      min-height: 120px;
+      min-height: 80px;
       display: grid;
       align-content: start;
       gap: 0.5rem;
@@ -308,12 +308,36 @@
     .item-slot[data-rarity="legendary"] .item-slot__tag {
       background: rgba(255, 200, 120, 0.18);
       border-color: rgba(255, 205, 140, 0.55);
-      color: #ffe7c0;
     }
 
     .item-slot[data-rarity="rare"] {
       border-color: rgba(120, 160, 255, 0.45);
       box-shadow: inset 0 0 0 1px rgba(120, 160, 255, 0.3);
+    }
+
+    .item-slot[data-rarity="rare"] .item-slot__tag {
+      background: rgba(120, 160, 255, 0.18);
+      border-color: rgba(140, 180, 255, 0.55);
+    }
+
+    .item-slot[data-rarity="uncommon"] {
+      border-color: rgba(0, 120, 0, 0.45);
+      box-shadow: inset 0 0 0 1px rgba(0, 120, 0, 0.3);
+    }
+
+    .item-slot[data-rarity="uncommon"] .item-slot__tag {
+      background: rgba(0, 120, 0, 0.18);
+      border-color: rgba(0, 140, 0, 0.55);
+    }
+
+    .item-slot[data-rarity="common"] {
+      border-color: rgba(255, 255, 255, 0.45);
+      box-shadow: inset 0 0 0 1px rgba(120, 120, 120, 0.3);
+    }
+
+    .item-slot[data-rarity="common"] .item-slot__tag {
+      background: rgba(255, 255, 255, 0.18);
+      border-color: rgba(140, 140, 140, 0.55);
     }
 
     .item-slot[data-slot="empty"] {
@@ -421,7 +445,6 @@
     #item-detail-popover[data-rarity="legendary"] .item-popover__tag {
       background: rgba(255, 200, 120, 0.18);
       border-color: rgba(255, 205, 140, 0.45);
-      color: #ffe7c0;
     }
 
     #item-detail-popover[data-rarity="rare"] {
@@ -432,6 +455,26 @@
     #item-detail-popover[data-rarity="rare"] .item-popover__tag {
       background: rgba(120, 160, 255, 0.18);
       border-color: rgba(140, 180, 255, 0.35);
+    }
+
+    #item-detail-popover[data-rarity="uncommon"] {
+      border-color: rgba(0, 120, 0, 0.45);
+      box-shadow: 0 1.5rem 3rem rgba(0, 120, 0, 0.3);
+    }
+
+    #item-detail-popover[data-rarity="uncommon"] .item-popover__tag {
+      background: rgba(0, 120, 0, 0.45);
+      border-color: rgba(0, 140, 0, 0.3);
+    }
+
+    #item-detail-popover[data-rarity="common"] {
+      border-color: rgba(255, 255, 255, 0.45);
+      box-shadow: 0 1.5rem 3rem rgba(120, 120, 120, 0.3);
+    }
+
+    #item-detail-popover[data-rarity="common"] .item-popover__tag {
+      background: rgba(255, 255, 255, 0.45);
+      border-color: rgba(140, 140, 140, 0.3);
     }
 
     [role="tabpanel"][hidden] {
@@ -485,22 +528,22 @@
           <div class="stat-grid">
             <div class="stat-card" data-stat="power">
               <span>Power</span>
-              <strong class="stat-card__value">68</strong>
+              <strong class="stat-card__value">0</strong>
               <small class="stat-card__detail" hidden></small>
             </div>
             <div class="stat-card" data-stat="agility">
               <span>Agility</span>
-              <strong class="stat-card__value">54</strong>
+              <strong class="stat-card__value">0</strong>
               <small class="stat-card__detail" hidden></small>
             </div>
             <div class="stat-card" data-stat="resilience">
               <span>Resilience</span>
-              <strong class="stat-card__value">61</strong>
+              <strong class="stat-card__value">0</strong>
               <small class="stat-card__detail" hidden></small>
             </div>
             <div class="stat-card" data-stat="insight">
               <span>Insight</span>
-              <strong class="stat-card__value">47</strong>
+              <strong class="stat-card__value">0</strong>
               <small class="stat-card__detail" hidden></small>
             </div>
           </div>
@@ -516,54 +559,92 @@
                   data-slot-kind="gear"
                   data-slot-allowed="primary"
                   data-item-type="primary"
-                  data-rarity="legendary"
-                  data-description="Pulse rifle that overcharges shields, amplifying stagger damage."
-                  data-bonuses="Power:+24;Weakpoint Damage:+18%;Shield Break:+12%"
+                  data-rarity="common"
+                  data-description="For when you have no other options."
+                  data-bonuses="Power:+2"
                 >
                   <span class="item-slot__tag">Primary</span>
-                  <strong>VX-19 Duskrender</strong>
+                  <strong>Pea Shooter</strong>
                 </div>
                 <div
                   class="item-slot"
                   data-slot-kind="gear"
-                  data-slot-allowed="sidearm"
-                  data-item-type="sidearm"
-                  data-rarity="rare"
-                  data-description="Stores headshot charges to unleash a tracking kinetic blade."
-                  data-bonuses="Agility:+10;Finisher Damage:+22%;Combo Window:+0.6s"
+                  data-slot-allowed="melee"
+                  data-item-type="melee"
+                  data-rarity="common"
+                  data-description="You should find something else to use."
+                  data-bonuses="Agility:+1"
                 >
-                  <span class="item-slot__tag">Sidearm</span>
-                  <strong>Graviknife Sidearm</strong>
+                  <span class="item-slot__tag">Melee</span>
+                  <strong>Cracked Training Sword</strong>
                 </div>
                 <div
                   class="item-slot"
                   data-slot-kind="gear"
-                  data-slot-allowed="power"
-                  data-item-type="power"
-                  data-rarity="rare"
-                  data-description="Barrier generator that detonates on break to stagger hostiles."
-                  data-bonuses="Resilience:+16;Shield Capacity:+150;Cooldown Reduction:+12%"
+                  data-slot-allowed="head"
+                  data-item-type="head"
+                  data-rarity="common"
+                  data-description="It's a hat. Is it even mine?"
+                  data-bonuses="Resilience:+1"
                 >
-                  <span class="item-slot__tag">Power</span>
-                  <strong>Stormbound Aegis</strong>
+                  <span class="item-slot__tag">Head</span>
+                  <strong>Knit Cap</strong>
+                </div>
+                <div class="item-slot"
+                     data-slot-kind="gear"
+                     data-slot-allowed="chest"
+                     data-item-type="chest"
+                     data-rarity="uncommon"
+                     data-description="It's almost warm enough to wear outdoors."
+                     data-bonuses="Resilience:+3"
+                >
+                  <span class="item-slot__tag">Chest</span>
+                  <strong>Festive Sweater</strong>
+                </div>
+                <div class="item-slot"
+                     data-slot-kind="gear"
+                     data-slot-allowed="legs"
+                     data-item-type="legs"
+                     data-rarity="common"
+                     data-description="They definitely don't fit."
+                     data-bonuses="Resilience:+2;Agility:-2"
+                >
+                  <span class="item-slot__tag">Legs</span>
+                  <strong>Pajama Pants</strong>
+                </div>
+                <div class="item-slot"
+                     data-slot-kind="gear"
+                     data-slot-allowed="feet"
+                     data-item-type="feet"
+                     data-rarity="common"
+                     data-description="They are surprisingly uncomfortable."
+                     data-bonuses="Resilience:+1;Agility:-1"
+                >
+                  <span class="item-slot__tag">Feet</span>
+                  <strong>Offbrand Clogs</strong>
                 </div>
                 <div class="item-slot" data-slot-kind="gear" data-slot-allowed="grenade" data-slot="empty">
-                  <span class="item-slot__placeholder">Empty Module Slot</span>
+                  <span class="item-slot__placeholder">Empty Grenade Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="gear" data-slot-allowed="artifact" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Artifact Slot</span>
                 </div>
               </div>
             </div>
+          </div>
+          <div class="inventory-layout">
             <div class="inventory-section">
               <h4>Pack Inventory</h4>
               <div class="inventory-grid">
                 <div
                   class="item-slot"
                   data-slot-kind="inventory"
-                  data-item-type="consumable"
+                  data-item-type="use"
                   data-rarity="rare"
                   data-description="Rapidly mends 40% health over 5 seconds. Shares cooldown."
                   data-bonuses="Health Restored:+40%;Regeneration:+8% per second"
                 >
-                  <span class="item-slot__tag">Consumable</span>
+                  <span class="item-slot__tag">Use</span>
                   <strong>Field Medkit x3</strong>
                 </div>
                 <div
@@ -587,6 +668,39 @@
                 >
                   <span class="item-slot__tag">Artifact</span>
                   <strong>Chrono Loop</strong>
+                </div>
+                <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
                 </div>
                 <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
                   <span class="item-slot__placeholder">Empty Pack Slot</span>

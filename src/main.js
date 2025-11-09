@@ -211,15 +211,15 @@ fn fs_main(@location(0) color : vec3<f32>) -> @location(0) vec4<f32> {
 
 const BASE_PLAYER_STATS = {
   vitality: {
-    health: { label: 'Health', current: 1320, max: 1500 },
-    focus: { label: 'Focus', current: 420, max: 500 },
-    shield: { label: 'Shield', current: 275, max: 250 }
+    health: { label: 'Health', current: 22, max: 50 },
+    focus: { label: 'Focus', current: 0, max: 20 },
+    shield: { label: 'Shield', current: 0, max: 0 }
   },
   attributes: {
-    power: { label: 'Power', base: 44 },
-    agility: { label: 'Agility', base: 44 },
-    resilience: { label: 'Resilience', base: 45 },
-    insight: { label: 'Insight', base: 47 }
+    power: { label: 'Power', base: 10 },
+    agility: { label: 'Agility', base: 4 },
+    resilience: { label: 'Resilience', base: 12 },
+    insight: { label: 'Insight', base: 2 }
   }
 };
 
