@@ -8,11 +8,11 @@ import { getWeapon } from './game/playerWeapons.js';
 
 const DEFAULT_WEAPON_OFFSET = {
   forward: 0.6,
-  right: 0.22,
+  right: -0.22,
   up: -0.22
 };
 
-const DEFAULT_WEAPON_ROLL = 0.28;
+const DEFAULT_WEAPON_ROLL = 0.0;
 const WORLD_UP = [0, 1, 0];
 
 async function main() {

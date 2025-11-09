@@ -128,18 +128,18 @@ function buildPeaShooterVertices() {
     accent: [0.9, 0.95, 0.4]
   };
 
-  // Receiver/main body.
+  // Grip / magazine well underneath.
   pushPrism(
     data,
     {
-      minX: -0.08,
-      maxX: 0.08,
-      minY: -0.04,
-      maxY: 0.08,
-      minZ: -0.25,
-      maxZ: 0.25
+      minX: -0.05,
+      maxX: 0.05,
+      minY: -0.16,
+      maxY: -0.04,
+      minZ: -0.05,
+      maxZ: 0.10
     },
-    colors.body,
+    colors.grip,
     bounds
   );
 
@@ -173,18 +173,18 @@ function buildPeaShooterVertices() {
     bounds
   );
 
-  // Grip / magazine well underneath.
+  // Receiver/main body.
   pushPrism(
     data,
     {
-      minX: -0.05,
-      maxX: 0.05,
-      minY: -0.16,
-      maxY: -0.04,
-      minZ: -0.05,
-      maxZ: 0.10
+      minX: -0.08,
+      maxX: 0.08,
+      minY: -0.04,
+      maxY: 0.08,
+      minZ: -0.25,
+      maxZ: 0.25
     },
-    colors.grip,
+    colors.body,
     bounds
   );
 
