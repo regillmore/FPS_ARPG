@@ -121,3 +121,26 @@ export function mat4LookAt(out, eye, center, up) {
   out[15] = 1;
   return out;
 }
+
+export function mat4FromRotationTranslation(out, right, up, forward, translation) {
+  out[0] = right[0];
+  out[1] = right[1];
+  out[2] = right[2];
+  out[3] = 0;
+
+  out[4] = up[0];
+  out[5] = up[1];
+  out[6] = up[2];
+  out[7] = 0;
+
+  out[8] = forward[0];
+  out[9] = forward[1];
+  out[10] = forward[2];
+  out[11] = 0;
+
+  out[12] = translation[0];
+  out[13] = translation[1];
+  out[14] = translation[2];
+  out[15] = 1;
+  return out;
+}

@@ -49,7 +49,7 @@ fn fs_main(@location(0) color : vec3<f32>) -> @location(0) vec4<f32> {
     },
     primitive: {
       topology: 'triangle-list',
-      cullMode: 'front'
+      cullMode: 'none'
     },
     depthStencil: undefined
   });
