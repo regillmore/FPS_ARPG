@@ -252,6 +252,7 @@ async function main() {
     const popoverTag = itemPopover.querySelector('.item-popover__tag');
     const popoverName = itemPopover.querySelector('.item-popover__name');
     const popoverDescription = itemPopover.querySelector('.item-popover__description');
+    const popoverBonuses = itemPopover.querySelector('.item-popover__bonuses');
     const supportsPopover = typeof itemPopover.showPopover === 'function';
 
     const cancelScheduledHide = () => {
@@ -323,6 +324,10 @@ async function main() {
         popoverDescription.textContent = '';
         popoverDescription.hidden = true;
       }
+      if (popoverBonuses) {
+        popoverBonuses.innerHTML = '';
+        popoverBonuses.hidden = true;
+      }
       closePopover();
       itemPopover.style.left = '-9999px';
       itemPopover.style.top = '-9999px';
@@ -388,6 +393,33 @@ async function main() {
         popoverDescription.hidden = true;
       }
 
+      if (popoverBonuses) {
+        const bonuses = parseBonuses(slot);
+        if (bonuses.length > 0) {
+          popoverBonuses.innerHTML = '';
+          for (const { label, value } of bonuses) {
+            const item = document.createElement('li');
+            item.className = 'item-popover__bonus';
+
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'item-popover__bonus-label';
+            labelSpan.textContent = label;
+
+            const valueSpan = document.createElement('span');
+            valueSpan.className = 'item-popover__bonus-value';
+            valueSpan.textContent = value;
+
+            item.appendChild(labelSpan);
+            item.appendChild(valueSpan);
+            popoverBonuses.appendChild(item);
+          }
+          popoverBonuses.hidden = false;
+        } else {
+          popoverBonuses.innerHTML = '';
+          popoverBonuses.hidden = true;
+        }
+      }
+
       openPopover();
     };
 
@@ -432,6 +464,27 @@ async function main() {
       return allowed.map((type) => formatItemTypeLabel(type)).join(' / ');
     }
 
+    function parseBonuses(slot) {
+      const raw = slot?.dataset?.bonuses;
+      if (!raw) {
+        return [];
+      }
+      return raw
+        .split(/[;|]/)
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .map((entry) => {
+          const [labelPart, valuePart] = entry.split(':');
+          const label = labelPart?.trim();
+          const value = valuePart?.trim();
+          if (!label || !value) {
+            return null;
+          }
+          return { label, value };
+        })
+        .filter(Boolean);
+    }
+
     function refreshEmptySlotLabel(slot) {
       if (!slot) {
         return;
@@ -440,6 +493,7 @@ async function main() {
         delete slot.dataset.emptyLabel;
         return;
       }
+      delete slot.dataset.bonuses;
       if (slot.dataset.slotKind !== 'gear') {
         delete slot.dataset.emptyLabel;
         return;
@@ -535,6 +589,7 @@ async function main() {
       ) {
         slot.innerHTML = '<span class="item-slot__placeholder">Empty Pack Slot</span>';
         slot.dataset.description = 'This pack slot is empty.';
+        delete slot.dataset.bonuses;
       } else {
         slot.innerHTML = state.html;
       }

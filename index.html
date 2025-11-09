@@ -366,6 +366,36 @@
       line-height: 1.6;
     }
 
+    .item-popover__bonuses {
+      list-style: none;
+      margin: 0;
+      padding: 0.6rem 0 0;
+      border-top: 1px solid rgba(120, 160, 255, 0.18);
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .item-popover__bonus {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.75rem;
+      font-size: 0.82rem;
+    }
+
+    .item-popover__bonus-label {
+      color: rgba(200, 210, 240, 0.82);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 0.68rem;
+    }
+
+    .item-popover__bonus-value {
+      color: #f5f8ff;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+
     #item-detail-popover[data-rarity="legendary"] {
       border-color: rgba(255, 180, 80, 0.4);
       box-shadow: 0 1.5rem 3rem rgba(255, 180, 80, 0.22);
@@ -440,6 +470,7 @@
                   data-item-type="primary"
                   data-rarity="legendary"
                   data-description="Pulse rifle that overcharges shields, amplifying stagger damage."
+                  data-bonuses="Power:+24;Weakpoint Damage:+18%;Shield Break:+12%"
                 >
                   <span class="item-slot__tag">Primary</span>
                   <strong>VX-19 Duskrender</strong>
@@ -451,6 +482,7 @@
                   data-item-type="sidearm"
                   data-rarity="rare"
                   data-description="Stores headshot charges to unleash a tracking kinetic blade."
+                  data-bonuses="Agility:+10;Finisher Damage:+22%;Combo Window:+0.6s"
                 >
                   <span class="item-slot__tag">Sidearm</span>
                   <strong>Graviknife Sidearm</strong>
@@ -462,6 +494,7 @@
                   data-item-type="power"
                   data-rarity="rare"
                   data-description="Barrier generator that detonates on break to stagger hostiles."
+                  data-bonuses="Resilience:+16;Shield Capacity:+150;Cooldown Reduction:+12%"
                 >
                   <span class="item-slot__tag">Power</span>
                   <strong>Stormbound Aegis</strong>
@@ -480,6 +513,7 @@
                   data-item-type="consumable"
                   data-rarity="rare"
                   data-description="Rapidly mends 40% health over 5 seconds. Shares cooldown."
+                  data-bonuses="Health Restored:+40%;Regeneration:+8% per second"
                 >
                   <span class="item-slot__tag">Consumable</span>
                   <strong>Field Medkit x3</strong>
@@ -490,6 +524,7 @@
                   data-item-type="grenade"
                   data-rarity="rare"
                   data-description="Releases a chain lightning burst that weakens armored targets."
+                  data-bonuses="Shock Damage:+320;Chain Targets:5"
                 >
                   <span class="item-slot__tag">Grenade</span>
                   <strong>Arcwave Charge</strong>
@@ -500,6 +535,7 @@
                   data-item-type="artifact"
                   data-rarity="legendary"
                   data-description="Triggers a short rewind on shield break, restoring lost stamina."
+                  data-bonuses="Shield Restore:+25%;Stamina Refund:100%"
                 >
                   <span class="item-slot__tag">Artifact</span>
                   <strong>Chrono Loop</strong>
@@ -563,6 +599,7 @@
     <span class="item-popover__tag" hidden></span>
     <strong class="item-popover__name" hidden></strong>
     <p class="item-popover__description" hidden></p>
+    <ul class="item-popover__bonuses" hidden></ul>
   </div>
   <script type="module" src="./src/main.js"></script>
 </body>
