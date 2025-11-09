@@ -550,18 +550,12 @@ async function main() {
       }
       const slotRect = activeItemSlot.getBoundingClientRect();
       const popRect = itemPopover.getBoundingClientRect();
-      const gap = 16;
+      const gap = 48;
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
 
-      let left = slotRect.right + gap;
-      if (left + popRect.width > viewportWidth - gap) {
-        left = slotRect.left - gap - popRect.width;
-      }
-      left = Math.max(gap, Math.min(left, viewportWidth - popRect.width - gap));
-
-      let top = slotRect.top + slotRect.height / 2 - popRect.height / 2;
-      top = Math.max(gap, Math.min(top, viewportHeight - popRect.height - gap));
+      let left = (2 * (slotRect.left - (viewportWidth / 2) + (popRect.width / 2) + (slotRect.width))) - gap;
+      let top = (2 * (slotRect.top - (viewportHeight / 2) + (popRect.height / 2) + (slotRect.height))) - gap;
 
       itemPopover.style.left = `${Math.round(left)}px`;
       itemPopover.style.top = `${Math.round(top)}px`;
