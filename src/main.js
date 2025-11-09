@@ -551,17 +551,38 @@ async function main() {
       const slotRect = activeItemSlot.getBoundingClientRect();
       const popRect = itemPopover.getBoundingClientRect();
       const gap = 16;
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
+      const viewport = window.visualViewport;
+      const viewportScale = viewport?.scale || 1;
+      const viewportOffsetLeft = viewport?.offsetLeft || 0;
+      const viewportOffsetTop = viewport?.offsetTop || 0;
+      const viewportWidth = viewport ? viewport.width : window.innerWidth;
+      const viewportHeight = viewport ? viewport.height : window.innerHeight;
 
-      let left = slotRect.right + gap;
-      if (left + popRect.width > viewportWidth - gap) {
-        left = slotRect.left - gap - popRect.width;
+      const convertX = (value) =>
+        viewport ? (value - viewportOffsetLeft) / viewportScale + viewportOffsetLeft : value;
+      const convertY = (value) =>
+        viewport ? (value - viewportOffsetTop) / viewportScale + viewportOffsetTop : value;
+
+      const slotLeft = convertX(slotRect.left);
+      const slotRight = convertX(slotRect.right);
+      const slotTop = convertY(slotRect.top);
+      const slotHeight = viewport ? slotRect.height / viewportScale : slotRect.height;
+      const popWidth = viewport ? popRect.width / viewportScale : popRect.width;
+      const popHeight = viewport ? popRect.height / viewportScale : popRect.height;
+
+      const minLeft = viewportOffsetLeft + gap;
+      const maxLeft = viewportOffsetLeft + viewportWidth - popWidth - gap;
+      const minTop = viewportOffsetTop + gap;
+      const maxTop = viewportOffsetTop + viewportHeight - popHeight - gap;
+
+      let left = slotRight + gap;
+      if (left + popWidth > viewportOffsetLeft + viewportWidth - gap) {
+        left = slotLeft - gap - popWidth;
       }
-      left = Math.max(gap, Math.min(left, viewportWidth - popRect.width - gap));
+      left = Math.max(minLeft, Math.min(left, maxLeft));
 
-      let top = slotRect.top + slotRect.height / 2 - popRect.height / 2;
-      top = Math.max(gap, Math.min(top, viewportHeight - popRect.height - gap));
+      let top = slotTop + slotHeight / 2 - popHeight / 2;
+      top = Math.max(minTop, Math.min(top, maxTop));
 
       itemPopover.style.left = `${Math.round(left)}px`;
       itemPopover.style.top = `${Math.round(top)}px`;
