@@ -250,14 +250,6 @@ async function main() {
         );
         pass.setVertexBuffer(0, weaponGeometry.vertexBuffer);
         pass.draw(weaponGeometry.vertexCount, 1, 0, 0);
-
-        device.queue.writeBuffer(
-          uniformBuffer,
-          0,
-          viewProj.buffer,
-          viewProj.byteOffset,
-          viewProj.byteLength
-        );
       }
       pass.end();
 
