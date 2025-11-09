@@ -163,6 +163,23 @@
       margin-bottom: 0.2rem;
     }
 
+    .stat-card__value {
+      display: block;
+      font-size: 1.05rem;
+      letter-spacing: 0.04em;
+      color: #f5f8ff;
+      font-weight: 600;
+    }
+
+    .stat-card__detail {
+      display: block;
+      margin-top: 0.35rem;
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(200, 210, 240, 0.7);
+    }
+
     .bestiary-list,
     .achievement-list {
       display: grid;
@@ -444,17 +461,48 @@
         <section class="pause-menu__panel" role="tabpanel" id="panel-stats" aria-labelledby="tab-stats" data-tab="stats">
           <h3>Current Vitality</h3>
           <div class="stat-grid">
-            <div class="stat-card"><span>Health</span>1320 / 1500</div>
-            <div class="stat-card"><span>Focus</span>420 / 500</div>
-            <div class="stat-card"><span>Shield</span>275 / 400</div>
-            <div class="stat-card"><span>Experience</span>Lvl 12 Vanguard</div>
+            <div class="stat-card" data-stat="health">
+              <span>Health</span>
+              <strong class="stat-card__value">1320 / 1500</strong>
+              <small class="stat-card__detail" hidden></small>
+            </div>
+            <div class="stat-card" data-stat="focus">
+              <span>Focus</span>
+              <strong class="stat-card__value">420 / 500</strong>
+              <small class="stat-card__detail" hidden></small>
+            </div>
+            <div class="stat-card" data-stat="shield">
+              <span>Shield</span>
+              <strong class="stat-card__value">275 / 400</strong>
+              <small class="stat-card__detail" hidden></small>
+            </div>
+            <div class="stat-card">
+              <span>Experience</span>
+              <strong class="stat-card__value">Lvl 12 Vanguard</strong>
+            </div>
           </div>
           <h3>Core Attributes</h3>
           <div class="stat-grid">
-            <div class="stat-card"><span>Power</span>68</div>
-            <div class="stat-card"><span>Agility</span>54</div>
-            <div class="stat-card"><span>Resilience</span>61</div>
-            <div class="stat-card"><span>Insight</span>47</div>
+            <div class="stat-card" data-stat="power">
+              <span>Power</span>
+              <strong class="stat-card__value">68</strong>
+              <small class="stat-card__detail" hidden></small>
+            </div>
+            <div class="stat-card" data-stat="agility">
+              <span>Agility</span>
+              <strong class="stat-card__value">54</strong>
+              <small class="stat-card__detail" hidden></small>
+            </div>
+            <div class="stat-card" data-stat="resilience">
+              <span>Resilience</span>
+              <strong class="stat-card__value">61</strong>
+              <small class="stat-card__detail" hidden></small>
+            </div>
+            <div class="stat-card" data-stat="insight">
+              <span>Insight</span>
+              <strong class="stat-card__value">47</strong>
+              <small class="stat-card__detail" hidden></small>
+            </div>
           </div>
         </section>
         <section class="pause-menu__panel" role="tabpanel" id="panel-inventory" aria-labelledby="tab-inventory" data-tab="inventory" hidden>

@@ -209,6 +209,160 @@ fn fs_main(@location(0) color : vec3<f32>) -> @location(0) vec4<f32> {
   return pipeline;
 }
 
+const BASE_PLAYER_STATS = {
+  vitality: {
+    health: { label: 'Health', current: 1320, max: 1500 },
+    focus: { label: 'Focus', current: 420, max: 500 },
+    shield: { label: 'Shield', current: 275, max: 250 }
+  },
+  attributes: {
+    power: { label: 'Power', base: 44 },
+    agility: { label: 'Agility', base: 44 },
+    resilience: { label: 'Resilience', base: 45 },
+    insight: { label: 'Insight', base: 47 }
+  }
+};
+
+const GEAR_BONUS_RULES = {
+  power: { target: 'attribute', key: 'power' },
+  agility: { target: 'attribute', key: 'agility' },
+  resilience: { target: 'attribute', key: 'resilience' },
+  insight: { target: 'attribute', key: 'insight' },
+  'shield capacity': { target: 'vitality', key: 'shield', field: 'max' },
+  'shield max': { target: 'vitality', key: 'shield', field: 'max' },
+  'max shield': { target: 'vitality', key: 'shield', field: 'max' },
+  shield: { target: 'vitality', key: 'shield', field: 'max' },
+  health: { target: 'vitality', key: 'health', field: 'max' },
+  'max health': { target: 'vitality', key: 'health', field: 'max' },
+  'health capacity': { target: 'vitality', key: 'health', field: 'max' },
+  focus: { target: 'vitality', key: 'focus', field: 'max' },
+  'max focus': { target: 'vitality', key: 'focus', field: 'max' },
+  'focus capacity': { target: 'vitality', key: 'focus', field: 'max' }
+};
+
+const STAT_EPSILON = 1e-4;
+
+function parseBonuses(element) {
+  const raw = element?.dataset?.bonuses;
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(/[;|]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [labelPart, valuePart] = entry.split(':');
+      const label = labelPart?.trim();
+      const value = valuePart?.trim();
+      if (!label || !value) {
+        return null;
+      }
+      return { label, value };
+    })
+    .filter(Boolean);
+}
+
+function parseStatAmount(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value !== 'string') {
+    return NaN;
+  }
+  const match = value.trim().match(/^([+-]?\d+(?:\.\d+)?)/);
+  if (!match) {
+    return NaN;
+  }
+  return Number.parseFloat(match[1]);
+}
+
+function applyGearBonus(totals, entry) {
+  if (!entry) {
+    return;
+  }
+  const normalized = entry.label.trim().toLowerCase();
+  const rule = GEAR_BONUS_RULES[normalized];
+  if (!rule) {
+    return;
+  }
+  const amount = parseStatAmount(entry.value);
+  if (!Number.isFinite(amount)) {
+    return;
+  }
+  if (rule.target === 'attribute') {
+    const stat = totals.attributes[rule.key];
+    if (stat) {
+      stat.bonus += amount;
+    }
+    return;
+  }
+  if (rule.target === 'vitality') {
+    const stat = totals.vitality[rule.key];
+    if (!stat) {
+      return;
+    }
+    if (rule.field === 'current') {
+      stat.bonusCurrent += amount;
+    } else if (rule.field === 'both') {
+      stat.bonusCurrent += amount;
+      stat.bonusMax += amount;
+    } else {
+      stat.bonusMax += amount;
+    }
+  }
+}
+
+function computePlayerStatsFromEquipment(equippedSlots) {
+  const totals = {
+    vitality: {},
+    attributes: {}
+  };
+
+  for (const [key, stat] of Object.entries(BASE_PLAYER_STATS.vitality)) {
+    totals.vitality[key] = {
+      label: stat.label,
+      current: stat.current,
+      max: stat.max,
+      bonusCurrent: 0,
+      bonusMax: 0,
+      totalCurrent: stat.current,
+      totalMax: stat.max
+    };
+  }
+
+  for (const [key, stat] of Object.entries(BASE_PLAYER_STATS.attributes)) {
+    totals.attributes[key] = {
+      label: stat.label,
+      base: stat.base,
+      bonus: 0,
+      total: stat.base
+    };
+  }
+
+  for (const slot of equippedSlots || []) {
+    if (!slot || slot.dataset.slot === 'empty') {
+      continue;
+    }
+    const bonuses = parseBonuses(slot);
+    for (const bonus of bonuses) {
+      applyGearBonus(totals, bonus);
+    }
+  }
+
+  for (const stat of Object.values(totals.vitality)) {
+    stat.totalMax = stat.max + stat.bonusMax;
+    const baseCurrent = stat.current + stat.bonusCurrent;
+    stat.totalCurrent = Math.min(baseCurrent, stat.totalMax);
+  }
+
+  for (const stat of Object.values(totals.attributes)) {
+    stat.total = stat.base + stat.bonus;
+  }
+
+  return totals;
+}
+
 async function main() {
   const canvas = document.getElementById('gfx');
   const overlay = document.getElementById('overlay');
@@ -225,6 +379,123 @@ async function main() {
   let hideItemDetail;
   let activeItemSlot = null;
   let hidePopoverTimeout;
+
+  function resolveStatElements(statId) {
+    const card = pauseMenu.querySelector(`.stat-card[data-stat="${statId}"]`);
+    if (!card) {
+      return { value: null, detail: null };
+    }
+    return {
+      value: card.querySelector('.stat-card__value'),
+      detail: card.querySelector('.stat-card__detail')
+    };
+  }
+
+  const statElements = {
+    vitality: {
+      health: resolveStatElements('health'),
+      focus: resolveStatElements('focus'),
+      shield: resolveStatElements('shield')
+    },
+    attributes: {
+      power: resolveStatElements('power'),
+      agility: resolveStatElements('agility'),
+      resilience: resolveStatElements('resilience'),
+      insight: resolveStatElements('insight')
+    }
+  };
+
+  let statsUpdateScheduled = false;
+
+  function formatNumber(value) {
+    if (!Number.isFinite(value)) {
+      return '0';
+    }
+    if (Math.abs(value - Math.round(value)) < STAT_EPSILON) {
+      return String(Math.round(value));
+    }
+    return value.toFixed(2).replace(/\.?(?:0)+$/, '');
+  }
+
+  function formatSignedNumber(value) {
+    const prefix = value >= 0 ? '+' : '−';
+    return `${prefix}${formatNumber(Math.abs(value))}`;
+  }
+
+  function isApproximatelyZero(value) {
+    return Math.abs(value) < STAT_EPSILON;
+  }
+
+  function setDetail(element, text) {
+    if (!element) {
+      return;
+    }
+    if (text) {
+      element.textContent = text;
+      element.hidden = false;
+    } else {
+      element.textContent = '';
+      element.hidden = true;
+    }
+  }
+
+  function updateVitalityStat(statId, stat) {
+    const elements = statElements.vitality[statId];
+    if (!elements || !elements.value || !stat) {
+      return;
+    }
+    const currentText = formatNumber(stat.totalCurrent);
+    const maxText = formatNumber(stat.totalMax);
+    elements.value.textContent = `${currentText} / ${maxText}`;
+    const parts = [];
+    if (!isApproximatelyZero(stat.bonusCurrent)) {
+      parts.push(`${formatSignedNumber(stat.bonusCurrent)} current`);
+    }
+    if (!isApproximatelyZero(stat.bonusMax)) {
+      parts.push(`${formatSignedNumber(stat.bonusMax)} max`);
+    }
+    setDetail(elements.detail, parts.length ? `Gear ${parts.join(' · ')}` : '');
+  }
+
+  function updateAttributeStat(statId, stat) {
+    const elements = statElements.attributes[statId];
+    if (!elements || !elements.value || !stat) {
+      return;
+    }
+    elements.value.textContent = formatNumber(stat.total);
+    setDetail(
+      elements.detail,
+      !isApproximatelyZero(stat.bonus) ? `Gear ${formatSignedNumber(stat.bonus)}` : ''
+    );
+  }
+
+  function updatePlayerStats() {
+    if (!pauseMenu) {
+      return;
+    }
+    const equippedSlots = Array.from(
+      pauseMenu.querySelectorAll('.item-slot[data-slot-kind="gear"]')
+    );
+    const totals = computePlayerStatsFromEquipment(equippedSlots);
+    updateVitalityStat('health', totals.vitality.health);
+    updateVitalityStat('focus', totals.vitality.focus);
+    updateVitalityStat('shield', totals.vitality.shield);
+    updateAttributeStat('power', totals.attributes.power);
+    updateAttributeStat('agility', totals.attributes.agility);
+    updateAttributeStat('resilience', totals.attributes.resilience);
+    updateAttributeStat('insight', totals.attributes.insight);
+  }
+
+  function requestPlayerStatsUpdate() {
+    if (statsUpdateScheduled) {
+      return;
+    }
+    statsUpdateScheduled = true;
+    requestAnimationFrame(() => {
+      statsUpdateScheduled = false;
+      updatePlayerStats();
+    });
+  }
 
   function setActiveTab(tabId, { focus = false } = {}) {
     activeTab = tabId;
@@ -464,27 +735,6 @@ async function main() {
       return allowed.map((type) => formatItemTypeLabel(type)).join(' / ');
     }
 
-    function parseBonuses(slot) {
-      const raw = slot?.dataset?.bonuses;
-      if (!raw) {
-        return [];
-      }
-      return raw
-        .split(/[;|]/)
-        .map((entry) => entry.trim())
-        .filter(Boolean)
-        .map((entry) => {
-          const [labelPart, valuePart] = entry.split(':');
-          const label = labelPart?.trim();
-          const value = valuePart?.trim();
-          if (!label || !value) {
-            return null;
-          }
-          return { label, value };
-        })
-        .filter(Boolean);
-    }
-
     function refreshEmptySlotLabel(slot) {
       if (!slot) {
         return;
@@ -594,6 +844,7 @@ async function main() {
         slot.innerHTML = state.html;
       }
       refreshEmptySlotLabel(slot);
+      requestPlayerStatsUpdate();
     };
 
     const updatePreviewPosition = (clientX, clientY) => {
@@ -771,6 +1022,8 @@ async function main() {
     }
   }
 
+  updatePlayerStats();
+
   function setPaused(next) {
     if (paused === next) return;
     paused = next;
@@ -781,6 +1034,7 @@ async function main() {
     pauseMenu.setAttribute('aria-hidden', String(!paused));
     overlay.style.display = paused ? 'none' : '';
     if (paused) {
+      updatePlayerStats();
       setActiveTab(activeTab, { focus: true });
       if (controller) {
         controller.resetMovement();
