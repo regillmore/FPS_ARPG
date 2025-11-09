@@ -612,9 +612,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         document.exitPointerLock();
       }
     } else if (document.pointerLockElement !== canvas) {
-      canvas?.requestPointerLock?.().catch(() => {
-        // Ignore failures
-      });
+      canvas?.requestPointerLock?.();
     }
   }
 
