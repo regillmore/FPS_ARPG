@@ -110,7 +110,44 @@ function pushPrism(target, bounds, color, geometryBounds) {
   pushQuad(target, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], color, geometryBounds);
 }
 
-function buildPeaShooterVertices() {
+const DEFAULT_PEA_SHOOTER_PALETTE = Object.freeze({
+  body: [0.32, 0.82, 0.36],
+  barrel: [0.14, 0.45, 0.18],
+  grip: [0.18, 0.18, 0.2],
+  accent: [0.9, 0.95, 0.4]
+});
+
+function normalizeColor(color, fallback) {
+  if (!color || !Array.isArray(color)) {
+    return [...fallback];
+  }
+  const [r = fallback[0], g = fallback[1], b = fallback[2]] = color;
+  const rValue = Number(r);
+  const gValue = Number(g);
+  const bValue = Number(b);
+  return [
+    Number.isFinite(rValue) ? rValue : fallback[0],
+    Number.isFinite(gValue) ? gValue : fallback[1],
+    Number.isFinite(bValue) ? bValue : fallback[2]
+  ];
+}
+
+function normalizePeaShooterPalette(overrides = {}) {
+  return {
+    body: normalizeColor(overrides.body, DEFAULT_PEA_SHOOTER_PALETTE.body),
+    barrel: normalizeColor(overrides.barrel, DEFAULT_PEA_SHOOTER_PALETTE.barrel),
+    grip: normalizeColor(overrides.grip, DEFAULT_PEA_SHOOTER_PALETTE.grip),
+    accent: normalizeColor(overrides.accent, DEFAULT_PEA_SHOOTER_PALETTE.accent)
+  };
+}
+
+function paletteKey(palette) {
+  return Object.values(palette)
+    .map((color) => color.map((component) => component.toFixed(6)).join(','))
+    .join('|');
+}
+
+function buildPeaShooterVertices(palette) {
   const data = [];
   const bounds = {
     minX: Infinity,
@@ -119,13 +156,6 @@ function buildPeaShooterVertices() {
     maxX: -Infinity,
     maxY: -Infinity,
     maxZ: -Infinity
-  };
-
-  const colors = {
-    body: [0.32, 0.82, 0.36],
-    barrel: [0.14, 0.45, 0.18],
-    grip: [0.18, 0.18, 0.2],
-    accent: [0.9, 0.95, 0.4]
   };
 
   // Grip / magazine well underneath.
@@ -139,7 +169,7 @@ function buildPeaShooterVertices() {
       minZ: -0.05,
       maxZ: 0.10
     },
-    colors.grip,
+    palette.grip,
     bounds
   );
 
@@ -154,7 +184,7 @@ function buildPeaShooterVertices() {
       minZ: 0.25,
       maxZ: 0.45
     },
-    colors.barrel,
+    palette.barrel,
     bounds
   );
 
@@ -169,7 +199,7 @@ function buildPeaShooterVertices() {
       minZ: -0.10,
       maxZ: 0.10
     },
-    colors.accent,
+    palette.accent,
     bounds
   );
 
@@ -184,17 +214,30 @@ function buildPeaShooterVertices() {
       minZ: -0.25,
       maxZ: 0.25
     },
-    colors.body,
+    palette.body,
     bounds
   );
 
   return {
-    vertices: new Float32Array(data),
+    vertexData: new Float32Array(data),
     bounds
   };
 }
 
-const { vertices: peaShooterVertexData, bounds: peaShooterBounds } = buildPeaShooterVertices();
+const peaShooterVertexCache = new Map();
+
+function getPeaShooterVertexResources(paletteOverrides) {
+  const palette = normalizePeaShooterPalette(paletteOverrides);
+  const key = paletteKey(palette);
+  if (!peaShooterVertexCache.has(key)) {
+    const { vertexData, bounds } = buildPeaShooterVertices(palette);
+    peaShooterVertexCache.set(key, {
+      vertexData,
+      bounds: Object.freeze({ ...bounds })
+    });
+  }
+  return peaShooterVertexCache.get(key);
+}
 
 export function createWeaponGeometry(device, vertexData, bounds, options = {}) {
   const usage = options.usage ?? (GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
@@ -216,7 +259,9 @@ export function createWeaponGeometry(device, vertexData, bounds, options = {}) {
 }
 
 export function createPeaShooterGeometry(device, options = {}) {
-  return createWeaponGeometry(device, peaShooterVertexData, peaShooterBounds, options);
+  const { palette: paletteOverrides, ...rest } = options;
+  const { vertexData, bounds } = getPeaShooterVertexResources(paletteOverrides);
+  return createWeaponGeometry(device, vertexData, bounds, rest);
 }
 
 export const PeaShooter = registerWeapon(
@@ -232,6 +277,33 @@ export const PeaShooter = registerWeapon(
       reloadTime: 1.6
     },
     createGeometry: (device, options) => createPeaShooterGeometry(device, options)
+  })
+);
+
+const PEA_SHOOTER_II_PALETTE = Object.freeze({
+  body: [0.25, 0.78, 0.92],
+  barrel: [0.12, 0.36, 0.72],
+  grip: [0.16, 0.18, 0.36],
+  accent: [0.98, 0.62, 0.24]
+});
+
+export const PeaShooterII = registerWeapon(
+  new WeaponDefinition({
+    id: 'pea-shooter-ii',
+    displayName: 'Pea Shooter II',
+    description: 'Upgraded plasma repeater with stabilized recoil and tuned coils.',
+    stats: {
+      baseDamage: 8,
+      rateOfFire: 5.2,
+      muzzleVelocity: 42,
+      magazineSize: 20,
+      reloadTime: 1.45
+    },
+    createGeometry: (device, options) =>
+      createPeaShooterGeometry(device, {
+        ...(options ?? {}),
+        palette: PEA_SHOOTER_II_PALETTE
+      })
   })
 );
 

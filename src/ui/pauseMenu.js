@@ -356,6 +356,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       slot.dataset.emptyLabel = placeholderLabel;
       slot.dataset.description = description;
       delete slot.dataset.itemType;
+      delete slot.dataset.weaponId;
     }
 
     const canSlotAcceptItem = (slot, itemType) => {
@@ -405,6 +406,24 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       };
     };
 
+    const emitSlotChange = (slot) => {
+      if (!slot) {
+        return;
+      }
+      window.dispatchEvent(
+        new CustomEvent('player-slot-change', {
+          detail: {
+            slot,
+            slotKind: slot.dataset.slotKind || '',
+            slotAllowed: slot.dataset.slotAllowed || '',
+            slotState: slot.dataset.slot || '',
+            itemType: slot.dataset.itemType || '',
+            weaponId: slot.dataset.weaponId || ''
+          }
+        })
+      );
+    };
+
     const applySlotState = (slot, state) => {
       for (const attr of Array.from(slot.attributes)) {
         if (attr.name.startsWith('data-') && !SLOT_META_ATTRIBUTES.has(attr.name)) {
@@ -440,6 +459,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       }
       refreshEmptySlotLabel(slot);
       requestPlayerStatsUpdate();
+      emitSlotChange(slot);
     };
 
     const updatePreviewPosition = (clientX, clientY) => {
