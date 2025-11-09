@@ -19,6 +19,16 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   const pauseContent = pauseMenu.querySelector('.pause-menu__content');
   const itemSlots = Array.from(pauseMenu.querySelectorAll('.item-slot'));
 
+  for (const slot of itemSlots) {
+    if (!slot.dataset.itemAbbr) {
+      continue;
+    }
+    const label = slot.querySelector('strong');
+    if (label) {
+      label.textContent = slot.dataset.itemAbbr;
+    }
+  }
+
   let activeTab = 'stats';
   let paused = false;
   let controller = null;
@@ -234,7 +244,13 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       }
 
       const tagLabel = slot.querySelector('.item-slot__tag')?.textContent || '';
-      const name = slot.querySelector('strong')?.textContent || slot.dataset.emptyLabel || '';
+      const strongLabel = slot.querySelector('strong');
+      const name =
+        slot.dataset.itemName ||
+        strongLabel?.dataset.itemName ||
+        strongLabel?.textContent ||
+        slot.dataset.emptyLabel ||
+        '';
       const description = slot.dataset.description || '';
       const bonuses = slot.dataset.bonuses;
       const rarity = slot.dataset.rarity || '';
@@ -357,6 +373,8 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       slot.dataset.description = description;
       delete slot.dataset.itemType;
       delete slot.dataset.weaponId;
+      delete slot.dataset.itemName;
+      delete slot.dataset.itemAbbr;
     }
 
     const canSlotAcceptItem = (slot, itemType) => {
@@ -454,6 +472,8 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         slot.innerHTML = '<span class="item-slot__placeholder">Empty Pack Slot</span>';
         slot.dataset.description = 'This pack slot is empty.';
         delete slot.dataset.bonuses;
+        delete slot.dataset.itemName;
+        delete slot.dataset.itemAbbr;
       } else {
         slot.innerHTML = state.html;
       }
