@@ -183,12 +183,21 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       if (!activeItemSlot) {
         return;
       }
-      const rect = activeItemSlot.getBoundingClientRect();
+      const slotRect = activeItemSlot.getBoundingClientRect();
       const popRect = itemPopover.getBoundingClientRect();
-      const x = rect.right + 12;
-      const y = rect.top + rect.height / 2 - popRect.height / 2;
-      itemPopover.style.left = `${x}px`;
-      itemPopover.style.top = `${Math.max(12, Math.min(window.innerHeight - popRect.height - 12, y))}px`;
+      const gap = 48;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      let left = (2 * (slotRect.left - (viewportWidth / 2) + (popRect.width / 2) + (slotRect.width))) - gap;
+      if (left + popRect.width > viewportWidth - gap) {
+        left = slotRect.left - gap - popRect.width;
+      }
+
+      let top = (2 * (slotRect.top - (viewportHeight / 2) + (popRect.height / 2) + (slotRect.height))) - gap;
+
+      itemPopover.style.left = `${Math.round(left)}px`;
+      itemPopover.style.top = `${Math.round(top)}px`;
     };
 
     const cancelScheduledHide = () => {
