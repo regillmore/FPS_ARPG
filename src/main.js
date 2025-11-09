@@ -349,7 +349,9 @@ async function main() {
       const itemName = slot.querySelector('strong')?.textContent?.trim();
       const isEmpty = slot.dataset.slot === 'empty';
       const description = slot.dataset.description;
-      const fallbackName = isEmpty ? slot.textContent.trim() : '';
+      const fallbackName = isEmpty
+        ? slot.dataset.emptyLabel || slot.textContent.trim()
+        : '';
       const rarity = slot.dataset.rarity;
 
       if (rarity) {
@@ -390,6 +392,7 @@ async function main() {
     };
 
     for (const slot of itemSlots) {
+      refreshEmptySlotLabel(slot);
       slot.setAttribute('tabindex', '0');
       slot.addEventListener('mouseenter', () => showItemDetail(slot));
       slot.addEventListener('focus', () => showItemDetail(slot));
@@ -421,6 +424,49 @@ async function main() {
       }
       return parsed;
     };
+
+    function formatItemTypeLabel(value) {
+      return value
+        .split(/[-_\s]+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+    }
+
+    function formatAllowedTypeLabel(slot) {
+      const allowed = getAllowedTypes(slot);
+      if (!allowed || allowed.length === 0) {
+        return '';
+      }
+      return allowed.map((type) => formatItemTypeLabel(type)).join(' / ');
+    }
+
+    function refreshEmptySlotLabel(slot) {
+      if (!slot) {
+        return;
+      }
+      if (slot.dataset.slot !== 'empty') {
+        delete slot.dataset.emptyLabel;
+        return;
+      }
+      if (slot.dataset.slotKind !== 'gear') {
+        delete slot.dataset.emptyLabel;
+        return;
+      }
+
+      const allowedLabel = formatAllowedTypeLabel(slot);
+      const tagLabel = allowedLabel || 'Gear';
+      const placeholderLabel = `Empty ${tagLabel} Slot`;
+      const description = allowedLabel
+        ? `Accepts: ${allowedLabel} gear.`
+        : 'Equip compatible gear in this slot.';
+
+      slot.innerHTML = `<span class="item-slot__tag">${tagLabel}</span><span class="item-slot__placeholder">${placeholderLabel}</span>`;
+
+      slot.dataset.emptyLabel = placeholderLabel;
+      slot.dataset.description = description;
+      delete slot.dataset.itemType;
+    }
 
     const canSlotAcceptItem = (slot, itemType) => {
       if (!slot) {
@@ -455,7 +501,8 @@ async function main() {
       }
       return {
         html: slot.innerHTML,
-        dataAttributes
+        dataAttributes,
+        slotKind: slot?.dataset.slotKind || ''
       };
     };
 
@@ -465,10 +512,33 @@ async function main() {
           slot.removeAttribute(attr.name);
         }
       }
+      const isEmptyState = state.dataAttributes['data-slot'] === 'empty';
+      const slotKind = slot?.dataset.slotKind || '';
+      const originKind = state.slotKind;
       for (const [name, value] of Object.entries(state.dataAttributes)) {
+        if (
+          isEmptyState &&
+          originKind &&
+          originKind !== slotKind &&
+          name !== 'data-slot'
+        ) {
+          continue;
+        }
         slot.setAttribute(name, value);
       }
-      slot.innerHTML = state.html;
+
+      if (
+        isEmptyState &&
+        originKind &&
+        originKind !== slotKind &&
+        slotKind === 'inventory'
+      ) {
+        slot.innerHTML = '<span class="item-slot__placeholder">Empty Pack Slot</span>';
+        slot.dataset.description = 'This pack slot is empty.';
+      } else {
+        slot.innerHTML = state.html;
+      }
+      refreshEmptySlotLabel(slot);
     };
 
     const updatePreviewPosition = (clientX, clientY) => {

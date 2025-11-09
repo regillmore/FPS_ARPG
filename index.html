@@ -264,6 +264,11 @@
       letter-spacing: 0.03em;
     }
 
+    .item-slot__placeholder {
+      display: block;
+      font-weight: 600;
+    }
+
     .item-slot__tag {
       position: absolute;
       top: 0.6rem;
@@ -462,7 +467,7 @@
                   <strong>Stormbound Aegis</strong>
                 </div>
                 <div class="item-slot" data-slot-kind="gear" data-slot-allowed="module" data-slot="empty">
-                  Empty Module Slot
+                  <span class="item-slot__placeholder">Empty Module Slot</span>
                 </div>
               </div>
             </div>
@@ -500,10 +505,10 @@
                   <strong>Chrono Loop</strong>
                 </div>
                 <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
-                  Empty Pack Slot
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
                 </div>
                 <div class="item-slot" data-slot-kind="inventory" data-slot="empty">
-                  Empty Pack Slot
+                  <span class="item-slot__placeholder">Empty Pack Slot</span>
                 </div>
               </div>
             </div>
