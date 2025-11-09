@@ -37,18 +37,35 @@ async function main() {
       console.warn('Failed to create geometry for the default Pea Shooter weapon.');
     }
 
-    const uniformBuffer = device.createBuffer({
+    const worldUniformBuffer = device.createBuffer({
       size: 64,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
     });
 
-    const uniformBindGroup = device.createBindGroup({
+    const worldUniformBindGroup = device.createBindGroup({
       layout: pipeline.getBindGroupLayout(0),
       entries: [
         {
           binding: 0,
           resource: {
-            buffer: uniformBuffer
+            buffer: worldUniformBuffer
+          }
+        }
+      ]
+    });
+
+    const weaponUniformBuffer = device.createBuffer({
+      size: 64,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+
+    const weaponUniformBindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        {
+          binding: 0,
+          resource: {
+            buffer: weaponUniformBuffer
           }
         }
       ]
@@ -214,7 +231,7 @@ async function main() {
       }
 
       device.queue.writeBuffer(
-        uniformBuffer,
+        worldUniformBuffer,
         0,
         viewProj.buffer,
         viewProj.byteOffset,
@@ -236,20 +253,22 @@ async function main() {
       });
 
       pass.setPipeline(pipeline);
-      pass.setBindGroup(0, uniformBindGroup);
+      pass.setBindGroup(0, worldUniformBindGroup);
       pass.setVertexBuffer(0, vertexBuffer);
       pass.draw(vertexCount, 1, 0, 0);
 
       if (weaponReady && weaponGeometry) {
         device.queue.writeBuffer(
-          uniformBuffer,
+          weaponUniformBuffer,
           0,
           weaponViewProj.buffer,
           weaponViewProj.byteOffset,
           weaponViewProj.byteLength
         );
+        pass.setBindGroup(0, weaponUniformBindGroup);
         pass.setVertexBuffer(0, weaponGeometry.vertexBuffer);
         pass.draw(weaponGeometry.vertexCount, 1, 0, 0);
+        pass.setBindGroup(0, worldUniformBindGroup);
       }
       pass.end();
 
