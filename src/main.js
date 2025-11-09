@@ -555,6 +555,10 @@ async function main() {
       const viewportHeight = window.innerHeight;
 
       let left = (2 * (slotRect.left - (viewportWidth / 2) + (popRect.width / 2) + (slotRect.width))) - gap;
+      if (left + popRect.width > viewportWidth - gap) {
+        left = slotRect.left - gap - popRect.width;
+      }
+
       let top = (2 * (slotRect.top - (viewportHeight / 2) + (popRect.height / 2) + (slotRect.height))) - gap;
 
       itemPopover.style.left = `${Math.round(left)}px`;
