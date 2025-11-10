@@ -136,13 +136,18 @@ function createImpactPayload(projectile, hit) {
   };
 }
 
-function computeBoundsCollision(position, velocity, deltaTime, bounds) {
+function cloneInvertedVector(source) {
+  return new Float32Array([-source[0], -source[1], -source[2]]);
+}
+
+function computeBoundsCollision(position, velocity, deltaTime, bounds, options = {}) {
   if (!bounds || deltaTime <= 0) {
     return null;
   }
 
   let earliestT = Infinity;
   let impact = null;
+  const invertNormal = options?.invertNormal === true;
 
   const tryPlane = (axis, planeValue, normalKey) => {
     const normal = IMPACT_NORMALS[normalKey];
@@ -184,7 +189,7 @@ function computeBoundsCollision(position, velocity, deltaTime, bounds) {
         axis === 1 ? planeValue : hitY,
         axis === 2 ? planeValue : hitZ
       ]),
-      normal: cloneVector(normal),
+      normal: invertNormal ? cloneInvertedVector(normal) : cloneVector(normal),
       time: t
     };
   };
@@ -294,7 +299,8 @@ export function createProjectileManager(device, options = {}) {
             projectile.position,
             projectile.velocity,
             deltaTime,
-            colliderBounds
+            colliderBounds,
+            { invertNormal: true }
           );
           if (!hit) {
             continue;
