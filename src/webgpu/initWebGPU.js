@@ -11,8 +11,11 @@ export async function initWebGPU(canvas) {
   const device = await adapter.requestDevice();
   const context = canvas.getContext('webgpu');
   const format = navigator.gpu.getPreferredCanvasFormat();
+  const depthFormat = 'depth24plus';
 
   let configured = false;
+  let depthTexture = null;
+  let depthTextureView = null;
 
   function resize() {
     const devicePixelRatio = window.devicePixelRatio || 1;
@@ -28,6 +31,13 @@ export async function initWebGPU(canvas) {
         width,
         height
       });
+      depthTexture?.destroy?.();
+      depthTexture = device.createTexture({
+        size: { width, height },
+        format: depthFormat,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT
+      });
+      depthTextureView = depthTexture.createView();
       configured = true;
     }
   }
@@ -35,5 +45,12 @@ export async function initWebGPU(canvas) {
   resize();
   window.addEventListener('resize', resize);
 
-  return { device, context, format, resize };
+  return {
+    device,
+    context,
+    format,
+    depthFormat,
+    resize,
+    getDepthTextureView: () => depthTextureView
+  };
 }
