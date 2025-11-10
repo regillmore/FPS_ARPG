@@ -274,7 +274,11 @@ export const PeaShooter = registerWeapon(
       rateOfFire: 4.5,
       muzzleVelocity: 38,
       magazineSize: 18,
-      reloadTime: 1.6
+      reloadTime: 1.6,
+      projectileColor: [0.9, 0.95, 0.4],
+      projectileSize: 0.08,
+      projectileLifetime: 2.25,
+      projectileMuzzleOffset: 0.9
     },
     createGeometry: (device, options) => createPeaShooterGeometry(device, options)
   })
@@ -297,7 +301,11 @@ export const PeaShooterII = registerWeapon(
       rateOfFire: 5.2,
       muzzleVelocity: 42,
       magazineSize: 20,
-      reloadTime: 1.45
+      reloadTime: 1.45,
+      projectileColor: [0.98, 0.62, 0.24],
+      projectileSize: 0.085,
+      projectileLifetime: 2.4,
+      projectileMuzzleOffset: 0.92
     },
     createGeometry: (device, options) =>
       createPeaShooterGeometry(device, {
