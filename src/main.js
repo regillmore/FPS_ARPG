@@ -6,6 +6,7 @@ import { createRoomGeometry } from './world/roomGeometry.js';
 import { setupPauseMenu } from './ui/pauseMenu.js';
 import { getWeapon } from './game/playerWeapons.js';
 import { createProjectileManager } from './game/projectiles.js';
+import { createBulletHoleManager } from './game/bulletHoles.js';
 
 const DEFAULT_WEAPON_OFFSET = {
   forward: 0.6,
@@ -39,7 +40,21 @@ async function main() {
     const { device, context, format, resize } = await initWebGPU(canvas);
     const pipeline = createBasicPipeline(device, format);
     const { vertexBuffer, vertexCount, bounds } = createRoomGeometry(device);
-    const projectileManager = createProjectileManager(device);
+    const bulletHoleManager = createBulletHoleManager(device);
+    const projectileManager = createProjectileManager(device, {
+      bounds,
+      onImpact: (impact) => {
+        const size = Number.isFinite(impact.projectileSize)
+          ? Math.max(impact.projectileSize * 3, 0.12)
+          : undefined;
+        bulletHoleManager.spawnBulletHole({
+          position: impact.position,
+          normal: impact.normal,
+          size,
+          color: impact.projectileColor
+        });
+      }
+    });
     const primaryWeaponSlot = document.querySelector(PRIMARY_WEAPON_SLOT_SELECTOR);
     const fallbackWeapon = getWeapon('pea-shooter');
 
@@ -324,6 +339,7 @@ async function main() {
       }
 
       if (!isPaused) {
+        bulletHoleManager.update(deltaTime);
         projectileManager.update(deltaTime);
         if (primaryFireCooldown > 0) {
           primaryFireCooldown = Math.max(primaryFireCooldown - deltaTime, 0);
@@ -385,6 +401,7 @@ async function main() {
         viewProj.byteLength
       );
 
+      bulletHoleManager.syncGPU();
       projectileManager.syncGPU();
 
       const encoder = device.createCommandEncoder();
@@ -405,6 +422,12 @@ async function main() {
       pass.setBindGroup(0, worldUniformBindGroup);
       pass.setVertexBuffer(0, vertexBuffer);
       pass.draw(vertexCount, 1, 0, 0);
+
+      const bulletHoleVertexCount = bulletHoleManager.getVertexCount();
+      if (bulletHoleVertexCount > 0) {
+        pass.setVertexBuffer(0, bulletHoleManager.getVertexBuffer());
+        pass.draw(bulletHoleVertexCount, 1, 0, 0);
+      }
 
       const projectileVertexCount = projectileManager.getVertexCount();
       if (projectileVertexCount > 0) {

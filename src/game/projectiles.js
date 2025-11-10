@@ -1,11 +1,20 @@
 const DEFAULT_MAX_PROJECTILES = 256;
 const FLOATS_PER_VERTEX = 6;
 const VERTICES_PER_PROJECTILE = 36;
-const FLOATS_PER_PROJECTILE = VERTICES_PER_PROJECTILE * FLOATS_PER_VERTEX
+const FLOATS_PER_PROJECTILE = VERTICES_PER_PROJECTILE * FLOATS_PER_VERTEX;
 const DEFAULT_PROJECTILE_SIZE = 0.075;
 const DEFAULT_PROJECTILE_SPEED = 24;
 const DEFAULT_PROJECTILE_LIFETIME = 2.0;
 const DEFAULT_PROJECTILE_COLOR = Object.freeze([0.9, 0.95, 0.4]);
+const IMPACT_NORMALS = Object.freeze({
+  minX: new Float32Array([1, 0, 0]),
+  maxX: new Float32Array([-1, 0, 0]),
+  minY: new Float32Array([0, 1, 0]),
+  maxY: new Float32Array([0, -1, 0]),
+  minZ: new Float32Array([0, 0, 1]),
+  maxZ: new Float32Array([0, 0, -1])
+});
+const COLLISION_EPSILON = 1e-5;
 
 function clampMaxProjectiles(value) {
   const maxValue = Number(value);
@@ -111,8 +120,84 @@ function writeCube(target, offset, center, size, color) {
   return offset;
 }
 
+function cloneVector(source) {
+  return new Float32Array([source[0], source[1], source[2]]);
+}
+
+function computeBoundsCollision(position, velocity, deltaTime, bounds) {
+  if (!bounds || deltaTime <= 0) {
+    return null;
+  }
+
+  let earliestT = Infinity;
+  let impact = null;
+
+  const tryPlane = (axis, planeValue, normalKey, isMinPlane) => {
+    const normal = IMPACT_NORMALS[normalKey];
+    if (!normal) {
+      return;
+    }
+
+    const start = position[axis];
+    const velocityComponent = velocity[axis];
+    if (Math.abs(velocityComponent) <= COLLISION_EPSILON) {
+      return;
+    }
+
+    if (isMinPlane) {
+      if (velocityComponent >= 0) {
+        return;
+      }
+    } else if (velocityComponent <= 0) {
+      return;
+    }
+
+    const delta = velocityComponent * deltaTime;
+    const t = (planeValue - start) / delta;
+    if (t < 0 || t > 1 || t >= earliestT) {
+      return;
+    }
+
+    const hitX = position[0] + velocity[0] * deltaTime * t;
+    const hitY = position[1] + velocity[1] * deltaTime * t;
+    const hitZ = position[2] + velocity[2] * deltaTime * t;
+
+    if (
+      hitX < bounds.minX - COLLISION_EPSILON ||
+      hitX > bounds.maxX + COLLISION_EPSILON ||
+      hitY < bounds.minY - COLLISION_EPSILON ||
+      hitY > bounds.maxY + COLLISION_EPSILON ||
+      hitZ < bounds.minZ - COLLISION_EPSILON ||
+      hitZ > bounds.maxZ + COLLISION_EPSILON
+    ) {
+      return;
+    }
+
+    earliestT = t;
+    impact = {
+      position: new Float32Array([
+        axis === 0 ? planeValue : hitX,
+        axis === 1 ? planeValue : hitY,
+        axis === 2 ? planeValue : hitZ
+      ]),
+      normal: cloneVector(normal)
+    };
+  };
+
+  tryPlane(0, bounds.minX, 'minX', true);
+  tryPlane(0, bounds.maxX, 'maxX', false);
+  tryPlane(1, bounds.minY, 'minY', true);
+  tryPlane(1, bounds.maxY, 'maxY', false);
+  tryPlane(2, bounds.minZ, 'minZ', true);
+  tryPlane(2, bounds.maxZ, 'maxZ', false);
+
+  return impact;
+}
+
 export function createProjectileManager(device, options = {}) {
   const maxProjectiles = clampMaxProjectiles(options.maxProjectiles ?? DEFAULT_MAX_PROJECTILES);
+  const collisionBounds = options.bounds ?? null;
+  const impactCallback = typeof options.onImpact === 'function' ? options.onImpact : null;
   const projectiles = [];
   const vertexData = new Float32Array(maxProjectiles * FLOATS_PER_PROJECTILE);
   const vertexBuffer = device.createBuffer({
@@ -169,6 +254,28 @@ export function createProjectileManager(device, options = {}) {
       const projectile = projectiles[index];
       projectile.age += deltaTime;
       if (projectile.age >= projectile.lifetime) {
+        projectiles.splice(index, 1);
+        changed = true;
+        continue;
+      }
+
+      const hit = collisionBounds
+        ? computeBoundsCollision(projectile.position, projectile.velocity, deltaTime, collisionBounds)
+        : null;
+
+      if (hit) {
+        if (impactCallback) {
+          try {
+            impactCallback({
+              position: hit.position,
+              normal: hit.normal,
+              projectileSize: projectile.size,
+              projectileColor: cloneVector(projectile.color)
+            });
+          } catch (error) {
+            console.error('Error while handling projectile impact:', error);
+          }
+        }
         projectiles.splice(index, 1);
         changed = true;
         continue;
