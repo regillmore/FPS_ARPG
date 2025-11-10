@@ -122,12 +122,12 @@ function pushPrism(target, bounds, color, geometryBounds) {
 
   // Bottom (-Y)
   pushQuad(target, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], color, geometryBounds);
+  // Left (-X)
+  pushQuad(target, [corners.nbl, corners.fbl, corners.ftl, corners.ntl], color, geometryBounds);
   // Front (+Z)
   pushQuad(target, [corners.fbl, corners.fbr, corners.ftr, corners.ftl], color, geometryBounds);
   // Back (-Z)
   pushQuad(target, [corners.nbr, corners.nbl, corners.ntl, corners.ntr], color, geometryBounds);
-  // Left (-X)
-  pushQuad(target, [corners.nbl, corners.fbl, corners.ftl, corners.ntl], color, geometryBounds);
   // Right (+X)
   pushQuad(target, [corners.fbr, corners.nbr, corners.ntr, corners.ftr], color, geometryBounds);
   // Top (+Y)
