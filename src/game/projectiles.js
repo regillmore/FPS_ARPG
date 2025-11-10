@@ -7,12 +7,12 @@ const DEFAULT_PROJECTILE_SPEED = 24;
 const DEFAULT_PROJECTILE_LIFETIME = 2.0;
 const DEFAULT_PROJECTILE_COLOR = Object.freeze([0.9, 0.95, 0.4]);
 const IMPACT_NORMALS = Object.freeze({
-  minX: new Float32Array([1, 0, 0]),
-  maxX: new Float32Array([-1, 0, 0]),
-  minY: new Float32Array([0, 1, 0]),
-  maxY: new Float32Array([0, -1, 0]),
-  minZ: new Float32Array([0, 0, 1]),
-  maxZ: new Float32Array([0, 0, -1])
+  minX: new Float32Array([-1, 0, 0]),
+  maxX: new Float32Array([1, 0, 0]),
+  minY: new Float32Array([0, -1, 0]),
+  maxY: new Float32Array([0, 1, 0]),
+  minZ: new Float32Array([0, 0, -1]),
+  maxZ: new Float32Array([0, 0, 1])
 });
 const COLLISION_EPSILON = 1e-5;
 
@@ -127,6 +127,15 @@ function cloneVector(source) {
   return new Float32Array([source[0], source[1], source[2]]);
 }
 
+function createImpactPayload(projectile, hit) {
+  return {
+    position: hit.position,
+    normal: hit.normal,
+    projectileSize: projectile.size,
+    projectileColor: cloneVector(projectile.color)
+  };
+}
+
 function computeBoundsCollision(position, velocity, deltaTime, bounds) {
   if (!bounds || deltaTime <= 0) {
     return null;
@@ -135,7 +144,7 @@ function computeBoundsCollision(position, velocity, deltaTime, bounds) {
   let earliestT = Infinity;
   let impact = null;
 
-  const tryPlane = (axis, planeValue, normalKey, isMinPlane) => {
+  const tryPlane = (axis, planeValue, normalKey) => {
     const normal = IMPACT_NORMALS[normalKey];
     if (!normal) {
       return;
@@ -144,14 +153,6 @@ function computeBoundsCollision(position, velocity, deltaTime, bounds) {
     const start = position[axis];
     const velocityComponent = velocity[axis];
     if (Math.abs(velocityComponent) <= COLLISION_EPSILON) {
-      return;
-    }
-
-    if (isMinPlane) {
-      if (velocityComponent >= 0) {
-        return;
-      }
-    } else if (velocityComponent <= 0) {
       return;
     }
 
@@ -183,16 +184,17 @@ function computeBoundsCollision(position, velocity, deltaTime, bounds) {
         axis === 1 ? planeValue : hitY,
         axis === 2 ? planeValue : hitZ
       ]),
-      normal: cloneVector(normal)
+      normal: cloneVector(normal),
+      time: t
     };
   };
 
-  tryPlane(0, bounds.minX, 'minX', true);
-  tryPlane(0, bounds.maxX, 'maxX', false);
-  tryPlane(1, bounds.minY, 'minY', true);
-  tryPlane(1, bounds.maxY, 'maxY', false);
-  tryPlane(2, bounds.minZ, 'minZ', true);
-  tryPlane(2, bounds.maxZ, 'maxZ', false);
+  tryPlane(0, bounds.minX, 'minX');
+  tryPlane(0, bounds.maxX, 'maxX');
+  tryPlane(1, bounds.minY, 'minY');
+  tryPlane(1, bounds.maxY, 'maxY');
+  tryPlane(2, bounds.minZ, 'minZ');
+  tryPlane(2, bounds.maxZ, 'maxZ');
 
   return impact;
 }
@@ -201,6 +203,8 @@ export function createProjectileManager(device, options = {}) {
   const maxProjectiles = clampMaxProjectiles(options.maxProjectiles ?? DEFAULT_MAX_PROJECTILES);
   const collisionBounds = options.bounds ?? null;
   const impactCallback = typeof options.onImpact === 'function' ? options.onImpact : null;
+  const dynamicColliderProvider =
+    typeof options.getDynamicColliders === 'function' ? options.getDynamicColliders : null;
   const projectiles = [];
   const vertexData = new Float32Array(maxProjectiles * FLOATS_PER_PROJECTILE);
   const vertexBuffer = device.createBuffer({
@@ -252,6 +256,21 @@ export function createProjectileManager(device, options = {}) {
       return;
     }
 
+    let dynamicColliders = null;
+    if (dynamicColliderProvider) {
+      try {
+        const providedColliders = dynamicColliderProvider();
+        if (Array.isArray(providedColliders)) {
+          dynamicColliders = providedColliders;
+        } else if (providedColliders) {
+          dynamicColliders = [providedColliders];
+        }
+      } catch (error) {
+        console.error('Error while retrieving dynamic projectile colliders:', error);
+        dynamicColliders = null;
+      }
+    }
+
     let changed = false;
     for (let index = projectiles.length - 1; index >= 0; index -= 1) {
       const projectile = projectiles[index];
@@ -262,23 +281,64 @@ export function createProjectileManager(device, options = {}) {
         continue;
       }
 
-      const hit = collisionBounds
+      let dynamicHit = null;
+      let dynamicCollider = null;
+      if (dynamicColliders && dynamicColliders.length > 0) {
+        for (let colliderIndex = 0; colliderIndex < dynamicColliders.length; colliderIndex += 1) {
+          const collider = dynamicColliders[colliderIndex];
+          const colliderBounds = collider?.bounds;
+          if (!colliderBounds) {
+            continue;
+          }
+          const hit = computeBoundsCollision(
+            projectile.position,
+            projectile.velocity,
+            deltaTime,
+            colliderBounds
+          );
+          if (!hit) {
+            continue;
+          }
+          if (!dynamicHit || hit.time < dynamicHit.time) {
+            dynamicHit = hit;
+            dynamicCollider = collider;
+          }
+        }
+      }
+
+      const worldHit = collisionBounds
         ? computeBoundsCollision(projectile.position, projectile.velocity, deltaTime, collisionBounds)
         : null;
 
-      if (hit) {
-        if (impactCallback) {
+      const dynamicTime = dynamicHit ? dynamicHit.time ?? Infinity : Infinity;
+      const worldTime = worldHit ? worldHit.time ?? Infinity : Infinity;
+      const hasDynamicHit = dynamicHit && dynamicTime <= worldTime;
+      const hasWorldHit = worldHit && worldTime < dynamicTime;
+
+      if (hasDynamicHit || hasWorldHit) {
+        const finalHit = hasDynamicHit ? dynamicHit : worldHit;
+        if (hasDynamicHit) {
+          if (dynamicCollider && typeof dynamicCollider.onHit === 'function') {
+            try {
+              dynamicCollider.onHit(createImpactPayload(projectile, finalHit));
+            } catch (error) {
+              console.error('Error while handling dynamic projectile impact:', error);
+            }
+          } else if (impactCallback) {
+            try {
+              impactCallback(createImpactPayload(projectile, finalHit));
+            } catch (error) {
+              console.error('Error while handling projectile impact:', error);
+            }
+          }
+        } else if (impactCallback) {
           try {
-            impactCallback({
-              position: hit.position,
-              normal: hit.normal,
-              projectileSize: projectile.size,
-              projectileColor: cloneVector(projectile.color)
-            });
+            impactCallback(createImpactPayload(projectile, finalHit));
           } catch (error) {
             console.error('Error while handling projectile impact:', error);
           }
         }
+
         projectiles.splice(index, 1);
         changed = true;
         continue;

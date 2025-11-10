@@ -149,16 +149,40 @@ export function createTargetDummy(device, options = {}) {
   const modelMatrix = new Float32Array(16);
   mat4FromRotationTranslation(modelMatrix, UNIT_X, UNIT_Y, UNIT_Z, translation);
 
-  return {
+  const worldBounds = translateBounds(geometry.localBounds, translation);
+  const hitHandler = typeof options.onHit === 'function' ? options.onHit : null;
+  const hitBoxes = [
+    {
+      bounds: worldBounds
+    }
+  ];
+
+  const targetDummy = {
     type: 'target-dummy',
     modelMatrix,
     vertexBuffer: geometry.vertexBuffer,
     vertexCount: geometry.vertexCount,
     position: translation,
-    bounds: translateBounds(geometry.localBounds, translation),
+    bounds: worldBounds,
+    getHitBoxes() {
+      return hitBoxes;
+    },
     update() {},
+    takeHit(impact) {
+      if (hitHandler) {
+        hitHandler({ enemy: targetDummy, impact });
+      }
+    },
     destroy() {
       geometry.vertexBuffer.destroy?.();
     }
   };
+
+  if (hitHandler) {
+    hitBoxes[0].onHit = (impact) => {
+      targetDummy.takeHit(impact);
+    };
+  }
+
+  return targetDummy;
 }
