@@ -1,4 +1,4 @@
-export function createBasicPipeline(device, format) {
+export function createBasicPipeline(device, format, depthFormat = 'depth24plus') {
   const shaderModule = device.createShaderModule({
     code: `
 struct Light {
@@ -90,6 +90,10 @@ fn fs_main(
       topology: 'triangle-list',
       cullMode: 'back'
     },
-    depthStencil: undefined
+    depthStencil: {
+      format: depthFormat,
+      depthWriteEnabled: true,
+      depthCompare: 'less'
+    }
   });
 }
