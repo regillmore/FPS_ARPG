@@ -6,14 +6,6 @@ const DEFAULT_PROJECTILE_SIZE = 0.075;
 const DEFAULT_PROJECTILE_SPEED = 24;
 const DEFAULT_PROJECTILE_LIFETIME = 2.0;
 const DEFAULT_PROJECTILE_COLOR = Object.freeze([0.9, 0.95, 0.4]);
-const IMPACT_NORMALS = Object.freeze({
-  minX: new Float32Array([-1, 0, 0]),
-  maxX: new Float32Array([1, 0, 0]),
-  minY: new Float32Array([0, -1, 0]),
-  maxY: new Float32Array([0, 1, 0]),
-  minZ: new Float32Array([0, 0, -1]),
-  maxZ: new Float32Array([0, 0, 1])
-});
 const COLLISION_EPSILON = 1e-5;
 
 function clampMaxProjectiles(value) {
@@ -144,12 +136,7 @@ function computeBoundsCollision(position, velocity, deltaTime, bounds) {
   let earliestT = Infinity;
   let impact = null;
 
-  const tryPlane = (axis, planeValue, normalKey) => {
-    const normal = IMPACT_NORMALS[normalKey];
-    if (!normal) {
-      return;
-    }
-
+  const tryPlane = (axis, planeValue) => {
     const start = position[axis];
     const velocityComponent = velocity[axis];
     if (Math.abs(velocityComponent) <= COLLISION_EPSILON) {
@@ -178,23 +165,27 @@ function computeBoundsCollision(position, velocity, deltaTime, bounds) {
     }
 
     earliestT = t;
+    const normal = new Float32Array(3);
+    // The surface normal always opposes the projectile's travel direction so that
+    // impacts provide consistent orientation data for gameplay and rendering logic.
+    normal[axis] = velocityComponent > 0 ? -1 : 1;
     impact = {
       position: new Float32Array([
         axis === 0 ? planeValue : hitX,
         axis === 1 ? planeValue : hitY,
         axis === 2 ? planeValue : hitZ
       ]),
-      normal: cloneVector(normal),
+      normal,
       time: t
     };
   };
 
-  tryPlane(0, bounds.minX, 'minX');
-  tryPlane(0, bounds.maxX, 'maxX');
-  tryPlane(1, bounds.minY, 'minY');
-  tryPlane(1, bounds.maxY, 'maxY');
-  tryPlane(2, bounds.minZ, 'minZ');
-  tryPlane(2, bounds.maxZ, 'maxZ');
+  tryPlane(0, bounds.minX);
+  tryPlane(0, bounds.maxX);
+  tryPlane(1, bounds.minY);
+  tryPlane(1, bounds.maxY);
+  tryPlane(2, bounds.minZ);
+  tryPlane(2, bounds.maxZ);
 
   return impact;
 }
