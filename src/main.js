@@ -98,7 +98,6 @@ async function main() {
       primaryColor,
       accentColor
     });
-    hudReticle.setVisible(true);
   };
 
   try {
@@ -291,6 +290,11 @@ async function main() {
       lastTime = now;
 
       const isPaused = pauseControls.isPaused();
+
+      if (hudReticle) {
+        const shouldShowHudReticle = !isPaused && Boolean(equippedWeaponDefinition);
+        hudReticle.setVisible(shouldShowHudReticle);
+      }
 
       if (!isPaused) {
         controller.update(deltaTime);
