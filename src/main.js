@@ -113,8 +113,10 @@ async function main() {
     const pipeline = createBasicPipeline(device, format, depthFormat);
     const { vertexBuffer, vertexCount, bounds } = createRoomGeometry(device);
     const bulletHoleManager = createBulletHoleManager(device);
+    const enemyManager = createEnemyManager(device);
     const projectileManager = createProjectileManager(device, {
       bounds,
+      getDynamicColliders: () => enemyManager.getHitBoxes(),
       onImpact: (impact) => {
         const size = Number.isFinite(impact.projectileSize)
           ? Math.max(impact.projectileSize * 3, 0.12)
@@ -127,7 +129,6 @@ async function main() {
         });
       }
     });
-    const enemyManager = createEnemyManager(device);
     enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
     const primaryWeaponSlot = document.querySelector(PRIMARY_WEAPON_SLOT_SELECTOR);
     const fallbackWeapon = getWeapon('pea-shooter');
