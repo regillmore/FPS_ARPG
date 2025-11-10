@@ -26,6 +26,9 @@ export class FirstPersonController {
       up: false,
       down: false
     };
+    this.triggers = {
+      primary: false
+    };
     this.#bindEvents();
   }
 
@@ -41,13 +44,19 @@ export class FirstPersonController {
         document.addEventListener('mousemove', this.#onMouseMove);
       } else {
         document.removeEventListener('mousemove', this.#onMouseMove);
+        this.#resetTriggers();
       }
     });
 
     this.#onMouseMove = this.#handleMouseMove.bind(this);
     window.addEventListener('keydown', (event) => this.#handleKey(event, true));
     window.addEventListener('keyup', (event) => this.#handleKey(event, false));
-    window.addEventListener('blur', () => this.#resetMovement());
+    window.addEventListener('mousedown', (event) => this.#handleMouseButton(event, true));
+    window.addEventListener('mouseup', (event) => this.#handleMouseButton(event, false));
+    window.addEventListener('blur', () => {
+      this.#resetMovement();
+      this.#resetTriggers();
+    });
   }
 
   #handleMouseMove(event) {
@@ -56,6 +65,19 @@ export class FirstPersonController {
     const limit = Math.PI / 2 - 0.01;
     if (this.pitch > limit) this.pitch = limit;
     if (this.pitch < -limit) this.pitch = -limit;
+  }
+
+  #handleMouseButton(event, pressed) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    if (pressed && document.pointerLockElement !== this.canvas) {
+      return;
+    }
+
+    this.triggers.primary = pressed;
+    event.preventDefault();
   }
 
   #handleKey(event, pressed) {
@@ -72,8 +94,16 @@ export class FirstPersonController {
     }
   }
 
+  #resetTriggers() {
+    this.triggers.primary = false;
+  }
+
   resetMovement() {
     this.#resetMovement();
+  }
+
+  resetTriggers() {
+    this.#resetTriggers();
   }
 
   update(deltaTime) {
@@ -139,5 +169,9 @@ export class FirstPersonController {
       this.position[1] + dy,
       this.position[2] + dz
     ];
+  }
+
+  isPrimaryFireActive() {
+    return this.triggers.primary;
   }
 }

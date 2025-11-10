@@ -5,6 +5,7 @@ import { createBasicPipeline } from './webgpu/pipeline.js';
 import { createRoomGeometry } from './world/roomGeometry.js';
 import { setupPauseMenu } from './ui/pauseMenu.js';
 import { getWeapon } from './game/playerWeapons.js';
+import { createProjectileManager } from './game/projectiles.js';
 
 const DEFAULT_WEAPON_OFFSET = {
   forward: 0.6,
@@ -15,6 +16,12 @@ const DEFAULT_WEAPON_OFFSET = {
 const DEFAULT_WEAPON_ROLL = 0.0;
 const WORLD_UP = [0, 1, 0];
 const PRIMARY_WEAPON_SLOT_SELECTOR = '.item-slot[data-slot-kind="gear"][data-slot-allowed="primary"]';
+const DEFAULT_PROJECTILE_SETTINGS = Object.freeze({
+  size: 0.075,
+  lifetime: 2.0,
+  muzzleOffset: 0.9,
+  color: [0.9, 0.95, 0.4]
+});
 
 async function main() {
   const canvas = document.getElementById('gfx');
@@ -32,11 +39,13 @@ async function main() {
     const { device, context, format, resize } = await initWebGPU(canvas);
     const pipeline = createBasicPipeline(device, format);
     const { vertexBuffer, vertexCount, bounds } = createRoomGeometry(device);
+    const projectileManager = createProjectileManager(device);
     const primaryWeaponSlot = document.querySelector(PRIMARY_WEAPON_SLOT_SELECTOR);
     const fallbackWeapon = getWeapon('pea-shooter');
 
     let weaponGeometry = null;
     let equippedWeaponDefinition = null;
+    let primaryFireCooldown = 0;
 
     let overlayWeaponLine = null;
     if (overlay) {
@@ -73,6 +82,7 @@ async function main() {
 
       weaponGeometry = null;
       equippedWeaponDefinition = weaponDefinition ?? null;
+      primaryFireCooldown = 0;
 
       if (equippedWeaponDefinition) {
         weaponGeometry = equippedWeaponDefinition.createGeometry(device);
@@ -161,6 +171,7 @@ async function main() {
     const weaponRight = new Float32Array(3);
     const weaponUp = new Float32Array(3);
     const weaponTranslation = new Float32Array(3);
+    const muzzlePosition = new Float32Array(3);
 
     const controller = new FirstPersonController(canvas);
     pauseControls.setController(controller);
@@ -171,7 +182,9 @@ async function main() {
       const deltaTime = Math.min((now - lastTime) / 1000, 0.2);
       lastTime = now;
 
-      if (!pauseControls.isPaused()) {
+      const isPaused = pauseControls.isPaused();
+
+      if (!isPaused) {
         controller.update(deltaTime);
       }
 
@@ -198,8 +211,8 @@ async function main() {
       mat4LookAt(view, eye, center, WORLD_UP);
       mat4Multiply(viewProj, projection, view);
 
-      let weaponReady = false;
-      if (weaponGeometry) {
+      let weaponTransformReady = false;
+      if (equippedWeaponDefinition) {
         const cosPitch = Math.cos(controller.pitch);
         const sinPitch = Math.sin(controller.pitch);
         const cosYaw = Math.cos(controller.yaw);
@@ -307,7 +320,61 @@ async function main() {
         );
         mat4Multiply(weaponViewModel, view, weaponModel);
         mat4Multiply(weaponViewProj, projection, weaponViewModel);
-        weaponReady = true;
+        weaponTransformReady = true;
+      }
+
+      if (!isPaused) {
+        projectileManager.update(deltaTime);
+        if (primaryFireCooldown > 0) {
+          primaryFireCooldown = Math.max(primaryFireCooldown - deltaTime, 0);
+        }
+
+        if (
+          weaponTransformReady &&
+          controller.isPrimaryFireActive() &&
+          primaryFireCooldown <= 0 &&
+          equippedWeaponDefinition
+        ) {
+          const stats = equippedWeaponDefinition.stats ?? {};
+          const rateOfFire = Number(stats.rateOfFire);
+          const muzzleVelocity = Number(stats.muzzleVelocity);
+          const sizeValue = Number(stats.projectileSize);
+          const lifetimeValue = Number(stats.projectileLifetime);
+          const muzzleOffsetValue = Number(stats.projectileMuzzleOffset);
+          const projectileSize = Number.isFinite(sizeValue) && sizeValue > 0
+            ? sizeValue
+            : DEFAULT_PROJECTILE_SETTINGS.size;
+          const projectileLifetime = Number.isFinite(lifetimeValue) && lifetimeValue > 0
+            ? lifetimeValue
+            : DEFAULT_PROJECTILE_SETTINGS.lifetime;
+          const muzzleOffset = Number.isFinite(muzzleOffsetValue)
+            ? muzzleOffsetValue
+            : DEFAULT_PROJECTILE_SETTINGS.muzzleOffset;
+          const projectileColor = Array.isArray(stats.projectileColor)
+            ? stats.projectileColor
+            : DEFAULT_PROJECTILE_SETTINGS.color;
+
+          const resolvedRateOfFire = Number.isFinite(rateOfFire) && rateOfFire > 0 ? rateOfFire : 1;
+          const resolvedVelocity = Number.isFinite(muzzleVelocity) && muzzleVelocity > 0 ? muzzleVelocity : 20;
+
+          muzzlePosition[0] =
+            weaponTranslation[0] + weaponForward[0] * muzzleOffset;
+          muzzlePosition[1] =
+            weaponTranslation[1] + weaponForward[1] * muzzleOffset;
+          muzzlePosition[2] =
+            weaponTranslation[2] + weaponForward[2] * muzzleOffset;
+
+          projectileManager.spawnProjectile({
+            position: muzzlePosition,
+            direction: weaponForward,
+            speed: resolvedVelocity,
+            color: projectileColor,
+            size: projectileSize,
+            lifetime: projectileLifetime
+          });
+
+          primaryFireCooldown = 1 / resolvedRateOfFire;
+        }
       }
 
       device.queue.writeBuffer(
@@ -317,6 +384,8 @@ async function main() {
         viewProj.byteOffset,
         viewProj.byteLength
       );
+
+      projectileManager.syncGPU();
 
       const encoder = device.createCommandEncoder();
       const textureView = context.getCurrentTexture().createView();
@@ -337,7 +406,13 @@ async function main() {
       pass.setVertexBuffer(0, vertexBuffer);
       pass.draw(vertexCount, 1, 0, 0);
 
-      if (weaponReady && weaponGeometry) {
+      const projectileVertexCount = projectileManager.getVertexCount();
+      if (projectileVertexCount > 0) {
+        pass.setVertexBuffer(0, projectileManager.getVertexBuffer());
+        pass.draw(projectileVertexCount, 1, 0, 0);
+      }
+
+      if (weaponTransformReady && weaponGeometry) {
         device.queue.writeBuffer(
           weaponUniformBuffer,
           0,
