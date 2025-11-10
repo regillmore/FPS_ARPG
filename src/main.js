@@ -102,8 +102,15 @@ async function main() {
   };
 
   try {
-    const { device, context, format, resize } = await initWebGPU(canvas);
-    const pipeline = createBasicPipeline(device, format);
+    const {
+      device,
+      context,
+      format,
+      depthFormat,
+      resize,
+      getDepthTextureView
+    } = await initWebGPU(canvas);
+    const pipeline = createBasicPipeline(device, format, depthFormat);
     const { vertexBuffer, vertexCount, bounds } = createRoomGeometry(device);
     const bulletHoleManager = createBulletHoleManager(device);
     const projectileManager = createProjectileManager(device, {
@@ -500,6 +507,7 @@ async function main() {
 
       const encoder = device.createCommandEncoder();
       const textureView = context.getCurrentTexture().createView();
+      const depthTextureView = getDepthTextureView();
 
       const pass = encoder.beginRenderPass({
         colorAttachments: [
@@ -509,7 +517,13 @@ async function main() {
             loadOp: 'clear',
             storeOp: 'store'
           }
-        ]
+        ],
+        depthStencilAttachment: {
+          view: depthTextureView,
+          depthClearValue: 1.0,
+          depthLoadOp: 'clear',
+          depthStoreOp: 'store'
+        }
       });
 
       pass.setPipeline(pipeline);
