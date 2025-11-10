@@ -39,8 +39,26 @@ function pushVertex(target, position, normal, color) {
   );
 }
 
-function pushQuad(target, corners, normal, color) {
+function computeNormal(a, b, c) {
+  const abX = b[0] - a[0];
+  const abY = b[1] - a[1];
+  const abZ = b[2] - a[2];
+  const acX = c[0] - a[0];
+  const acY = c[1] - a[1];
+  const acZ = c[2] - a[2];
+  const nx = abY * acZ - abZ * acY;
+  const ny = abZ * acX - abX * acZ;
+  const nz = abX * acY - abY * acX;
+  const length = Math.hypot(nx, ny, nz);
+  if (length <= 1e-6) {
+    return [0, 1, 0];
+  }
+  return [nx / length, ny / length, nz / length];
+}
+
+function pushQuad(target, corners, color) {
   const [a, b, c, d] = corners;
+  const normal = computeNormal(a, b, c);
   pushVertex(target, a, normal, color);
   pushVertex(target, b, normal, color);
   pushVertex(target, c, normal, color);
@@ -63,12 +81,12 @@ function addBox(target, min, max, color) {
     ftr: [maxX, maxY, maxZ]
   };
 
-  pushQuad(target, [corners.fbl, corners.fbr, corners.ftr, corners.ftl], [0, 0, 1], color);
-  pushQuad(target, [corners.nbr, corners.nbl, corners.ntl, corners.ntr], [0, 0, -1], color);
-  pushQuad(target, [corners.nbl, corners.fbl, corners.ftl, corners.ntl], [-1, 0, 0], color);
-  pushQuad(target, [corners.fbr, corners.nbr, corners.ntr, corners.ftr], [1, 0, 0], color);
-  pushQuad(target, [corners.ntl, corners.ftl, corners.ftr, corners.ntr], [0, 1, 0], color);
-  pushQuad(target, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], [0, -1, 0], color);
+  pushQuad(target, [corners.fbl, corners.fbr, corners.ftr, corners.ftl], color);
+  pushQuad(target, [corners.nbr, corners.nbl, corners.ntl, corners.ntr], color);
+  pushQuad(target, [corners.nbl, corners.fbl, corners.ftl, corners.ntl], color);
+  pushQuad(target, [corners.fbr, corners.nbr, corners.ntr, corners.ftr], color);
+  pushQuad(target, [corners.ntl, corners.ftl, corners.ftr, corners.ntr], color);
+  pushQuad(target, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], color);
 }
 
 function createTargetDummyGeometry(device) {
