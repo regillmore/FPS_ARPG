@@ -27,6 +27,121 @@ html, body {
   line-height: 1.4;
 }
 
+#hud {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.hud-reticle {
+  --hud-reticle-primary: rgba(255, 255, 255, 0.92);
+  --hud-reticle-accent: rgba(78, 196, 112, 0.95);
+  position: relative;
+  width: clamp(36px, 3vw, 52px);
+  height: clamp(36px, 3vw, 52px);
+  opacity: 0;
+  transition: opacity 140ms ease;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.75));
+}
+
+.hud-reticle.is-visible {
+  opacity: 1;
+}
+
+.hud-reticle__crosshair {
+  position: absolute;
+  inset: 0;
+}
+
+.hud-reticle__arm {
+  position: absolute;
+  background: var(--hud-reticle-primary);
+  border-radius: 999px;
+}
+
+.hud-reticle__arm::after {
+  content: '';
+  position: absolute;
+  background: var(--hud-reticle-accent);
+  border-radius: inherit;
+  opacity: 0.9;
+}
+
+.hud-reticle__arm--top,
+.hud-reticle__arm--bottom {
+  width: clamp(2px, 0.2vw, 3px);
+  height: clamp(14px, 1.8vw, 22px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.hud-reticle__arm--left,
+.hud-reticle__arm--right {
+  height: clamp(2px, 0.2vw, 3px);
+  width: clamp(14px, 1.8vw, 22px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.hud-reticle__arm--top {
+  top: 0;
+}
+
+.hud-reticle__arm--top::after {
+  bottom: clamp(2px, 0.35vw, 4px);
+  left: 0;
+  width: 100%;
+  height: clamp(4px, 0.6vw, 6px);
+}
+
+.hud-reticle__arm--bottom {
+  bottom: 0;
+}
+
+.hud-reticle__arm--bottom::after {
+  top: clamp(2px, 0.35vw, 4px);
+  left: 0;
+  width: 100%;
+  height: clamp(4px, 0.6vw, 6px);
+}
+
+.hud-reticle__arm--left {
+  left: 0;
+}
+
+.hud-reticle__arm--left::after {
+  right: clamp(2px, 0.35vw, 4px);
+  top: 0;
+  width: clamp(6px, 0.8vw, 8px);
+  height: 100%;
+}
+
+.hud-reticle__arm--right {
+  right: 0;
+}
+
+.hud-reticle__arm--right::after {
+  left: clamp(2px, 0.35vw, 4px);
+  top: 0;
+  width: clamp(6px, 0.8vw, 8px);
+  height: 100%;
+}
+
+.hud-reticle__dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: clamp(4px, 0.45vw, 6px);
+  height: clamp(4px, 0.45vw, 6px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--hud-reticle-primary);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.65);
+}
+
 canvas {
   width: 100vw;
   height: 100vh;

@@ -8,7 +8,7 @@
  */
 
 class WeaponDefinition {
-  constructor({ id, displayName, description, stats, createGeometry }) {
+  constructor({ id, displayName, description, stats, createGeometry, hudTheme }) {
     if (!id) {
       throw new Error('WeaponDefinition requires a stable `id`.');
     }
@@ -18,6 +18,7 @@ class WeaponDefinition {
     this.description = description ?? '';
     this.stats = Object.freeze({ ...(stats ?? {}) });
     this._createGeometry = createGeometry ?? null;
+    this._hudTheme = normalizeHudTheme(hudTheme);
   }
 
   /**
@@ -33,6 +34,10 @@ class WeaponDefinition {
       return null;
     }
     return this._createGeometry(device, options);
+  }
+
+  getHudTheme() {
+    return this._hudTheme;
   }
 }
 
@@ -140,6 +145,33 @@ const DEFAULT_PEA_SHOOTER_PALETTE = Object.freeze({
   grip: [0.18, 0.18, 0.2],
   accent: [0.9, 0.95, 0.4]
 });
+
+const DEFAULT_RETICLE_PRIMARY_COLOR = [1, 1, 1];
+const DEFAULT_RETICLE_ACCENT_COLOR = [0.305, 0.77, 0.44];
+
+function normalizeHudTheme(theme) {
+  if (!theme) {
+    return null;
+  }
+
+  const normalized = {};
+
+  if ('reticlePrimaryColor' in theme) {
+    normalized.reticlePrimaryColor = normalizeColor(
+      theme.reticlePrimaryColor,
+      DEFAULT_RETICLE_PRIMARY_COLOR
+    );
+  }
+
+  if ('reticleAccentColor' in theme) {
+    normalized.reticleAccentColor = normalizeColor(
+      theme.reticleAccentColor,
+      DEFAULT_RETICLE_ACCENT_COLOR
+    );
+  }
+
+  return Object.freeze(normalized);
+}
 
 function normalizeColor(color, fallback) {
   if (!color || !Array.isArray(color)) {
@@ -304,7 +336,10 @@ export const PeaShooter = registerWeapon(
       projectileLifetime: 2.25,
       projectileMuzzleOffset: 0.9
     },
-    createGeometry: (device, options) => createPeaShooterGeometry(device, options)
+    createGeometry: (device, options) => createPeaShooterGeometry(device, options),
+    hudTheme: {
+      reticleAccentColor: DEFAULT_PEA_SHOOTER_PALETTE.body
+    }
   })
 );
 
@@ -335,7 +370,10 @@ export const PeaShooterII = registerWeapon(
       createPeaShooterGeometry(device, {
         ...(options ?? {}),
         palette: PEA_SHOOTER_II_PALETTE
-      })
+      }),
+    hudTheme: {
+      reticleAccentColor: PEA_SHOOTER_II_PALETTE.body
+    }
   })
 );
 
