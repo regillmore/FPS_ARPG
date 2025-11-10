@@ -2,7 +2,7 @@ const DEFAULT_MAX_BULLET_HOLES = 128;
 const DEFAULT_BULLET_HOLE_SIZE = 0.24;
 const DEFAULT_BULLET_HOLE_LIFETIME = 10.0;
 const DEFAULT_BULLET_HOLE_COLOR = Object.freeze([0.08, 0.08, 0.08]);
-const FLOATS_PER_VERTEX = 6;
+const FLOATS_PER_VERTEX = 9;
 const VERTICES_PER_DECAL = 6;
 const FLOATS_PER_DECAL = FLOATS_PER_VERTEX * VERTICES_PER_DECAL;
 const SURFACE_BIAS = 0.0025;
@@ -68,24 +68,27 @@ function cross(out, a, b) {
   return out;
 }
 
-function writeVertex(target, offset, position, color) {
+function writeVertex(target, offset, position, normal, color) {
   target[offset++] = position[0];
   target[offset++] = position[1];
   target[offset++] = position[2];
+  target[offset++] = normal[0];
+  target[offset++] = normal[1];
+  target[offset++] = normal[2];
   target[offset++] = color[0];
   target[offset++] = color[1];
   target[offset++] = color[2];
   return offset;
 }
 
-function writeQuad(target, offset, corners, color) {
+function writeQuad(target, offset, corners, normal, color) {
   const [a, b, c, d] = corners;
-  offset = writeVertex(target, offset, a, color);
-  offset = writeVertex(target, offset, b, color);
-  offset = writeVertex(target, offset, c, color);
-  offset = writeVertex(target, offset, a, color);
-  offset = writeVertex(target, offset, c, color);
-  offset = writeVertex(target, offset, d, color);
+  offset = writeVertex(target, offset, a, normal, color);
+  offset = writeVertex(target, offset, b, normal, color);
+  offset = writeVertex(target, offset, c, normal, color);
+  offset = writeVertex(target, offset, a, normal, color);
+  offset = writeVertex(target, offset, c, normal, color);
+  offset = writeVertex(target, offset, d, normal, color);
   return offset;
 }
 
@@ -253,7 +256,7 @@ export function createBulletHoleManager(device, options = {}) {
         ]
       ];
 
-      offset = writeQuad(vertexData, offset, corners, bulletHole.color);
+      offset = writeQuad(vertexData, offset, corners, normal, bulletHole.color);
     }
 
     vertexCount = offset / FLOATS_PER_VERTEX;

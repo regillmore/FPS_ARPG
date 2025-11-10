@@ -59,10 +59,20 @@ export function listWeapons() {
   return Array.from(weaponRegistry.values());
 }
 
-function pushVertex(target, vertex, color, bounds) {
+function pushVertex(target, vertex, normal, color, bounds) {
   const [x, y, z] = vertex;
 
-  target.push(x, y, z, color[0], color[1], color[2]);
+  target.push(
+    x,
+    y,
+    z,
+    normal[0],
+    normal[1],
+    normal[2],
+    color[0],
+    color[1],
+    color[2]
+  );
 
   bounds.minX = Math.min(bounds.minX, x);
   bounds.minY = Math.min(bounds.minY, y);
@@ -72,14 +82,28 @@ function pushVertex(target, vertex, color, bounds) {
   bounds.maxZ = Math.max(bounds.maxZ, z);
 }
 
+function computeNormal(a, b, c) {
+  const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+  const nx = ab[1] * ac[2] - ab[2] * ac[1];
+  const ny = ab[2] * ac[0] - ab[0] * ac[2];
+  const nz = ab[0] * ac[1] - ab[1] * ac[0];
+  const length = Math.hypot(nx, ny, nz);
+  if (length <= 1e-5) {
+    return [0, 1, 0];
+  }
+  return [nx / length, ny / length, nz / length];
+}
+
 function pushQuad(target, corners, color, bounds) {
   const [a, b, c, d] = corners;
-  pushVertex(target, a, color, bounds);
-  pushVertex(target, b, color, bounds);
-  pushVertex(target, c, color, bounds);
-  pushVertex(target, a, color, bounds);
-  pushVertex(target, c, color, bounds);
-  pushVertex(target, d, color, bounds);
+  const normal = computeNormal(a, b, c);
+  pushVertex(target, a, normal, color, bounds);
+  pushVertex(target, b, normal, color, bounds);
+  pushVertex(target, c, normal, color, bounds);
+  pushVertex(target, a, normal, color, bounds);
+  pushVertex(target, c, normal, color, bounds);
+  pushVertex(target, d, normal, color, bounds);
 }
 
 function pushPrism(target, bounds, color, geometryBounds) {
@@ -253,7 +277,7 @@ export function createWeaponGeometry(device, vertexData, bounds, options = {}) {
 
   return {
     vertexBuffer,
-    vertexCount: vertexData.length / 6,
+    vertexCount: vertexData.length / 9,
     bounds: { ...bounds }
   };
 }

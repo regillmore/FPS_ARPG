@@ -23,6 +23,26 @@ const DEFAULT_PROJECTILE_SETTINGS = Object.freeze({
   muzzleOffset: 0.9,
   color: [0.9, 0.95, 0.4]
 });
+const MAX_LIGHTS = 2;
+const AMBIENT_LIGHT = new Float32Array([0.05, 0.055, 0.06]);
+const ACTIVE_LIGHTS = [
+  {
+    position: new Float32Array([-2.25, 3.25, -1.75, 1.0]),
+    color: new Float32Array([1.0, 0.82, 0.65, 3.2])
+  },
+  {
+    position: new Float32Array([2.5, 2.2, 2.8, 1.0]),
+    color: new Float32Array([0.6, 0.8, 1.0, 2.6])
+  }
+];
+const UNIFORM_FLOAT_COUNT = 52;
+const UNIFORM_BYTE_LENGTH = UNIFORM_FLOAT_COUNT * 4;
+const IDENTITY_MATRIX = new Float32Array([
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  0, 0, 0, 1
+]);
 
 async function main() {
   const canvas = document.getElementById('gfx');
@@ -143,7 +163,7 @@ async function main() {
     });
 
     const worldUniformBuffer = device.createBuffer({
-      size: 64,
+      size: UNIFORM_BYTE_LENGTH,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
     });
 
@@ -160,7 +180,7 @@ async function main() {
     });
 
     const weaponUniformBuffer = device.createBuffer({
-      size: 64,
+      size: UNIFORM_BYTE_LENGTH,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
     });
 
@@ -180,8 +200,35 @@ async function main() {
     const view = new Float32Array(16);
     const viewProj = new Float32Array(16);
     const weaponModel = new Float32Array(16);
-    const weaponViewModel = new Float32Array(16);
-    const weaponViewProj = new Float32Array(16);
+    const worldUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
+    const weaponUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
+    const activeLightCount = Math.min(ACTIVE_LIGHTS.length, MAX_LIGHTS);
+
+    const writeUniformData = (target, viewProjection, modelMatrix) => {
+      target.set(viewProjection, 0);
+      target.set(modelMatrix, 16);
+      target[32] = AMBIENT_LIGHT[0];
+      target[33] = AMBIENT_LIGHT[1];
+      target[34] = AMBIENT_LIGHT[2];
+      target[35] = activeLightCount;
+      for (let i = 0; i < MAX_LIGHTS; i += 1) {
+        const base = 36 + i * 8;
+        const light = ACTIVE_LIGHTS[i];
+        if (light) {
+          target[base + 0] = light.position[0];
+          target[base + 1] = light.position[1];
+          target[base + 2] = light.position[2];
+          target[base + 3] = light.position[3] ?? 1.0;
+          target[base + 4] = light.color[0];
+          target[base + 5] = light.color[1];
+          target[base + 6] = light.color[2];
+          target[base + 7] = light.color[3] ?? 1.0;
+        } else {
+          target.fill(0, base, base + 8);
+        }
+      }
+    };
+
     const weaponForward = new Float32Array(3);
     const weaponRight = new Float32Array(3);
     const weaponUp = new Float32Array(3);
@@ -333,8 +380,6 @@ async function main() {
           weaponForward,
           weaponTranslation
         );
-        mat4Multiply(weaponViewModel, view, weaponModel);
-        mat4Multiply(weaponViewProj, projection, weaponViewModel);
         weaponTransformReady = true;
       }
 
@@ -393,13 +438,8 @@ async function main() {
         }
       }
 
-      device.queue.writeBuffer(
-        worldUniformBuffer,
-        0,
-        viewProj.buffer,
-        viewProj.byteOffset,
-        viewProj.byteLength
-      );
+      writeUniformData(worldUniformData, viewProj, IDENTITY_MATRIX);
+      device.queue.writeBuffer(worldUniformBuffer, 0, worldUniformData);
 
       bulletHoleManager.syncGPU();
       projectileManager.syncGPU();
@@ -436,13 +476,8 @@ async function main() {
       }
 
       if (weaponTransformReady && weaponGeometry) {
-        device.queue.writeBuffer(
-          weaponUniformBuffer,
-          0,
-          weaponViewProj.buffer,
-          weaponViewProj.byteOffset,
-          weaponViewProj.byteLength
-        );
+        writeUniformData(weaponUniformData, viewProj, weaponModel);
+        device.queue.writeBuffer(weaponUniformBuffer, 0, weaponUniformData);
         pass.setBindGroup(0, weaponUniformBindGroup);
         pass.setVertexBuffer(0, weaponGeometry.vertexBuffer);
         pass.draw(weaponGeometry.vertexCount, 1, 0, 0);
