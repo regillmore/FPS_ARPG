@@ -204,7 +204,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         left = slotRect.left - gap - popRect.width;
       }
 
-      let top = (2 * (slotRect.top - (viewportHeight / 2) + (popRect.height / 2) + (slotRect.height))) - gap;
+      let top = (2 * (slotRect.top - (viewportHeight / 2) - (popRect.height / 2))) + gap;
 
       itemPopover.style.left = `${Math.round(left)}px`;
       itemPopover.style.top = `${Math.round(top)}px`;
