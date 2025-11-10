@@ -4,6 +4,7 @@ import { initWebGPU } from './webgpu/initWebGPU.js';
 import { createBasicPipeline } from './webgpu/pipeline.js';
 import { createRoomGeometry } from './world/roomGeometry.js';
 import { setupPauseMenu } from './ui/pauseMenu.js';
+import { createHudReticle } from './ui/hudReticle.js';
 import { getWeapon } from './game/playerWeapons.js';
 import { createProjectileManager } from './game/projectiles.js';
 import { createBulletHoleManager } from './game/bulletHoles.js';
@@ -23,6 +24,8 @@ const DEFAULT_PROJECTILE_SETTINGS = Object.freeze({
   muzzleOffset: 0.9,
   color: [0.9, 0.95, 0.4]
 });
+const DEFAULT_RETICLE_PRIMARY_COLOR = [1, 1, 1];
+const RETICLE_WHITE_BLEND = 0.45;
 const MAX_LIGHTS = 2;
 const AMBIENT_LIGHT = new Float32Array([0.05, 0.055, 0.06]);
 const ACTIVE_LIGHTS = [
@@ -49,12 +52,53 @@ async function main() {
   const overlay = document.getElementById('overlay');
   const pauseMenu = document.getElementById('pause-menu');
   const itemPopover = document.getElementById('item-detail-popover');
+  const hudLayer = document.getElementById('hud');
 
   if (!canvas) {
     throw new Error('Failed to find the rendering canvas.');
   }
 
   const pauseControls = setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover });
+  const hudReticle = createHudReticle({ mount: hudLayer });
+
+  const blendWithWhite = (color, factor = RETICLE_WHITE_BLEND) => {
+    if (!Array.isArray(color) || color.length < 3) {
+      return null;
+    }
+
+    const blend = Math.min(Math.max(factor, 0), 1);
+    const keep = 1 - blend;
+    const r = Number.isFinite(color[0]) ? color[0] : 0;
+    const g = Number.isFinite(color[1]) ? color[1] : 0;
+    const b = Number.isFinite(color[2]) ? color[2] : 0;
+    return [
+      Math.min(Math.max(r * keep + blend, 0), 1),
+      Math.min(Math.max(g * keep + blend, 0), 1),
+      Math.min(Math.max(b * keep + blend, 0), 1)
+    ];
+  };
+
+  const applyWeaponHudTheme = (weaponDefinition) => {
+    if (!hudReticle) {
+      return;
+    }
+
+    if (!weaponDefinition) {
+      hudReticle.setVisible(false);
+      return;
+    }
+
+    const theme = weaponDefinition.getHudTheme?.() ?? null;
+    const accentColor = theme?.reticleAccentColor
+      ? blendWithWhite(theme.reticleAccentColor)
+      : undefined;
+    const primaryColor = theme?.reticlePrimaryColor ?? DEFAULT_RETICLE_PRIMARY_COLOR;
+
+    hudReticle.setTheme({
+      primaryColor,
+      accentColor
+    });
+  };
 
   try {
     const { device, context, format, resize } = await initWebGPU(canvas);
@@ -127,6 +171,7 @@ async function main() {
       }
 
       updateOverlayWeaponLine();
+      applyWeaponHudTheme(equippedWeaponDefinition);
     };
 
     const resolveWeaponForSlot = (slot) => {
@@ -245,6 +290,11 @@ async function main() {
       lastTime = now;
 
       const isPaused = pauseControls.isPaused();
+
+      if (hudReticle) {
+        const shouldShowHudReticle = !isPaused && Boolean(equippedWeaponDefinition);
+        hudReticle.setVisible(shouldShowHudReticle);
+      }
 
       if (!isPaused) {
         controller.update(deltaTime);
