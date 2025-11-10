@@ -141,98 +141,70 @@ function computeBoundsCollision(position, velocity, deltaTime, bounds) {
     return null;
   }
 
-  const stepX = velocity[0] * deltaTime;
-  const stepY = velocity[1] * deltaTime;
-  const stepZ = velocity[2] * deltaTime;
+  let earliestT = Infinity;
+  let impact = null;
 
-  if (
-    Math.abs(stepX) <= COLLISION_EPSILON &&
-    Math.abs(stepY) <= COLLISION_EPSILON &&
-    Math.abs(stepZ) <= COLLISION_EPSILON
-  ) {
-    return null;
-  }
+  const tryPlane = (axis, planeValue, normalKey, isMinPlane) => {
+    const normal = IMPACT_NORMALS[normalKey];
+    if (!normal) {
+      return;
+    }
 
-  let entryTime = -Infinity;
-  let exitTime = Infinity;
-  let entryNormal = null;
-  let exitNormal = null;
-
-  const axes = [
-    { axis: 0, min: bounds.minX, max: bounds.maxX, minNormal: IMPACT_NORMALS.minX, maxNormal: IMPACT_NORMALS.maxX },
-    { axis: 1, min: bounds.minY, max: bounds.maxY, minNormal: IMPACT_NORMALS.minY, maxNormal: IMPACT_NORMALS.maxY },
-    { axis: 2, min: bounds.minZ, max: bounds.maxZ, minNormal: IMPACT_NORMALS.minZ, maxNormal: IMPACT_NORMALS.maxZ }
-  ];
-
-  for (let i = 0; i < axes.length; i += 1) {
-    const { axis, min, max, minNormal, maxNormal } = axes[i];
     const start = position[axis];
-    const step = axis === 0 ? stepX : axis === 1 ? stepY : stepZ;
+    const velocityComponent = velocity[axis];
+    if (Math.abs(velocityComponent) <= COLLISION_EPSILON) {
+      return;
+    }
 
-    if (Math.abs(step) <= COLLISION_EPSILON) {
-      if (start < min - COLLISION_EPSILON || start > max + COLLISION_EPSILON) {
-        return null;
+    if (isMinPlane) {
+      if (velocityComponent >= 0) {
+        return;
       }
-      continue;
+    } else if (velocityComponent <= 0) {
+      return;
     }
 
-    let axisEntryTime = (min - start) / step;
-    let axisExitTime = (max - start) / step;
-    let axisEntryNormal = minNormal;
-    let axisExitNormal = maxNormal;
-
-    if (axisEntryTime > axisExitTime) {
-      const tempTime = axisEntryTime;
-      axisEntryTime = axisExitTime;
-      axisExitTime = tempTime;
-
-      const tempNormal = axisEntryNormal;
-      axisEntryNormal = axisExitNormal;
-      axisExitNormal = tempNormal;
+    const delta = velocityComponent * deltaTime;
+    const t = (planeValue - start) / delta;
+    if (t < 0 || t > 1 || t >= earliestT) {
+      return;
     }
 
-    if (axisEntryTime > exitTime || axisExitTime < entryTime) {
-      return null;
+    const hitX = position[0] + velocity[0] * deltaTime * t;
+    const hitY = position[1] + velocity[1] * deltaTime * t;
+    const hitZ = position[2] + velocity[2] * deltaTime * t;
+
+    if (
+      hitX < bounds.minX - COLLISION_EPSILON ||
+      hitX > bounds.maxX + COLLISION_EPSILON ||
+      hitY < bounds.minY - COLLISION_EPSILON ||
+      hitY > bounds.maxY + COLLISION_EPSILON ||
+      hitZ < bounds.minZ - COLLISION_EPSILON ||
+      hitZ > bounds.maxZ + COLLISION_EPSILON
+    ) {
+      return;
     }
 
-    if (axisEntryTime > entryTime) {
-      entryTime = axisEntryTime;
-      entryNormal = axisEntryNormal;
-    }
-
-    if (axisExitTime < exitTime) {
-      exitTime = axisExitTime;
-      exitNormal = axisExitNormal;
-    }
-  }
-
-  if (entryTime > 1 || exitTime < 0) {
-    return null;
-  }
-
-  let hitTime = entryTime;
-  let hitNormal = entryNormal;
-
-  if (hitTime < 0) {
-    hitTime = exitTime;
-    hitNormal = exitNormal;
-  }
-
-  if (hitTime < 0 || hitTime > 1 || !hitNormal) {
-    return null;
-  }
-
-  const hitPosition = new Float32Array([
-    position[0] + stepX * hitTime,
-    position[1] + stepY * hitTime,
-    position[2] + stepZ * hitTime
-  ]);
-
-  return {
-    position: hitPosition,
-    normal: cloneVector(hitNormal),
-    time: hitTime
+    earliestT = t;
+    impact = {
+      position: new Float32Array([
+        axis === 0 ? planeValue : hitX,
+        axis === 1 ? planeValue : hitY,
+        axis === 2 ? planeValue : hitZ
+      ]),
+      normal: cloneVector(normal),
+      time: t
+    };
   };
+
+  tryPlane(0, bounds.minX, 'minX', true);
+  tryPlane(0, bounds.maxX, 'maxX', false);
+  tryPlane(1, bounds.minY, 'minY', true);
+  tryPlane(1, bounds.maxY, 'maxY', false);
+  tryPlane(2, bounds.minZ, 'minZ', true);
+  tryPlane(2, bounds.maxZ, 'maxZ', false);
+
+  return impact;
 }
 
 export function createProjectileManager(device, options = {}) {
