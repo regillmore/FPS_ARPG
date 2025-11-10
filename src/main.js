@@ -111,6 +111,7 @@ async function main() {
       getDepthTextureView
     } = await initWebGPU(canvas);
     const pipeline = createBasicPipeline(device, format, depthFormat);
+    const uniformBindGroupLayout = pipeline.getBindGroupLayout(0);
     const { vertexBuffer, vertexCount, bounds } = createRoomGeometry(device);
     const bulletHoleManager = createBulletHoleManager(device);
     const enemyManager = createEnemyManager(device);
@@ -224,7 +225,7 @@ async function main() {
     });
 
     const worldUniformBindGroup = device.createBindGroup({
-      layout: pipeline.getBindGroupLayout(0),
+      layout: uniformBindGroupLayout,
       entries: [
         {
           binding: 0,
@@ -241,7 +242,7 @@ async function main() {
     });
 
     const weaponUniformBindGroup = device.createBindGroup({
-      layout: pipeline.getBindGroupLayout(0),
+      layout: uniformBindGroupLayout,
       entries: [
         {
           binding: 0,
@@ -259,6 +260,45 @@ async function main() {
     const worldUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
     const weaponUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
     const activeLightCount = Math.min(ACTIVE_LIGHTS.length, MAX_LIGHTS);
+
+    const ensureEnemyUniformResources = (enemy) => {
+      if (!enemy || enemy.uniformBuffer) {
+        return;
+      }
+
+      const uniformBuffer = device.createBuffer({
+        size: UNIFORM_BYTE_LENGTH,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+      });
+
+      const uniformBindGroup = device.createBindGroup({
+        layout: uniformBindGroupLayout,
+        entries: [
+          {
+            binding: 0,
+            resource: {
+              buffer: uniformBuffer
+            }
+          }
+        ]
+      });
+
+      const uniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
+      const originalDestroy = typeof enemy.destroy === 'function' ? enemy.destroy.bind(enemy) : null;
+
+      enemy.uniformBuffer = uniformBuffer;
+      enemy.uniformBindGroup = uniformBindGroup;
+      enemy.uniformData = uniformData;
+      enemy.destroy = () => {
+        uniformBuffer.destroy?.();
+        enemy.uniformBuffer = null;
+        enemy.uniformBindGroup = null;
+        enemy.uniformData = null;
+        if (originalDestroy) {
+          originalDestroy();
+        }
+      };
+    };
 
     const writeUniformData = (target, viewProjection, modelMatrix) => {
       target.set(viewProjection, 0);
@@ -538,13 +578,17 @@ async function main() {
           if (!enemy || !enemy.vertexBuffer || !enemy.vertexCount) {
             continue;
           }
-          writeUniformData(worldUniformData, viewProj, enemy.modelMatrix ?? IDENTITY_MATRIX);
-          device.queue.writeBuffer(worldUniformBuffer, 0, worldUniformData);
+          ensureEnemyUniformResources(enemy);
+          if (!enemy.uniformBuffer || !enemy.uniformBindGroup || !enemy.uniformData) {
+            continue;
+          }
+          writeUniformData(enemy.uniformData, viewProj, enemy.modelMatrix ?? IDENTITY_MATRIX);
+          device.queue.writeBuffer(enemy.uniformBuffer, 0, enemy.uniformData);
+          pass.setBindGroup(0, enemy.uniformBindGroup);
           pass.setVertexBuffer(0, enemy.vertexBuffer);
           pass.draw(enemy.vertexCount, 1, 0, 0);
         }
-        writeUniformData(worldUniformData, viewProj, IDENTITY_MATRIX);
-        device.queue.writeBuffer(worldUniformBuffer, 0, worldUniformData);
+        pass.setBindGroup(0, worldUniformBindGroup);
         pass.setVertexBuffer(0, vertexBuffer);
       }
 
