@@ -6,6 +6,7 @@ import { createRoomGeometry } from './world/roomGeometry.js';
 import { setupPauseMenu } from './ui/pauseMenu.js';
 import { createHudReticle } from './ui/hudReticle.js';
 import { getWeapon } from './game/playerWeapons.js';
+import { createEnemyManager } from './game/enemies/enemyManager.js';
 import { createProjectileManager } from './game/projectiles.js';
 import { createBulletHoleManager } from './game/bulletHoles.js';
 
@@ -119,6 +120,8 @@ async function main() {
         });
       }
     });
+    const enemyManager = createEnemyManager(device);
+    enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
     const primaryWeaponSlot = document.querySelector(PRIMARY_WEAPON_SLOT_SELECTOR);
     const fallbackWeapon = getWeapon('pea-shooter');
 
@@ -436,6 +439,7 @@ async function main() {
       if (!isPaused) {
         bulletHoleManager.update(deltaTime);
         projectileManager.update(deltaTime);
+        enemyManager.update(deltaTime);
         if (primaryFireCooldown > 0) {
           primaryFireCooldown = Math.max(primaryFireCooldown - deltaTime, 0);
         }
@@ -512,6 +516,22 @@ async function main() {
       pass.setBindGroup(0, worldUniformBindGroup);
       pass.setVertexBuffer(0, vertexBuffer);
       pass.draw(vertexCount, 1, 0, 0);
+
+      const enemies = enemyManager.getEnemies();
+      if (enemies.length > 0) {
+        for (const enemy of enemies) {
+          if (!enemy || !enemy.vertexBuffer || !enemy.vertexCount) {
+            continue;
+          }
+          writeUniformData(worldUniformData, viewProj, enemy.modelMatrix ?? IDENTITY_MATRIX);
+          device.queue.writeBuffer(worldUniformBuffer, 0, worldUniformData);
+          pass.setVertexBuffer(0, enemy.vertexBuffer);
+          pass.draw(enemy.vertexCount, 1, 0, 0);
+        }
+        writeUniformData(worldUniformData, viewProj, IDENTITY_MATRIX);
+        device.queue.writeBuffer(worldUniformBuffer, 0, worldUniformData);
+        pass.setVertexBuffer(0, vertexBuffer);
+      }
 
       const bulletHoleVertexCount = bulletHoleManager.getVertexCount();
       if (bulletHoleVertexCount > 0) {
