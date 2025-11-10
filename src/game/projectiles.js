@@ -7,12 +7,12 @@ const DEFAULT_PROJECTILE_SPEED = 24;
 const DEFAULT_PROJECTILE_LIFETIME = 2.0;
 const DEFAULT_PROJECTILE_COLOR = Object.freeze([0.9, 0.95, 0.4]);
 const IMPACT_NORMALS = Object.freeze({
-  minX: new Float32Array([1, 0, 0]),
-  maxX: new Float32Array([-1, 0, 0]),
-  minY: new Float32Array([0, 1, 0]),
-  maxY: new Float32Array([0, -1, 0]),
-  minZ: new Float32Array([0, 0, 1]),
-  maxZ: new Float32Array([0, 0, -1])
+  minX: new Float32Array([-1, 0, 0]),
+  maxX: new Float32Array([1, 0, 0]),
+  minY: new Float32Array([0, -1, 0]),
+  maxY: new Float32Array([0, 1, 0]),
+  minZ: new Float32Array([0, 0, -1]),
+  maxZ: new Float32Array([0, 0, 1])
 });
 const COLLISION_EPSILON = 1e-5;
 
@@ -144,7 +144,7 @@ function computeBoundsCollision(position, velocity, deltaTime, bounds) {
   let earliestT = Infinity;
   let impact = null;
 
-  const tryPlane = (axis, planeValue, normalKey, isMinPlane) => {
+  const tryPlane = (axis, planeValue, normalKey) => {
     const normal = IMPACT_NORMALS[normalKey];
     if (!normal) {
       return;
@@ -153,14 +153,6 @@ function computeBoundsCollision(position, velocity, deltaTime, bounds) {
     const start = position[axis];
     const velocityComponent = velocity[axis];
     if (Math.abs(velocityComponent) <= COLLISION_EPSILON) {
-      return;
-    }
-
-    if (isMinPlane) {
-      if (velocityComponent >= 0) {
-        return;
-      }
-    } else if (velocityComponent <= 0) {
       return;
     }
 
@@ -197,12 +189,12 @@ function computeBoundsCollision(position, velocity, deltaTime, bounds) {
     };
   };
 
-  tryPlane(0, bounds.minX, 'minX', true);
-  tryPlane(0, bounds.maxX, 'maxX', false);
-  tryPlane(1, bounds.minY, 'minY', true);
-  tryPlane(1, bounds.maxY, 'maxY', false);
-  tryPlane(2, bounds.minZ, 'minZ', true);
-  tryPlane(2, bounds.maxZ, 'maxZ', false);
+  tryPlane(0, bounds.minX, 'minX');
+  tryPlane(0, bounds.maxX, 'maxX');
+  tryPlane(1, bounds.minY, 'minY');
+  tryPlane(1, bounds.maxY, 'maxY');
+  tryPlane(2, bounds.minZ, 'minZ');
+  tryPlane(2, bounds.maxZ, 'maxZ');
 
   return impact;
 }
