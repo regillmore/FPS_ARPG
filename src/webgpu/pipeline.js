@@ -88,7 +88,7 @@ fn fs_main(
     },
     primitive: {
       topology: 'triangle-list',
-      cullMode: 'none'
+      cullMode: 'back'
     },
     depthStencil: undefined
   });

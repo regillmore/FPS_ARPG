@@ -94,11 +94,11 @@ export function createRoomGeometry(device) {
   for (const face of faces) {
     const [a, b, c, d] = face.corners;
     pushVertex(a, face.normal, face.color);
+    pushVertex(c, face.normal, face.color);
     pushVertex(b, face.normal, face.color);
-    pushVertex(c, face.normal, face.color);
     pushVertex(a, face.normal, face.color);
-    pushVertex(c, face.normal, face.color);
     pushVertex(d, face.normal, face.color);
+    pushVertex(c, face.normal, face.color);
   }
 
   const vertexBuffer = device.createBuffer({

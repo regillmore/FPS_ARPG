@@ -244,21 +244,6 @@ function buildPeaShooterVertices(palette) {
     bounds
   );
 
-  // Energy cell accent on the left side.
-  pushPrism(
-    data,
-    {
-      minX: 0.04,
-      maxX: 0.10,
-      minY: -0.02,
-      maxY: 0.05,
-      minZ: -0.10,
-      maxZ: 0.10
-    },
-    palette.accent,
-    bounds
-  );
-
   // Receiver/main body.
   pushPrism(
     data,
@@ -271,6 +256,21 @@ function buildPeaShooterVertices(palette) {
       maxZ: 0.25
     },
     palette.body,
+    bounds
+  );
+
+  // Energy cell accent on the left side.
+  pushPrism(
+    data,
+    {
+      minX: 0.04,
+      maxX: 0.10,
+      minY: -0.02,
+      maxY: 0.05,
+      minZ: -0.10,
+      maxZ: 0.10
+    },
+    palette.accent,
     bounds
   );
 
