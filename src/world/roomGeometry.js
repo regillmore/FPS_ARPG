@@ -10,6 +10,7 @@ export function createRoomGeometry(device) {
     // Floor
     {
       color: [0.45, 0.45, 0.5],
+      normal: [0, 1, 0],
       corners: [
         [minX, minY, minZ],
         [maxX, minY, minZ],
@@ -20,6 +21,7 @@ export function createRoomGeometry(device) {
     // Ceiling
     {
       color: [0.35, 0.35, 0.4],
+      normal: [0, -1, 0],
       corners: [
         [minX, maxY, maxZ],
         [maxX, maxY, maxZ],
@@ -30,6 +32,7 @@ export function createRoomGeometry(device) {
     // Back wall (-Z)
     {
       color: [0.4, 0.4, 0.55],
+      normal: [0, 0, 1],
       corners: [
         [maxX, minY, minZ],
         [minX, minY, minZ],
@@ -40,6 +43,7 @@ export function createRoomGeometry(device) {
     // Front wall (+Z)
     {
       color: [0.4, 0.45, 0.6],
+      normal: [0, 0, -1],
       corners: [
         [minX, minY, maxZ],
         [maxX, minY, maxZ],
@@ -50,6 +54,7 @@ export function createRoomGeometry(device) {
     // Left wall (-X)
     {
       color: [0.5, 0.45, 0.4],
+      normal: [1, 0, 0],
       corners: [
         [minX, minY, minZ],
         [minX, minY, maxZ],
@@ -60,6 +65,7 @@ export function createRoomGeometry(device) {
     // Right wall (+X)
     {
       color: [0.45, 0.5, 0.4],
+      normal: [-1, 0, 0],
       corners: [
         [maxX, minY, maxZ],
         [maxX, minY, minZ],
@@ -69,14 +75,17 @@ export function createRoomGeometry(device) {
     }
   ];
 
-  const vertexStride = 6;
+  const vertexStride = 9;
   const vertices = new Float32Array(faces.length * 6 * vertexStride);
   let offset = 0;
 
-  const pushVertex = (corner, color) => {
+  const pushVertex = (corner, normal, color) => {
     vertices[offset++] = corner[0];
     vertices[offset++] = corner[1];
     vertices[offset++] = corner[2];
+    vertices[offset++] = normal[0];
+    vertices[offset++] = normal[1];
+    vertices[offset++] = normal[2];
     vertices[offset++] = color[0];
     vertices[offset++] = color[1];
     vertices[offset++] = color[2];
@@ -84,12 +93,12 @@ export function createRoomGeometry(device) {
 
   for (const face of faces) {
     const [a, b, c, d] = face.corners;
-    pushVertex(a, face.color);
-    pushVertex(b, face.color);
-    pushVertex(c, face.color);
-    pushVertex(a, face.color);
-    pushVertex(c, face.color);
-    pushVertex(d, face.color);
+    pushVertex(a, face.normal, face.color);
+    pushVertex(b, face.normal, face.color);
+    pushVertex(c, face.normal, face.color);
+    pushVertex(a, face.normal, face.color);
+    pushVertex(c, face.normal, face.color);
+    pushVertex(d, face.normal, face.color);
   }
 
   const vertexBuffer = device.createBuffer({

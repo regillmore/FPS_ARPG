@@ -1,5 +1,5 @@
 const DEFAULT_MAX_PROJECTILES = 256;
-const FLOATS_PER_VERTEX = 6;
+const FLOATS_PER_VERTEX = 9;
 const VERTICES_PER_PROJECTILE = 36;
 const FLOATS_PER_PROJECTILE = VERTICES_PER_PROJECTILE * FLOATS_PER_VERTEX;
 const DEFAULT_PROJECTILE_SIZE = 0.075;
@@ -69,24 +69,27 @@ function normalizeColor(color) {
   ]);
 }
 
-function writeVertex(target, offset, position, color) {
+function writeVertex(target, offset, position, normal, color) {
   target[offset++] = position[0];
   target[offset++] = position[1];
   target[offset++] = position[2];
+  target[offset++] = normal[0];
+  target[offset++] = normal[1];
+  target[offset++] = normal[2];
   target[offset++] = color[0];
   target[offset++] = color[1];
   target[offset++] = color[2];
   return offset;
 }
 
-function writeQuad(target, offset, corners, color) {
+function writeQuad(target, offset, corners, normal, color) {
   const [a, b, c, d] = corners;
-  offset = writeVertex(target, offset, a, color);
-  offset = writeVertex(target, offset, b, color);
-  offset = writeVertex(target, offset, c, color);
-  offset = writeVertex(target, offset, a, color);
-  offset = writeVertex(target, offset, c, color);
-  offset = writeVertex(target, offset, d, color);
+  offset = writeVertex(target, offset, a, normal, color);
+  offset = writeVertex(target, offset, b, normal, color);
+  offset = writeVertex(target, offset, c, normal, color);
+  offset = writeVertex(target, offset, a, normal, color);
+  offset = writeVertex(target, offset, c, normal, color);
+  offset = writeVertex(target, offset, d, normal, color);
   return offset;
 }
 
@@ -110,12 +113,12 @@ function writeCube(target, offset, center, size, color) {
     ftr: [maxX, maxY, maxZ]
   };
 
-  offset = writeQuad(target, offset, [corners.fbl, corners.fbr, corners.ftr, corners.ftl], color);
-  offset = writeQuad(target, offset, [corners.nbr, corners.nbl, corners.ntl, corners.ntr], color);
-  offset = writeQuad(target, offset, [corners.nbl, corners.fbl, corners.ftl, corners.ntl], color);
-  offset = writeQuad(target, offset, [corners.fbr, corners.nbr, corners.ntr, corners.ftr], color);
-  offset = writeQuad(target, offset, [corners.ntl, corners.ftl, corners.ftr, corners.ntr], color);
-  offset = writeQuad(target, offset, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], color);
+  offset = writeQuad(target, offset, [corners.fbl, corners.fbr, corners.ftr, corners.ftl], [0, 0, 1], color);
+  offset = writeQuad(target, offset, [corners.nbr, corners.nbl, corners.ntl, corners.ntr], [0, 0, -1], color);
+  offset = writeQuad(target, offset, [corners.nbl, corners.fbl, corners.ftl, corners.ntl], [-1, 0, 0], color);
+  offset = writeQuad(target, offset, [corners.fbr, corners.nbr, corners.ntr, corners.ftr], [1, 0, 0], color);
+  offset = writeQuad(target, offset, [corners.ntl, corners.ftl, corners.ftr, corners.ntr], [0, 1, 0], color);
+  offset = writeQuad(target, offset, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], [0, -1, 0], color);
 
   return offset;
 }
