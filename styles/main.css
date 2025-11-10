@@ -283,6 +283,7 @@ canvas {
 .item-slot__placeholder {
   display: block;
   font-weight: 600;
+  margin-top: auto;
 }
 
 .item-slot__tag {
