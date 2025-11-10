@@ -120,6 +120,8 @@ function pushPrism(target, bounds, color, geometryBounds) {
     ftr: [maxX, maxY, maxZ]
   };
 
+  // Bottom (-Y)
+  pushQuad(target, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], color, geometryBounds);
   // Front (+Z)
   pushQuad(target, [corners.fbl, corners.fbr, corners.ftr, corners.ftl], color, geometryBounds);
   // Back (-Z)
@@ -130,8 +132,6 @@ function pushPrism(target, bounds, color, geometryBounds) {
   pushQuad(target, [corners.fbr, corners.nbr, corners.ntr, corners.ftr], color, geometryBounds);
   // Top (+Y)
   pushQuad(target, [corners.ntl, corners.ftl, corners.ftr, corners.ntr], color, geometryBounds);
-  // Bottom (-Y)
-  pushQuad(target, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], color, geometryBounds);
 }
 
 const DEFAULT_PEA_SHOOTER_PALETTE = Object.freeze({

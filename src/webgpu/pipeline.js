@@ -39,7 +39,7 @@ fn vs_main(
 }
 
 fn evaluateLight(light : Light, normal : vec3<f32>, worldPos : vec3<f32>) -> vec3<f32> {
-  let direction = light.position.xyz - worldPos;
+  var direction = light.position.xyz - worldPos;
   let distSq = max(dot(direction, direction), 1e-4);
   let invDist = inverseSqrt(distSq);
   direction = direction * invDist;
