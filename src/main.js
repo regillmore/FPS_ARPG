@@ -6,6 +6,7 @@ import { createRoomGeometry } from './world/roomGeometry.js';
 import { setupPauseMenu } from './ui/pauseMenu.js';
 import { createHudReticle } from './ui/hudReticle.js';
 import { createEnemyHealthBars } from './ui/enemyHealthBars.js';
+import { createFloatingDamageNumbers } from './ui/floatingDamageNumbers.js';
 import { getWeapon } from './game/playerWeapons.js';
 import { createEnemyManager } from './game/enemies/enemyManager.js';
 import { createProjectileManager } from './game/projectiles.js';
@@ -66,6 +67,7 @@ async function main() {
   const pauseControls = setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover });
   const hudReticle = createHudReticle({ mount: hudLayer });
   const enemyHealthBars = createEnemyHealthBars({ mount: hudLayer });
+  const floatingDamageNumbers = createFloatingDamageNumbers({ mount: hudLayer });
 
   const blendWithWhite = (color, factor = RETICLE_WHITE_BLEND) => {
     if (!Array.isArray(color) || color.length < 3) {
@@ -119,7 +121,13 @@ async function main() {
     const uniformBindGroupLayout = pipeline.getBindGroupLayout(0);
     const { vertexBuffer, vertexCount, bounds } = createRoomGeometry(device);
     const bulletHoleManager = createBulletHoleManager(device);
-    const enemyManager = createEnemyManager(device);
+    const enemyManager = createEnemyManager(device, {
+      onEnemyDamaged: (details) => {
+        if (floatingDamageNumbers) {
+          floatingDamageNumbers.spawn(details);
+        }
+      }
+    });
     const projectileManager = createProjectileManager(device, {
       bounds,
       getDynamicColliders: () => enemyManager.getHitBoxes(),
@@ -608,13 +616,21 @@ async function main() {
       }
 
       const enemies = enemyManager.getEnemies();
+      const viewportWidth = hudLayer?.clientWidth ?? canvas.clientWidth ?? canvas.width;
+      const viewportHeight = hudLayer?.clientHeight ?? canvas.clientHeight ?? canvas.height;
 
       if (enemyHealthBars) {
-        const viewportWidth = hudLayer?.clientWidth ?? canvas.clientWidth ?? canvas.width;
-        const viewportHeight = hudLayer?.clientHeight ?? canvas.clientHeight ?? canvas.height;
-
         enemyHealthBars.update({
           enemies,
+          viewProjectionMatrix: viewProj,
+          viewportWidth,
+          viewportHeight
+        });
+      }
+
+      if (floatingDamageNumbers) {
+        floatingDamageNumbers.update({
+          deltaTime: isPaused ? 0 : deltaTime,
           viewProjectionMatrix: viewProj,
           viewportWidth,
           viewportHeight
