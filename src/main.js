@@ -5,6 +5,7 @@ import { createBasicPipeline } from './webgpu/pipeline.js';
 import { createRoomGeometry } from './world/roomGeometry.js';
 import { setupPauseMenu } from './ui/pauseMenu.js';
 import { createHudReticle } from './ui/hudReticle.js';
+import { createEnemyHealthBars } from './ui/enemyHealthBars.js';
 import { getWeapon } from './game/playerWeapons.js';
 import { createEnemyManager } from './game/enemies/enemyManager.js';
 import { createProjectileManager } from './game/projectiles.js';
@@ -64,6 +65,7 @@ async function main() {
 
   const pauseControls = setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover });
   const hudReticle = createHudReticle({ mount: hudLayer });
+  const enemyHealthBars = createEnemyHealthBars({ mount: hudLayer });
 
   const blendWithWhite = (color, factor = RETICLE_WHITE_BLEND) => {
     if (!Array.isArray(color) || color.length < 3) {
@@ -605,6 +607,20 @@ async function main() {
         }
       }
 
+      const enemies = enemyManager.getEnemies();
+
+      if (enemyHealthBars) {
+        const viewportWidth = hudLayer?.clientWidth ?? canvas.clientWidth ?? canvas.width;
+        const viewportHeight = hudLayer?.clientHeight ?? canvas.clientHeight ?? canvas.height;
+
+        enemyHealthBars.update({
+          enemies,
+          viewProjectionMatrix: viewProj,
+          viewportWidth,
+          viewportHeight
+        });
+      }
+
       writeUniformData(worldUniformData, viewProj, IDENTITY_MATRIX);
       device.queue.writeBuffer(worldUniformBuffer, 0, worldUniformData);
 
@@ -637,7 +653,6 @@ async function main() {
       pass.setVertexBuffer(0, vertexBuffer);
       pass.draw(vertexCount, 1, 0, 0);
 
-      const enemies = enemyManager.getEnemies();
       if (enemies.length > 0) {
         for (const enemy of enemies) {
           if (!enemy || !enemy.vertexBuffer || !enemy.vertexCount) {

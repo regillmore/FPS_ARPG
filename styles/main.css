@@ -36,6 +36,39 @@ html, body {
   z-index: 5;
 }
 
+.enemy-health-bars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  justify-self: stretch;
+  align-self: stretch;
+  z-index: 1;
+}
+
+.enemy-health-bar {
+  position: absolute;
+  min-width: clamp(80px, 12vw, 140px);
+  transform: translate(-50%, -100%);
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.75));
+}
+
+.enemy-health-bar__shell {
+  position: relative;
+  width: 100%;
+  height: clamp(6px, 0.9vw, 10px);
+  border: 1px solid rgba(0, 0, 0, 0.75);
+  border-radius: 999px;
+  background: rgba(12, 18, 28, 0.7);
+  overflow: hidden;
+}
+
+.enemy-health-bar__fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(255, 96, 96, 0.95), rgba(255, 192, 96, 0.95));
+  transition: width 160ms ease-out;
+}
+
 .hud-reticle {
   --hud-reticle-primary: rgba(255, 255, 255, 0.92);
   --hud-reticle-accent: rgba(78, 196, 112, 0.95);
@@ -45,6 +78,7 @@ html, body {
   opacity: 0;
   transition: opacity 140ms ease;
   filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.75));
+  z-index: 2;
 }
 
 .hud-reticle.is-visible {
