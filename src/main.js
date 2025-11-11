@@ -610,11 +610,14 @@ async function main() {
       const enemies = enemyManager.getEnemies();
 
       if (enemyHealthBars) {
+        const viewportWidth = hudLayer?.clientWidth ?? canvas.clientWidth ?? canvas.width;
+        const viewportHeight = hudLayer?.clientHeight ?? canvas.clientHeight ?? canvas.height;
+
         enemyHealthBars.update({
           enemies,
           viewProjectionMatrix: viewProj,
-          viewportWidth: canvas.width,
-          viewportHeight: canvas.height
+          viewportWidth,
+          viewportHeight
         });
       }
 
