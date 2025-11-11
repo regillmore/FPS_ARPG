@@ -65,6 +65,7 @@ async function main() {
   }
 
   const pauseControls = setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover });
+  pauseControls.setPaused(true);
   const hudReticle = createHudReticle({ mount: hudLayer });
   const enemyHealthBars = createEnemyHealthBars({ mount: hudLayer });
   const floatingDamageNumbers = createFloatingDamageNumbers({ mount: hudLayer });
