@@ -276,6 +276,56 @@ async function main() {
       return true;
     };
 
+    const handleInventoryDrop = (detail) => {
+      if (!detail || !controller) {
+        return;
+      }
+      const itemState = detail.itemState;
+      if (!itemState) {
+        return;
+      }
+      const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+      const dropDistance = 1.1;
+      const forwardX = Math.sin(controller.yaw);
+      const forwardZ = Math.cos(controller.yaw);
+      const dropX = controller.position[0] + forwardX * dropDistance;
+      const dropZ = controller.position[2] + forwardZ * dropDistance;
+      const verticalBase = bounds ? clamp(bounds.minY + 0.05, bounds.minY, bounds.maxY) : 0;
+      const margin = 0.35;
+      const resolvedX = bounds
+        ? clamp(dropX, bounds.minX + margin, bounds.maxX - margin)
+        : dropX;
+      const resolvedZ = bounds
+        ? clamp(dropZ, bounds.minZ + margin, bounds.maxZ - margin)
+        : dropZ;
+      const resolvedY = bounds ? clamp(verticalBase, bounds.minY, bounds.maxY) : verticalBase;
+      const displayName = itemState.name || itemState.abbreviation || 'Item';
+      const abbreviation = itemState.abbreviation || displayName.slice(0, 2).toUpperCase();
+      const tagLabel = itemState.tag || 'Item';
+
+      worldItemManager.spawnPickup({
+        itemId: itemState.itemId || '',
+        displayName,
+        rarity: itemState.rarity || 'common',
+        position: [resolvedX, resolvedY, resolvedZ],
+        inventory: {
+          itemId: itemState.itemId || '',
+          itemType: itemState.itemType || '',
+          rarity: itemState.rarity || '',
+          description: itemState.description || '',
+          bonuses: itemState.bonuses || '',
+          name: itemState.name || displayName,
+          abbreviation,
+          tag: tagLabel,
+          weaponId: itemState.weaponId || ''
+        }
+      });
+    };
+
+    window.addEventListener('player-inventory-drop', (event) => {
+      handleInventoryDrop(event?.detail ?? null);
+    });
+
     let weaponGeometry = null;
     let equippedWeaponDefinition = null;
     let primaryFireCooldown = 0;
@@ -387,6 +437,11 @@ async function main() {
       slot.innerHTML = `<span class="item-slot__tag">${tagLabel}</span><strong>${abbreviation}</strong>`;
       slot.dataset.itemType = itemDetails.itemType ?? '';
       slot.dataset.rarity = itemDetails.rarity ?? '';
+      if (tagLabel) {
+        slot.dataset.itemTag = tagLabel;
+      } else {
+        delete slot.dataset.itemTag;
+      }
       if (typeof itemDetails.description === 'string' && itemDetails.description.length > 0) {
         slot.dataset.description = itemDetails.description;
       } else {

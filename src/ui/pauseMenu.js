@@ -46,6 +46,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   const tabPanels = Array.from(pauseMenu.querySelectorAll('[role="tabpanel"]'));
   const tablist = pauseMenu.querySelector('[role="tablist"]');
   const pauseContent = pauseMenu.querySelector('.pause-menu__content');
+  const pauseContainer = pauseMenu.querySelector('.pause-menu__container');
   const itemSlots = Array.from(pauseMenu.querySelectorAll('.item-slot'));
   const bestiaryElements = {
     list: pauseMenu.querySelector('[data-bestiary-role="encounter-list"]'),
@@ -70,6 +71,12 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     const label = slot.querySelector('strong');
     if (label) {
       label.textContent = slot.dataset.itemAbbr;
+    }
+    if (!slot.dataset.itemTag) {
+      const tag = slot.querySelector('.item-slot__tag');
+      if (tag?.textContent) {
+        slot.dataset.itemTag = tag.textContent.trim();
+      }
     }
   }
 
@@ -688,12 +695,60 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         delete slot.dataset.bonuses;
         delete slot.dataset.itemName;
         delete slot.dataset.itemAbbr;
+        delete slot.dataset.itemTag;
       } else {
         slot.innerHTML = state.html;
       }
       refreshEmptySlotLabel(slot);
       requestPlayerStatsUpdate();
       emitSlotChange(slot);
+    };
+
+    const createInventoryDropDetails = (slot) => {
+      if (!slot || slot.dataset.slot === 'empty') {
+        return null;
+      }
+      const tagLabel = slot.dataset.itemTag || slot.querySelector('.item-slot__tag')?.textContent?.trim() || '';
+      return {
+        itemId: slot.dataset.itemId || '',
+        itemType: slot.dataset.itemType || '',
+        rarity: slot.dataset.rarity || '',
+        description: slot.dataset.description || '',
+        bonuses: slot.dataset.bonuses || '',
+        name: slot.dataset.itemName || '',
+        abbreviation: slot.dataset.itemAbbr || '',
+        tag: tagLabel || 'Item',
+        weaponId: slot.dataset.weaponId || ''
+      };
+    };
+
+    const clearInventorySlot = (slot) => {
+      if (!slot || slot.dataset.slotKind !== 'inventory') {
+        return null;
+      }
+      slot.innerHTML = '<span class="item-slot__placeholder">Empty Pack Slot</span>';
+      slot.dataset.slot = 'empty';
+      slot.dataset.description = 'This pack slot is empty.';
+      delete slot.dataset.bonuses;
+      delete slot.dataset.itemType;
+      delete slot.dataset.rarity;
+      delete slot.dataset.itemId;
+      delete slot.dataset.weaponId;
+      delete slot.dataset.itemName;
+      delete slot.dataset.itemAbbr;
+      delete slot.dataset.itemTag;
+      refreshEmptySlotLabel(slot);
+      requestPlayerStatsUpdate();
+      emitSlotChange(slot);
+      return slot;
+    };
+
+    const isPointInsidePauseContainer = (clientX, clientY) => {
+      if (!pauseContainer || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+        return true;
+      }
+      const rect = pauseContainer.getBoundingClientRect();
+      return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
     };
 
     const updatePreviewPosition = (clientX, clientY) => {
@@ -769,16 +824,43 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       setDropTarget(element ? element.closest('.item-slot') : null);
     };
 
-    const handlePointerUp = () => {
+    const handlePointerUp = (event) => {
       if (!draggingSlot) {
         return;
       }
+      let handled = false;
       if (dropTarget) {
         const dropState = getSlotState(dropTarget);
         applySlotState(dropTarget, dragSourceState);
         applySlotState(draggingSlot, dropState);
         setDropTarget(null);
+        handled = true;
+      } else if (draggingSlot.dataset.slotKind === 'inventory') {
+        const droppedOutside = event
+          ? !isPointInsidePauseContainer(event.clientX, event.clientY)
+          : false;
+        if (droppedOutside) {
+          const itemDetails = createInventoryDropDetails(draggingSlot);
+          if (itemDetails) {
+            clearInventorySlot(draggingSlot);
+            window.dispatchEvent(
+              new CustomEvent('player-inventory-drop', {
+                detail: {
+                  slot: draggingSlot,
+                  slotKind: draggingSlot.dataset.slotKind || 'inventory',
+                  itemState: itemDetails,
+                  sourceState: dragSourceState
+                }
+              })
+            );
+            handled = true;
+          }
+        }
       }
+      if (!handled) {
+        applySlotState(draggingSlot, dragSourceState);
+      }
+      setDropTarget(null);
       endDrag();
     };
 
