@@ -7,6 +7,7 @@ const FLOATS_PER_PROJECTILE = VERTICES_PER_PROJECTILE * FLOATS_PER_VERTEX;
 const DEFAULT_PROJECTILE_SIZE = 0.075;
 const DEFAULT_PROJECTILE_SPEED = 24;
 const DEFAULT_PROJECTILE_LIFETIME = 2.0;
+const DEFAULT_PROJECTILE_DAMAGE = 6;
 const DEFAULT_PROJECTILE_COLOR = Object.freeze([0.9, 0.95, 0.4]);
 
 function clampMaxProjectiles(value) {
@@ -120,12 +121,25 @@ function cloneVector(source) {
   return new Float32Array([source[0], source[1], source[2]]);
 }
 
+function resolveDamageValue(projectile) {
+  if (!projectile) {
+    return DEFAULT_PROJECTILE_DAMAGE;
+  }
+
+  const value = Number(projectile.damage);
+  if (!Number.isFinite(value) || value < 0) {
+    return DEFAULT_PROJECTILE_DAMAGE;
+  }
+  return value;
+}
+
 function createImpactPayload(projectile, hit) {
   return {
     position: hit.position,
     normal: hit.normal,
     projectileSize: projectile.size,
-    projectileColor: cloneVector(projectile.color)
+    projectileColor: cloneVector(projectile.color),
+    damage: resolveDamageValue(projectile)
   };
 }
 
@@ -148,7 +162,7 @@ export function createProjectileManager(device, options = {}) {
     vertexDataDirty = true;
   }
 
-  function spawnProjectile({ position, direction, speed, color, size, lifetime } = {}) {
+  function spawnProjectile({ position, direction, speed, color, size, lifetime, damage } = {}) {
     if (projectiles.length >= maxProjectiles) {
       projectiles.shift();
     }
@@ -169,12 +183,18 @@ export function createProjectileManager(device, options = {}) {
     const lifetimeValue = Number(lifetime);
     const resolvedLifetime = Number.isFinite(lifetimeValue) && lifetimeValue > 0 ? lifetimeValue : DEFAULT_PROJECTILE_LIFETIME;
 
+    const damageValue = Number(damage);
+    const resolvedDamage = Number.isFinite(damageValue) && damageValue >= 0
+      ? damageValue
+      : DEFAULT_PROJECTILE_DAMAGE;
+
     projectiles.push({
       position: basePosition,
       velocity,
       color: normalizeColor(color),
       size: resolvedSize,
       lifetime: resolvedLifetime,
+      damage: resolvedDamage,
       age: 0
     });
 

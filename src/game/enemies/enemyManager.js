@@ -1,4 +1,5 @@
 import { createTargetDummy } from './targetDummy.js';
+import { createBarrel } from './barrel.js';
 
 export function createEnemyManager(device) {
   if (!device) {
@@ -16,8 +17,45 @@ export function createEnemyManager(device) {
     return enemy;
   }
 
+  function removeEnemy(enemy) {
+    if (!enemy) {
+      return false;
+    }
+
+    const index = enemies.indexOf(enemy);
+    if (index === -1) {
+      return false;
+    }
+
+    const [removed] = enemies.splice(index, 1);
+    removed?.destroy?.();
+    return true;
+  }
+
   function spawnTargetDummy(options) {
     return addEnemy(createTargetDummy(device, options));
+  }
+
+  function spawnBarrel(options) {
+    const { onDeath: userOnDeath, ...rest } = options ?? {};
+    let barrel = null;
+
+    const enemyOptions = {
+      ...rest,
+      onDeath(details) {
+        if (typeof userOnDeath === 'function') {
+          try {
+            userOnDeath(details);
+          } catch (error) {
+            console.error('Error while handling barrel death callback:', error);
+          }
+        }
+        removeEnemy(barrel);
+      }
+    };
+
+    barrel = createBarrel(device, enemyOptions);
+    return addEnemy(barrel);
   }
 
   function update(deltaTime) {
@@ -81,9 +119,11 @@ export function createEnemyManager(device) {
 
   return {
     spawnTargetDummy,
+    spawnBarrel,
     update,
     getEnemies,
     getHitBoxes,
+    removeEnemy,
     dispose
   };
 }
