@@ -10,6 +10,8 @@ export function createEnemyManager(device, managerOptions = {}) {
   const scratchHitBoxes = [];
   const onEnemyDamaged =
     typeof managerOptions.onEnemyDamaged === 'function' ? managerOptions.onEnemyDamaged : null;
+  const onEnemyDeath =
+    typeof managerOptions.onEnemyDeath === 'function' ? managerOptions.onEnemyDeath : null;
 
   function addEnemy(enemy) {
     if (!enemy) {
@@ -39,8 +41,9 @@ export function createEnemyManager(device, managerOptions = {}) {
   }
 
   function spawnBarrel(options) {
-    const { onDeath: userOnDeath, onDamaged: userOnDamaged, ...rest } = options ?? {};
+    const { onDeath: userOnDeath, onDamaged: userOnDamaged, experienceReward, ...rest } = options ?? {};
     let barrel = null;
+    const rewardXp = Number.isFinite(experienceReward) ? Number(experienceReward) : 35;
 
     const enemyOptions = {
       ...rest,
@@ -53,6 +56,17 @@ export function createEnemyManager(device, managerOptions = {}) {
           }
         }
         removeEnemy(barrel);
+        if (onEnemyDeath) {
+          try {
+            onEnemyDeath({
+              enemy: barrel,
+              experienceReward: rewardXp,
+              context: details?.context ?? null
+            });
+          } catch (error) {
+            console.error('Error while handling global enemy death callback:', error);
+          }
+        }
       },
       onDamaged(details) {
         if (typeof userOnDamaged === 'function') {
@@ -73,6 +87,9 @@ export function createEnemyManager(device, managerOptions = {}) {
     };
 
     barrel = createBarrel(device, enemyOptions);
+    if (barrel) {
+      barrel.experienceReward = rewardXp;
+    }
     return addEnemy(barrel);
   }
 

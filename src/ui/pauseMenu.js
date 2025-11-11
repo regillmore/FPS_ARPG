@@ -109,10 +109,18 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       agility: resolveStatElements('agility'),
       resilience: resolveStatElements('resilience'),
       insight: resolveStatElements('insight')
-    }
+    },
+    experience: resolveStatElements('experience')
   };
 
   let statsUpdateScheduled = false;
+
+  let experienceState = {
+    level: 1,
+    currentXp: 0,
+    requiredXp: 0,
+    totalXp: 0
+  };
 
   function formatNumber(value) {
     if (!Number.isFinite(value)) {
@@ -174,6 +182,53 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       elements.detail,
       !isApproximatelyZero(stat.bonus) ? `Gear ${formatSignedNumber(stat.bonus)}` : ''
     );
+  }
+
+  function updateExperienceCard(state) {
+    const elements = statElements.experience;
+    if (!elements || !elements.value) {
+      return;
+    }
+
+    const levelValue = Number(state?.level);
+    const xpValue = Number(state?.currentXp);
+    const requiredValue = Number(state?.requiredXp);
+    const totalValue = Number(state?.totalXp);
+
+    const level = Number.isFinite(levelValue) ? Math.max(1, Math.floor(levelValue)) : 1;
+    const currentXp = Number.isFinite(xpValue) ? Math.max(0, xpValue) : 0;
+    const requiredXp = Number.isFinite(requiredValue) ? Math.max(0, requiredValue) : 0;
+    const totalXp = Number.isFinite(totalValue) ? Math.max(0, totalValue) : 0;
+
+    elements.value.textContent = `Level ${formatNumber(level)}`;
+
+    const detailParts = [];
+    if (requiredXp > 0) {
+      detailParts.push(`${formatNumber(currentXp)} / ${formatNumber(requiredXp)} XP`);
+    } else {
+      detailParts.push(`${formatNumber(currentXp)} XP`);
+    }
+    if (totalXp > 0 || level > 1) {
+      detailParts.push(`Lifetime ${formatNumber(totalXp)} XP`);
+    }
+
+    setDetail(elements.detail, detailParts.join(' · '));
+  }
+
+  function setExperienceState(nextState = {}) {
+    const levelValue = Number(nextState?.level);
+    const currentValue = Number(nextState?.currentXp);
+    const requiredValue = Number(nextState?.requiredXp);
+    const totalValue = Number(nextState?.totalXp);
+
+    experienceState = {
+      level: Number.isFinite(levelValue) ? Math.max(1, Math.floor(levelValue)) : 1,
+      currentXp: Number.isFinite(currentValue) ? Math.max(0, currentValue) : 0,
+      requiredXp: Number.isFinite(requiredValue) ? Math.max(0, requiredValue) : 0,
+      totalXp: Number.isFinite(totalValue) ? Math.max(0, totalValue) : 0
+    };
+
+    updateExperienceCard(experienceState);
   }
 
   function updatePlayerStats() {
@@ -942,6 +997,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   }
 
   updatePlayerStats();
+  updateExperienceCard(experienceState);
 
   function setPaused(next) {
     if (paused === next) {
@@ -958,6 +1014,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     }
     if (paused) {
       updatePlayerStats();
+      updateExperienceCard(experienceState);
       setActiveTab(activeTab, { focus: true });
       controller?.resetMovement();
       if (document.pointerLockElement === canvas) {
@@ -1021,6 +1078,9 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       controller = instance;
     },
     setPaused,
+    setExperience(state) {
+      setExperienceState(state);
+    },
     isPaused: () => paused
   };
 }

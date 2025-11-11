@@ -7,6 +7,8 @@ import { setupPauseMenu } from './ui/pauseMenu.js';
 import { createHudReticle } from './ui/hudReticle.js';
 import { createEnemyHealthBars } from './ui/enemyHealthBars.js';
 import { createFloatingDamageNumbers } from './ui/floatingDamageNumbers.js';
+import { createExperienceTracker } from './game/experience.js';
+import { createExperienceBar } from './ui/experienceBar.js';
 import { getWeapon } from './game/playerWeapons.js';
 import { createEnemyManager } from './game/enemies/enemyManager.js';
 import { createProjectileManager } from './game/projectiles.js';
@@ -80,6 +82,27 @@ async function main() {
   const hudReticle = createHudReticle({ mount: hudLayer });
   const enemyHealthBars = createEnemyHealthBars({ mount: hudLayer });
   const floatingDamageNumbers = createFloatingDamageNumbers({ mount: hudLayer });
+  const experienceBar = createExperienceBar({ mount: hudLayer });
+  const experienceTracker = createExperienceTracker();
+
+  const applyExperienceState = (state) => {
+    if (!state) {
+      return;
+    }
+    if (experienceBar) {
+      experienceBar.setState(state);
+    }
+    if (pauseControls?.setExperience) {
+      pauseControls.setExperience(state);
+    }
+  };
+
+  applyExperienceState(experienceTracker.getState());
+
+  window.addEventListener('player-experience-change', (event) => {
+    const state = event?.detail?.state ?? experienceTracker.getState();
+    applyExperienceState(state);
+  });
 
   const blendWithWhite = (color, factor = RETICLE_WHITE_BLEND) => {
     if (!Array.isArray(color) || color.length < 3) {
@@ -195,6 +218,17 @@ async function main() {
       onEnemyDamaged: (details) => {
         if (floatingDamageNumbers) {
           floatingDamageNumbers.spawn(details);
+        }
+      },
+      onEnemyDeath: (details) => {
+        const reward = Number(details?.experienceReward);
+        if (experienceTracker && Number.isFinite(reward) && reward > 0) {
+          experienceTracker.addExperience(reward, {
+            source: 'enemy',
+            enemyType: details?.enemy?.type ?? '',
+            enemy: details?.enemy ?? null,
+            context: details?.context ?? null
+          });
         }
       }
     });
