@@ -12,6 +12,7 @@ import { createEnemyManager } from './game/enemies/enemyManager.js';
 import { createProjectileManager } from './game/projectiles.js';
 import { createBulletHoleManager } from './game/bulletHoles.js';
 import { traceRayAABB } from './game/collisions.js';
+import { createWorldItemManager } from './game/worldItems.js';
 
 const DEFAULT_WEAPON_OFFSET = {
   forward: 0.6,
@@ -34,6 +35,16 @@ const DEFAULT_RETICLE_PRIMARY_COLOR = [1, 1, 1];
 const RETICLE_WHITE_BLEND = 0.45;
 const MAX_LIGHTS = 2;
 const AMBIENT_LIGHT = new Float32Array([0.05, 0.055, 0.06]);
+const ITEM_INTERACTION_DISTANCE = 2.25;
+const ITEM_INTERACTION_DISTANCE_SQ = ITEM_INTERACTION_DISTANCE * ITEM_INTERACTION_DISTANCE;
+const ITEM_AIM_MAX_DISTANCE = 4.0;
+const ITEM_INTERACTION_VERTICAL_LIMIT = 1.75;
+const INVENTORY_EMPTY_SLOT_SELECTOR = '.item-slot[data-slot-kind="inventory"][data-slot="empty"]';
+const PICKUP_USE_KEY = 'E';
+const PICKUP_PROMPT_SUCCESS_DURATION = 2600;
+const PICKUP_PROMPT_FAILURE_DURATION = 2000;
+const PICKUP_PROMPT_BLOCKED_COLOR = 'rgb(255, 188, 140)';
+const PICKUP_PROMPT_FAILURE_COLOR = 'rgb(255, 128, 128)';
 const ACTIVE_LIGHTS = [
   {
     position: new Float32Array([-2.25, 3.25, -1.75, 1.0]),
@@ -87,6 +98,64 @@ async function main() {
     ];
   };
 
+  const floatColorToCss = (color, fallback = '') => {
+    if (!Array.isArray(color) || color.length < 3) {
+      return fallback;
+    }
+    const clampByte = (value) => Math.round(Math.min(Math.max(Number(value) || 0, 0), 1) * 255);
+    const r = clampByte(color[0]);
+    const g = clampByte(color[1]);
+    const b = clampByte(color[2]);
+    return `rgb(${r}, ${g}, ${b})`;
+  };
+
+  let baseReticlePrimaryColor = DEFAULT_RETICLE_PRIMARY_COLOR;
+  let baseReticleAccentColor = blendWithWhite(DEFAULT_RETICLE_PRIMARY_COLOR) ?? DEFAULT_RETICLE_PRIMARY_COLOR;
+  let reticleAccentOverride = null;
+  let reticleAccentOverrideKey = '';
+
+  const refreshHudReticleTheme = () => {
+    if (!hudReticle) {
+      return;
+    }
+    const accent = reticleAccentOverride ?? baseReticleAccentColor;
+    hudReticle.setTheme({
+      primaryColor: baseReticlePrimaryColor,
+      accentColor: accent
+    });
+  };
+
+  const setBaseReticleTheme = (primaryColor, accentCandidate) => {
+    baseReticlePrimaryColor = primaryColor;
+    let resolvedAccent = accentCandidate;
+    if (!resolvedAccent && Array.isArray(primaryColor)) {
+      resolvedAccent = blendWithWhite(primaryColor);
+    }
+    if (!resolvedAccent) {
+      resolvedAccent = blendWithWhite(DEFAULT_RETICLE_PRIMARY_COLOR) ?? DEFAULT_RETICLE_PRIMARY_COLOR;
+    }
+    baseReticleAccentColor = resolvedAccent;
+    refreshHudReticleTheme();
+  };
+
+  const setHudReticleAccentOverride = (color) => {
+    const key = color
+      ? Array.isArray(color)
+        ? color.map((component) => component.toFixed(3)).join(',')
+        : String(color)
+      : '';
+    if (key === reticleAccentOverrideKey) {
+      return;
+    }
+    reticleAccentOverrideKey = key;
+    reticleAccentOverride = color
+      ? Array.isArray(color)
+        ? [...color]
+        : color
+      : null;
+    refreshHudReticleTheme();
+  };
+
   const applyWeaponHudTheme = (weaponDefinition) => {
     if (!hudReticle) {
       return;
@@ -94,20 +163,20 @@ async function main() {
 
     if (!weaponDefinition) {
       hudReticle.setVisible(false);
+      setBaseReticleTheme(DEFAULT_RETICLE_PRIMARY_COLOR, blendWithWhite(DEFAULT_RETICLE_PRIMARY_COLOR));
       return;
     }
 
     const theme = weaponDefinition.getHudTheme?.() ?? null;
-    const accentColor = theme?.reticleAccentColor
-      ? blendWithWhite(theme.reticleAccentColor)
-      : undefined;
     const primaryColor = theme?.reticlePrimaryColor ?? DEFAULT_RETICLE_PRIMARY_COLOR;
-
-    hudReticle.setTheme({
-      primaryColor,
-      accentColor
-    });
+    let accentColor = null;
+    if (theme?.reticleAccentColor) {
+      accentColor = blendWithWhite(theme.reticleAccentColor);
+    }
+    setBaseReticleTheme(primaryColor, accentColor);
   };
+
+  refreshHudReticleTheme();
 
   try {
     const {
@@ -144,24 +213,204 @@ async function main() {
         });
       }
     });
+    const worldItemManager = createWorldItemManager(device);
     enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
     enemyManager.spawnBarrel({ position: [2.5, 0, -4.25] });
+    worldItemManager.spawnPickup({
+      id: 'pickup-field-medkit',
+      itemId: 'field-medkit',
+      displayName: 'Field Medkit',
+      rarity: 'uncommon',
+      position: [0.85, 0, -1.35],
+      inventory: {
+        itemId: 'field-medkit',
+        itemType: 'consumable',
+        rarity: 'uncommon',
+        description: 'Rapidly mends 40% health over 5 seconds. Shares cooldown.',
+        bonuses: 'Health Restored:+40%;Regeneration:+8% per second',
+        name: 'Field Medkit',
+        abbreviation: 'FM',
+        tag: 'Consume'
+      }
+    });
     const primaryWeaponSlot = document.querySelector(PRIMARY_WEAPON_SLOT_SELECTOR);
     const fallbackWeapon = getWeapon('pea-shooter');
+
+    const handleWorldItemPickup = (item) => {
+      if (!item) {
+        return false;
+      }
+      const inventoryDetails = item.inventory ?? null;
+      if (!inventoryDetails) {
+        worldItemManager.removeItem(item);
+        return true;
+      }
+      const itemName =
+        inventoryDetails.name ?? inventoryDetails.displayName ?? item.displayName ?? 'Item';
+      const granted = grantInventoryItem({
+        itemId: inventoryDetails.itemId ?? item.itemId ?? '',
+        itemType: inventoryDetails.itemType ?? '',
+        rarity: inventoryDetails.rarity ?? item.rarity ?? '',
+        description: inventoryDetails.description ?? '',
+        bonuses: inventoryDetails.bonuses ?? '',
+        name: itemName,
+        abbreviation: inventoryDetails.abbreviation ?? inventoryDetails.itemAbbr ?? '',
+        tag: inventoryDetails.tag ?? 'Item',
+        weaponId: inventoryDetails.weaponId ?? ''
+      });
+      if (!granted) {
+        return false;
+      }
+      worldItemManager.removeItem(item);
+      return true;
+    };
 
     let weaponGeometry = null;
     let equippedWeaponDefinition = null;
     let primaryFireCooldown = 0;
 
     let overlayWeaponLine = null;
+    let overlayUseLine = null;
     if (overlay) {
       overlay.innerHTML = `
         <div><strong>WebGPU FPS Prototype</strong></div>
         <div>Click to capture the mouse, then use WASD to move, Space/Shift for vertical movement. Press Esc to open the pause menu.</div>
+        <div>Press ${PICKUP_USE_KEY} to interact with nearby pickups.</div>
         <div data-overlay-role="equipped-weapon"></div>
+        <div data-overlay-role="use-prompt" style="display:none;"></div>
       `;
       overlayWeaponLine = overlay.querySelector('[data-overlay-role="equipped-weapon"]');
+      overlayUseLine = overlay.querySelector('[data-overlay-role="use-prompt"]');
     }
+
+    let persistentUsePrompt = { text: '', color: '' };
+    let usePromptTimer = null;
+    let usePromptTemporaryActive = false;
+
+    const applyUsePrompt = (text, color) => {
+      if (!overlayUseLine) {
+        return;
+      }
+      if (!text) {
+        overlayUseLine.textContent = '';
+        overlayUseLine.style.display = 'none';
+        overlayUseLine.style.removeProperty('color');
+        return;
+      }
+      overlayUseLine.textContent = text;
+      overlayUseLine.style.display = '';
+      if (color) {
+        overlayUseLine.style.color = color;
+      } else {
+        overlayUseLine.style.removeProperty('color');
+      }
+    };
+
+    const showPersistentUsePrompt = (text, color) => {
+      persistentUsePrompt = { text, color };
+      if (!usePromptTemporaryActive) {
+        applyUsePrompt(text, color);
+      }
+    };
+
+    const showTemporaryUsePrompt = (text, color, duration = PICKUP_PROMPT_SUCCESS_DURATION) => {
+      if (!overlayUseLine) {
+        return;
+      }
+      applyUsePrompt(text, color);
+      usePromptTemporaryActive = true;
+      if (usePromptTimer) {
+        clearTimeout(usePromptTimer);
+      }
+      usePromptTimer = window.setTimeout(() => {
+        usePromptTemporaryActive = false;
+        usePromptTimer = null;
+        applyUsePrompt(persistentUsePrompt.text, persistentUsePrompt.color);
+      }, Math.max(duration, 0));
+    };
+
+    const hideUsePrompt = () => {
+      persistentUsePrompt = { text: '', color: '' };
+      if (usePromptTimer) {
+        clearTimeout(usePromptTimer);
+        usePromptTimer = null;
+      }
+      usePromptTemporaryActive = false;
+      applyUsePrompt('', '');
+    };
+
+    const emitSlotChangeEvent = (slot) => {
+      if (!slot) {
+        return;
+      }
+      window.dispatchEvent(
+        new CustomEvent('player-slot-change', {
+          detail: {
+            slot,
+            slotKind: slot.dataset.slotKind || '',
+            slotAllowed: slot.dataset.slotAllowed || '',
+            slotState: slot.dataset.slot || '',
+            itemType: slot.dataset.itemType || '',
+            weaponId: slot.dataset.weaponId || ''
+          }
+        })
+      );
+    };
+
+    const findFirstEmptyInventorySlot = () =>
+      document.querySelector(INVENTORY_EMPTY_SLOT_SELECTOR);
+
+    const populateInventorySlot = (slot, itemDetails = {}) => {
+      if (!slot) {
+        return null;
+      }
+
+      const rawName =
+        itemDetails.name ?? itemDetails.displayName ?? itemDetails.itemName ?? 'Item';
+      const itemName = String(rawName);
+      const rawAbbreviation =
+        itemDetails.abbreviation ?? itemDetails.itemAbbr ?? itemName.slice(0, 2).toUpperCase();
+      const abbreviation = String(rawAbbreviation);
+      const tagLabel = itemDetails.tag ?? 'Item';
+
+      slot.innerHTML = `<span class="item-slot__tag">${tagLabel}</span><strong>${abbreviation}</strong>`;
+      slot.dataset.itemType = itemDetails.itemType ?? '';
+      slot.dataset.rarity = itemDetails.rarity ?? '';
+      if (typeof itemDetails.description === 'string' && itemDetails.description.length > 0) {
+        slot.dataset.description = itemDetails.description;
+      } else {
+        delete slot.dataset.description;
+      }
+      if (typeof itemDetails.bonuses === 'string' && itemDetails.bonuses.length > 0) {
+        slot.dataset.bonuses = itemDetails.bonuses;
+      } else {
+        delete slot.dataset.bonuses;
+      }
+      slot.dataset.itemName = itemName;
+      slot.dataset.itemAbbr = abbreviation;
+      if (itemDetails.itemId) {
+        slot.dataset.itemId = itemDetails.itemId;
+      } else {
+        delete slot.dataset.itemId;
+      }
+      if (itemDetails.weaponId) {
+        slot.dataset.weaponId = itemDetails.weaponId;
+      } else {
+        delete slot.dataset.weaponId;
+      }
+      slot.removeAttribute('data-slot');
+      return slot;
+    };
+
+    const grantInventoryItem = (itemDetails) => {
+      const slot = findFirstEmptyInventorySlot();
+      if (!slot) {
+        return null;
+      }
+      const populated = populateInventorySlot(slot, itemDetails);
+      emitSlotChangeEvent(populated);
+      return populated;
+    };
 
     const updateOverlayWeaponLine = () => {
       if (!overlayWeaponLine) {
@@ -276,8 +525,8 @@ async function main() {
     const weaponUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
     const activeLightCount = Math.min(ACTIVE_LIGHTS.length, MAX_LIGHTS);
 
-    const ensureEnemyUniformResources = (enemy) => {
-      if (!enemy || enemy.uniformBuffer) {
+    const ensureRenderableUniformResources = (entity) => {
+      if (!entity || entity.uniformBuffer) {
         return;
       }
 
@@ -299,16 +548,16 @@ async function main() {
       });
 
       const uniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
-      const originalDestroy = typeof enemy.destroy === 'function' ? enemy.destroy.bind(enemy) : null;
+      const originalDestroy = typeof entity.destroy === 'function' ? entity.destroy.bind(entity) : null;
 
-      enemy.uniformBuffer = uniformBuffer;
-      enemy.uniformBindGroup = uniformBindGroup;
-      enemy.uniformData = uniformData;
-      enemy.destroy = () => {
+      entity.uniformBuffer = uniformBuffer;
+      entity.uniformBindGroup = uniformBindGroup;
+      entity.uniformData = uniformData;
+      entity.destroy = () => {
         uniformBuffer.destroy?.();
-        enemy.uniformBuffer = null;
-        enemy.uniformBindGroup = null;
-        enemy.uniformData = null;
+        entity.uniformBuffer = null;
+        entity.uniformBindGroup = null;
+        entity.uniformData = null;
         if (originalDestroy) {
           originalDestroy();
         }
@@ -347,6 +596,7 @@ async function main() {
     const muzzlePosition = new Float32Array(3);
     const cameraAimPoint = new Float32Array(3);
     const projectileDirection = new Float32Array(3);
+    const viewDirection = new Float32Array(3);
 
     const controller = new FirstPersonController(canvas);
     pauseControls.setController(controller);
@@ -358,6 +608,8 @@ async function main() {
       lastTime = now;
 
       const isPaused = pauseControls.isPaused();
+      const usePressedThisFrame =
+        typeof controller.consumeUsePress === 'function' ? controller.consumeUsePress() : false;
 
       if (hudReticle) {
         const shouldShowHudReticle = !isPaused && Boolean(equippedWeaponDefinition);
@@ -388,6 +640,9 @@ async function main() {
       mat4Perspective(projection, Math.PI / 3, aspect, 0.1, 100.0);
       const eye = controller.position;
       const center = controller.getViewTarget();
+      viewDirection[0] = center[0] - eye[0];
+      viewDirection[1] = center[1] - eye[1];
+      viewDirection[2] = center[2] - eye[2];
       mat4LookAt(view, eye, center, WORLD_UP);
       mat4Multiply(viewProj, projection, view);
 
@@ -613,10 +868,100 @@ async function main() {
           });
 
           primaryFireCooldown = 1 / resolvedRateOfFire;
+      }
+    }
+
+    const worldItems = typeof worldItemManager.getItems === 'function' ? worldItemManager.getItems() : [];
+
+    if (isPaused) {
+      hideUsePrompt();
+      setHudReticleAccentOverride(null);
+    } else {
+      let highlightedPickup = null;
+      let closestPickupDistance = Infinity;
+
+      if (Array.isArray(worldItems) && worldItems.length > 0) {
+        for (const item of worldItems) {
+          if (!item || !item.bounds || !item.center) {
+            continue;
+          }
+
+          const dx = controller.position[0] - item.center[0];
+          const dz = controller.position[2] - item.center[2];
+          const horizontalDistanceSq = dx * dx + dz * dz;
+          if (horizontalDistanceSq > ITEM_INTERACTION_DISTANCE_SQ) {
+            continue;
+          }
+
+          const verticalDistance = Math.abs(controller.position[1] - item.center[1]);
+          if (verticalDistance > ITEM_INTERACTION_VERTICAL_LIMIT) {
+            continue;
+          }
+
+          const hit = traceRayAABB(eye, viewDirection, ITEM_AIM_MAX_DISTANCE, item.bounds);
+          if (!hit) {
+            continue;
+          }
+
+          if (hit.distance < closestPickupDistance) {
+            closestPickupDistance = hit.distance;
+            highlightedPickup = item;
+          }
         }
       }
 
-      const enemies = enemyManager.getEnemies();
+      if (highlightedPickup) {
+        const pickupName = highlightedPickup.displayName ?? 'Pickup';
+        const highlightColor =
+          blendWithWhite(highlightedPickup.accentColor, 0.25) ?? highlightedPickup.accentColor;
+        const promptColor = floatColorToCss(
+          highlightColor ?? highlightedPickup.accentColor,
+          'rgb(255, 255, 255)'
+        );
+        const canPickup = Boolean(findFirstEmptyInventorySlot());
+        let shouldShowPrompt = true;
+
+        setHudReticleAccentOverride(highlightColor ?? highlightedPickup.accentColor);
+
+        if (usePressedThisFrame) {
+          if (canPickup) {
+            if (handleWorldItemPickup(highlightedPickup)) {
+              setHudReticleAccentOverride(null);
+              showPersistentUsePrompt('', '');
+              showTemporaryUsePrompt(
+                `${pickupName} added to pack`,
+                promptColor,
+                PICKUP_PROMPT_SUCCESS_DURATION
+              );
+              highlightedPickup = null;
+              shouldShowPrompt = false;
+            }
+          } else {
+            showTemporaryUsePrompt('Pack inventory is full', PICKUP_PROMPT_FAILURE_COLOR, PICKUP_PROMPT_FAILURE_DURATION);
+          }
+        }
+
+        if (highlightedPickup && shouldShowPrompt) {
+          if (canPickup) {
+            const rarityLabel = highlightedPickup.rarityLabel || '';
+            showPersistentUsePrompt(
+              `Press ${PICKUP_USE_KEY} to pick up ${pickupName}${rarityLabel ? ` (${rarityLabel})` : ''}`,
+              promptColor
+            );
+          } else {
+            showPersistentUsePrompt(
+              `Pack is full — ${pickupName}`,
+              PICKUP_PROMPT_BLOCKED_COLOR
+            );
+          }
+        }
+      } else {
+        setHudReticleAccentOverride(null);
+        showPersistentUsePrompt('', '');
+      }
+    }
+
+    const enemies = enemyManager.getEnemies();
       const viewportWidth = hudLayer?.clientWidth ?? canvas.clientWidth ?? canvas.width;
       const viewportHeight = hudLayer?.clientHeight ?? canvas.clientHeight ?? canvas.height;
 
@@ -670,12 +1015,31 @@ async function main() {
       pass.setVertexBuffer(0, vertexBuffer);
       pass.draw(vertexCount, 1, 0, 0);
 
+      if (Array.isArray(worldItems) && worldItems.length > 0) {
+        for (const item of worldItems) {
+          if (!item || !item.vertexBuffer || !item.vertexCount) {
+            continue;
+          }
+          ensureRenderableUniformResources(item);
+          if (!item.uniformBuffer || !item.uniformBindGroup || !item.uniformData) {
+            continue;
+          }
+          writeUniformData(item.uniformData, viewProj, item.modelMatrix ?? IDENTITY_MATRIX);
+          device.queue.writeBuffer(item.uniformBuffer, 0, item.uniformData);
+          pass.setBindGroup(0, item.uniformBindGroup);
+          pass.setVertexBuffer(0, item.vertexBuffer);
+          pass.draw(item.vertexCount, 1, 0, 0);
+        }
+        pass.setBindGroup(0, worldUniformBindGroup);
+        pass.setVertexBuffer(0, vertexBuffer);
+      }
+
       if (enemies.length > 0) {
         for (const enemy of enemies) {
           if (!enemy || !enemy.vertexBuffer || !enemy.vertexCount) {
             continue;
           }
-          ensureEnemyUniformResources(enemy);
+          ensureRenderableUniformResources(enemy);
           if (!enemy.uniformBuffer || !enemy.uniformBindGroup || !enemy.uniformData) {
             continue;
           }
