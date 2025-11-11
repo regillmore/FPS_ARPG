@@ -774,3 +774,99 @@ canvas {
 [role="tabpanel"][hidden] {
   display: none;
 }
+
+.experience-bar {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(24px, 4vh, 48px);
+  transform: translateX(-50%);
+  width: min(520px, 80vw);
+  pointer-events: none;
+  color: #f2f6ff;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+  opacity: 0;
+  transition: opacity 180ms ease;
+  font-family: inherit;
+  z-index: 3;
+}
+
+.experience-bar.is-visible {
+  opacity: 1;
+}
+
+.experience-bar__shell {
+  position: relative;
+  width: 100%;
+  height: clamp(10px, 1.4vw, 16px);
+  border-radius: 999px;
+  background: rgba(10, 18, 28, 0.78);
+  overflow: hidden;
+  border: 1px solid rgba(86, 140, 220, 0.45);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.65);
+}
+
+.experience-bar__fill {
+  position: absolute;
+  inset: 0;
+  width: 0%;
+  background: linear-gradient(90deg, rgba(80, 180, 255, 0.95), rgba(120, 255, 200, 0.95));
+  transition: width 200ms ease-out;
+}
+
+.experience-bar__shell::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(126, 220, 255, 0.5) 0%, rgba(126, 220, 255, 0) 70%);
+  transform: scale(0.96);
+}
+
+.experience-bar--level-up .experience-bar__shell::after {
+  animation: experience-bar-pulse 0.9s ease-out forwards;
+}
+
+@keyframes experience-bar-pulse {
+  0% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  60% {
+    opacity: 0.4;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+.experience-bar__label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.45rem;
+  font-size: clamp(12px, 1.3vw, 15px);
+  letter-spacing: 0.01em;
+}
+
+.experience-bar__level {
+  font-weight: 600;
+}
+
+.experience-bar__progress {
+  color: var(--text-muted, #c4c8d0);
+}
+
+.experience-bar__detail {
+  margin-top: 0.2rem;
+  font-size: clamp(10px, 1.1vw, 13px);
+  color: var(--text-muted, #c4c8d0);
+  text-align: right;
+}
+
+.experience-bar--maxed .experience-bar__fill {
+  background: linear-gradient(90deg, rgba(255, 230, 120, 0.95), rgba(255, 180, 70, 0.95));
+}
