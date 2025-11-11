@@ -24,7 +24,8 @@ const DEFAULT_PROJECTILE_SETTINGS = Object.freeze({
   size: 0.075,
   lifetime: 2.0,
   muzzleOffset: 0.9,
-  color: [0.9, 0.95, 0.4]
+  color: [0.9, 0.95, 0.4],
+  damage: 6
 });
 const MAX_AIM_DISTANCE = 100;
 const DEFAULT_RETICLE_PRIMARY_COLOR = [1, 1, 1];
@@ -133,6 +134,7 @@ async function main() {
       }
     });
     enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
+    enemyManager.spawnBarrel({ position: [2.5, 0, -4.25] });
     const primaryWeaponSlot = document.querySelector(PRIMARY_WEAPON_SLOT_SELECTOR);
     const fallbackWeapon = getWeapon('pea-shooter');
 
@@ -520,6 +522,12 @@ async function main() {
           const projectileColor = Array.isArray(stats.projectileColor)
             ? stats.projectileColor
             : DEFAULT_PROJECTILE_SETTINGS.color;
+          const damageStat = 'projectileDamage' in stats ? stats.projectileDamage : stats.baseDamage;
+          const damageValue = Number(damageStat);
+          const projectileDamage =
+            Number.isFinite(damageValue) && damageValue > 0
+              ? damageValue
+              : DEFAULT_PROJECTILE_SETTINGS.damage;
 
           const resolvedRateOfFire = Number.isFinite(rateOfFire) && rateOfFire > 0 ? rateOfFire : 1;
           const resolvedVelocity = Number.isFinite(muzzleVelocity) && muzzleVelocity > 0 ? muzzleVelocity : 20;
@@ -589,7 +597,8 @@ async function main() {
             speed: resolvedVelocity,
             color: projectileColor,
             size: projectileSize,
-            lifetime: projectileLifetime
+            lifetime: projectileLifetime,
+            damage: projectileDamage
           });
 
           primaryFireCooldown = 1 / resolvedRateOfFire;
