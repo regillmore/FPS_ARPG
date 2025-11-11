@@ -1,5 +1,34 @@
 import { computePlayerStatsFromEquipment, STAT_EPSILON } from '../game/stats.js';
 
+const BESTIARY_ENTRY_DEFINITIONS = Object.freeze({
+  barrel: {
+    id: 'barrel',
+    tag: 'Hazard',
+    name: 'Volatile Containment Barrel',
+    rosterLine: 'Improvised explosive hazard',
+    subtitle: 'Pressurized storage drums rigged to detonate when breached.',
+    summary:
+      'Industrial waste barrels wrapped in shrapnel casing. Their ruptures emit a concussive blast and ignite exposed propellant.',
+    traits: [
+      {
+        label: 'Threat Vector',
+        description:
+          'Detonates when destroyed, dealing heavy area damage and staggering anyone inside the blast radius.'
+      },
+      {
+        label: 'Countermeasures',
+        description:
+          'Engage from cover or trigger at range. Maintain distance to avoid chained explosions in cluttered arenas.'
+      },
+      {
+        label: 'Field Notes',
+        description:
+          'Volatile drums can set off other hazards. Sweep the environment before firing to avoid collateral damage.'
+      }
+    ]
+  }
+});
+
 function createNoopPauseMenuControls() {
   return {
     setController() {},
@@ -18,6 +47,21 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   const tablist = pauseMenu.querySelector('[role="tablist"]');
   const pauseContent = pauseMenu.querySelector('.pause-menu__content');
   const itemSlots = Array.from(pauseMenu.querySelectorAll('.item-slot'));
+  const bestiaryElements = {
+    list: pauseMenu.querySelector('[data-bestiary-role="encounter-list"]'),
+    emptyState: pauseMenu.querySelector('[data-bestiary-role="empty-state"]'),
+    detail: pauseMenu.querySelector('[data-bestiary-role="detail"]'),
+    detailName: pauseMenu.querySelector('[data-bestiary-role="detail-name"]'),
+    detailSubtitle: pauseMenu.querySelector('[data-bestiary-role="detail-subtitle"]'),
+    detailSummary: pauseMenu.querySelector('[data-bestiary-role="detail-summary"]'),
+    detailTraits: pauseMenu.querySelector('[data-bestiary-role="detail-traits"]'),
+    detailTag: pauseMenu.querySelector('[data-bestiary-role="detail-tag"]')
+  };
+
+  const bestiaryState = {
+    unlocked: new Map(),
+    activeId: ''
+  };
 
   for (const slot of itemSlots) {
     if (!slot.dataset.itemAbbr) {
@@ -171,6 +215,176 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   }
 
   setActiveTab(activeTab);
+
+  function updateBestiaryEmptyState() {
+    if (!bestiaryElements.emptyState) {
+      return;
+    }
+    bestiaryElements.emptyState.toggleAttribute('hidden', bestiaryState.unlocked.size > 0);
+  }
+
+  function renderBestiaryDetail(definition) {
+    if (!bestiaryElements.detail) {
+      return;
+    }
+
+    const {
+      detailTag,
+      detailName,
+      detailSubtitle,
+      detailSummary,
+      detailTraits
+    } = bestiaryElements;
+
+    if (!definition) {
+      if (detailTag) {
+        detailTag.textContent = '';
+        detailTag.hidden = true;
+      }
+      if (detailName) {
+        detailName.textContent = 'Tactical Archive';
+      }
+      if (detailSubtitle) {
+        detailSubtitle.textContent = 'Select an encounter from the roster to review its dossier.';
+      }
+      if (detailSummary) {
+        detailSummary.textContent = '';
+        detailSummary.hidden = true;
+      }
+      if (detailTraits) {
+        detailTraits.innerHTML = '';
+        detailTraits.hidden = true;
+      }
+      return;
+    }
+
+    if (detailTag) {
+      if (definition.tag) {
+        detailTag.textContent = definition.tag;
+        detailTag.hidden = false;
+      } else {
+        detailTag.textContent = '';
+        detailTag.hidden = true;
+      }
+    }
+
+    if (detailName) {
+      detailName.textContent = definition.name ?? 'Encounter Intel';
+    }
+
+    if (detailSubtitle) {
+      detailSubtitle.textContent = definition.subtitle ?? '';
+    }
+
+    if (detailSummary) {
+      const summaryText = definition.summary ?? '';
+      detailSummary.textContent = summaryText;
+      detailSummary.hidden = summaryText.length === 0;
+    }
+
+    if (detailTraits) {
+      detailTraits.innerHTML = '';
+      const entries = Array.isArray(definition.traits) ? definition.traits : [];
+      if (entries.length === 0) {
+        detailTraits.hidden = true;
+      } else {
+        for (const trait of entries) {
+          if (!trait || (!trait.label && !trait.description)) {
+            continue;
+          }
+          if (trait.label) {
+            const term = document.createElement('dt');
+            term.textContent = trait.label;
+            detailTraits.appendChild(term);
+          }
+          if (trait.description) {
+            const detail = document.createElement('dd');
+            detail.textContent = trait.description;
+            detailTraits.appendChild(detail);
+          }
+        }
+        detailTraits.hidden = detailTraits.childElementCount === 0;
+      }
+    }
+  }
+
+  function selectBestiaryEntry(entryId) {
+    if (!entryId || !bestiaryState.unlocked.has(entryId)) {
+      renderBestiaryDetail(null);
+      bestiaryState.activeId = '';
+      return;
+    }
+
+    const record = bestiaryState.unlocked.get(entryId);
+    bestiaryState.activeId = entryId;
+
+    for (const { button } of bestiaryState.unlocked.values()) {
+      button?.classList.toggle('is-active', button === record.button);
+    }
+
+    renderBestiaryDetail(record.definition);
+  }
+
+  function createBestiaryButton(definition) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'bestiary-entry';
+    button.dataset.enemyId = definition.id ?? '';
+
+    const title = document.createElement('strong');
+    title.textContent = definition.name ?? 'Encounter';
+    button.appendChild(title);
+
+    const subtitleText = definition.rosterLine ?? definition.subtitle ?? '';
+    if (subtitleText) {
+      const subtitle = document.createElement('span');
+      subtitle.textContent = subtitleText;
+      button.appendChild(subtitle);
+    }
+
+    button.addEventListener('click', () => {
+      selectBestiaryEntry(definition.id);
+    });
+
+    return button;
+  }
+
+  function unlockBestiaryEntry(entryId) {
+    if (!entryId || bestiaryState.unlocked.has(entryId)) {
+      return;
+    }
+    if (!bestiaryElements.list) {
+      return;
+    }
+
+    const definition = BESTIARY_ENTRY_DEFINITIONS[entryId];
+    if (!definition) {
+      return;
+    }
+
+    const button = createBestiaryButton(definition);
+    bestiaryElements.list.appendChild(button);
+    bestiaryState.unlocked.set(entryId, { definition, button });
+    updateBestiaryEmptyState();
+    if (!bestiaryState.activeId) {
+      selectBestiaryEntry(entryId);
+    }
+  }
+
+  function handleBestiaryUnlock(event) {
+    const type = event?.detail?.enemyType ?? event?.detail?.id ?? '';
+    if (!type) {
+      return;
+    }
+    unlockBestiaryEntry(type);
+  }
+
+  if (bestiaryElements.list) {
+    window.addEventListener('bestiary-unlock', handleBestiaryUnlock);
+  }
+
+  updateBestiaryEmptyState();
+  renderBestiaryDetail(null);
 
   if (itemPopover) {
     const popoverTag = itemPopover.querySelector('.item-popover__tag');

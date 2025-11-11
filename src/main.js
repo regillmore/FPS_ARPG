@@ -215,7 +215,18 @@ async function main() {
     });
     const worldItemManager = createWorldItemManager(device);
     enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
-    enemyManager.spawnBarrel({ position: [2.5, 0, -4.25] });
+    enemyManager.spawnBarrel({
+      position: [2.5, 0, -4.25],
+      onDeath() {
+        window.dispatchEvent(
+          new CustomEvent('bestiary-unlock', {
+            detail: {
+              enemyType: 'barrel'
+            }
+          })
+        );
+      }
+    });
     worldItemManager.spawnPickup({
       id: 'pickup-field-medkit',
       itemId: 'field-medkit',

@@ -264,21 +264,35 @@
             </div>
           </div>
         </section>
-        <section class="pause-menu__panel" role="tabpanel" id="panel-bestiary" aria-labelledby="tab-bestiary" data-tab="bestiary" hidden>
+        <section
+          class="pause-menu__panel"
+          role="tabpanel"
+          id="panel-bestiary"
+          aria-labelledby="tab-bestiary"
+          data-tab="bestiary"
+          hidden
+        >
           <h3>Encounter Intel</h3>
-          <div class="bestiary-list">
-            <div class="bestiary-entry">
-              <strong>Vorvex Skirmisher</strong>
-              <span>Fast melee hunter. Counter with stagger or mobility cooldowns.</span>
+          <div class="bestiary-layout">
+            <div class="bestiary-encounters">
+              <p class="bestiary-empty" data-bestiary-role="empty-state">
+                Encounter intel will appear here after you neutralize hostile threats.
+              </p>
+              <div class="bestiary-list" data-bestiary-role="encounter-list"></div>
             </div>
-            <div class="bestiary-entry">
-              <strong>Obelith Conduit</strong>
-              <span>Anchored caster that shields allies. Prioritize for burst damage.</span>
-            </div>
-            <div class="bestiary-entry">
-              <strong>Null Swarm</strong>
-              <span>Nanite storm that drains shields. Area denial works best.</span>
-            </div>
+            <article class="bestiary-detail" data-bestiary-role="detail">
+              <header class="bestiary-detail__header">
+                <p class="bestiary-detail__tag" data-bestiary-role="detail-tag" hidden></p>
+                <h4 class="bestiary-detail__name" data-bestiary-role="detail-name">
+                  Tactical Archive
+                </h4>
+                <p class="bestiary-detail__subtitle" data-bestiary-role="detail-subtitle">
+                  Select an encounter from the roster to review its dossier.
+                </p>
+              </header>
+              <p class="bestiary-detail__summary" data-bestiary-role="detail-summary" hidden></p>
+              <dl class="bestiary-detail__traits" data-bestiary-role="detail-traits" hidden></dl>
+            </article>
           </div>
         </section>
         <section class="pause-menu__panel" role="tabpanel" id="panel-achievements" aria-labelledby="tab-achievements" data-tab="achievements" hidden>
