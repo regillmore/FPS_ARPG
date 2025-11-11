@@ -5,10 +5,10 @@ const BASE_PLAYER_STATS = {
     shield: { label: 'Shield', current: 0, max: 0 }
   },
   attributes: {
-    power: { label: 'Power', base: 10 },
-    agility: { label: 'Agility', base: 4 },
-    resilience: { label: 'Resilience', base: 12 },
-    insight: { label: 'Insight', base: 2 }
+    power: { label: 'Power', base: 0 },
+    agility: { label: 'Agility', base: 0 },
+    resilience: { label: 'Resilience', base: 0 },
+    insight: { label: 'Insight', base: 0 }
   }
 };
 

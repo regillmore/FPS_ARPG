@@ -64,12 +64,12 @@ function addSideStrip(target, bottomRadius, topRadius, bottomY, topY, color) {
     const normal1 = [cos1, 0, sin1];
 
     pushVertex(target, bottom0, normal0, color);
-    pushVertex(target, bottom1, normal1, color);
     pushVertex(target, top1, normal1, color);
+    pushVertex(target, bottom1, normal1, color);
 
     pushVertex(target, bottom0, normal0, color);
-    pushVertex(target, top1, normal1, color);
     pushVertex(target, top0, normal0, color);
+    pushVertex(target, top1, normal1, color);
   }
 }
 
@@ -89,7 +89,7 @@ function addCap(target, radius, y, normal, color, invert = false) {
     const edge0 = [radius * cos0, y, radius * sin0];
     const edge1 = [radius * cos1, y, radius * sin1];
 
-    if (!invert) {
+    if (invert) {
       pushVertex(target, center, normal, color);
       pushVertex(target, edge0, normal, color);
       pushVertex(target, edge1, normal, color);
