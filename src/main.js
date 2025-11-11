@@ -9,6 +9,7 @@ import { getWeapon } from './game/playerWeapons.js';
 import { createEnemyManager } from './game/enemies/enemyManager.js';
 import { createProjectileManager } from './game/projectiles.js';
 import { createBulletHoleManager } from './game/bulletHoles.js';
+import { traceRayAABB } from './game/collisions.js';
 
 const DEFAULT_WEAPON_OFFSET = {
   forward: 0.6,
@@ -25,6 +26,7 @@ const DEFAULT_PROJECTILE_SETTINGS = Object.freeze({
   muzzleOffset: 0.9,
   color: [0.9, 0.95, 0.4]
 });
+const MAX_AIM_DISTANCE = 100;
 const DEFAULT_RETICLE_PRIMARY_COLOR = [1, 1, 1];
 const RETICLE_WHITE_BLEND = 0.45;
 const MAX_LIGHTS = 2;
@@ -330,6 +332,8 @@ async function main() {
     const weaponUp = new Float32Array(3);
     const weaponTranslation = new Float32Array(3);
     const muzzlePosition = new Float32Array(3);
+    const cameraAimPoint = new Float32Array(3);
+    const projectileDirection = new Float32Array(3);
 
     const controller = new FirstPersonController(canvas);
     pauseControls.setController(controller);
@@ -527,9 +531,61 @@ async function main() {
           muzzlePosition[2] =
             weaponTranslation[2] + weaponForward[2] * muzzleOffset;
 
+          let closestAimHit = null;
+          const tryAimHit = (hit) => {
+            if (!hit) {
+              return;
+            }
+            if (!closestAimHit || hit.distance < closestAimHit.distance) {
+              closestAimHit = hit;
+            }
+          };
+
+          const dynamicAimColliders = enemyManager.getHitBoxes?.();
+          if (Array.isArray(dynamicAimColliders)) {
+            for (let i = 0; i < dynamicAimColliders.length; i += 1) {
+              const colliderBounds = dynamicAimColliders[i]?.bounds;
+              if (!colliderBounds) {
+                continue;
+              }
+              tryAimHit(traceRayAABB(eye, weaponForward, MAX_AIM_DISTANCE, colliderBounds));
+            }
+          }
+
+          tryAimHit(traceRayAABB(eye, weaponForward, MAX_AIM_DISTANCE, bounds));
+
+          if (closestAimHit) {
+            cameraAimPoint.set(closestAimHit.position);
+          } else {
+            cameraAimPoint[0] = eye[0] + weaponForward[0] * MAX_AIM_DISTANCE;
+            cameraAimPoint[1] = eye[1] + weaponForward[1] * MAX_AIM_DISTANCE;
+            cameraAimPoint[2] = eye[2] + weaponForward[2] * MAX_AIM_DISTANCE;
+          }
+
+          projectileDirection[0] = cameraAimPoint[0] - muzzlePosition[0];
+          projectileDirection[1] = cameraAimPoint[1] - muzzlePosition[1];
+          projectileDirection[2] = cameraAimPoint[2] - muzzlePosition[2];
+
+          let projectileDirectionLength = Math.hypot(
+            projectileDirection[0],
+            projectileDirection[1],
+            projectileDirection[2]
+          );
+
+          if (projectileDirectionLength <= 1e-5) {
+            projectileDirection[0] = weaponForward[0];
+            projectileDirection[1] = weaponForward[1];
+            projectileDirection[2] = weaponForward[2];
+            projectileDirectionLength = 1;
+          } else {
+            projectileDirection[0] /= projectileDirectionLength;
+            projectileDirection[1] /= projectileDirectionLength;
+            projectileDirection[2] /= projectileDirectionLength;
+          }
+
           projectileManager.spawnProjectile({
             position: muzzlePosition,
-            direction: weaponForward,
+            direction: projectileDirection,
             speed: resolvedVelocity,
             color: projectileColor,
             size: projectileSize,
