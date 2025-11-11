@@ -1,3 +1,5 @@
+import { sweepAABB } from './collisions.js';
+
 const DEFAULT_MAX_PROJECTILES = 256;
 const FLOATS_PER_VERTEX = 9;
 const VERTICES_PER_PROJECTILE = 36;
@@ -6,7 +8,6 @@ const DEFAULT_PROJECTILE_SIZE = 0.075;
 const DEFAULT_PROJECTILE_SPEED = 24;
 const DEFAULT_PROJECTILE_LIFETIME = 2.0;
 const DEFAULT_PROJECTILE_COLOR = Object.freeze([0.9, 0.95, 0.4]);
-const COLLISION_EPSILON = 1e-5;
 
 function clampMaxProjectiles(value) {
   const maxValue = Number(value);
@@ -128,68 +129,6 @@ function createImpactPayload(projectile, hit) {
   };
 }
 
-function computeBoundsCollision(position, velocity, deltaTime, bounds) {
-  if (!bounds || deltaTime <= 0) {
-    return null;
-  }
-
-  let earliestT = Infinity;
-  let impact = null;
-
-  const tryPlane = (axis, planeValue) => {
-    const start = position[axis];
-    const velocityComponent = velocity[axis];
-    if (Math.abs(velocityComponent) <= COLLISION_EPSILON) {
-      return;
-    }
-
-    const delta = velocityComponent * deltaTime;
-    const t = (planeValue - start) / delta;
-    if (t < 0 || t > 1 || t >= earliestT) {
-      return;
-    }
-
-    const hitX = position[0] + velocity[0] * deltaTime * t;
-    const hitY = position[1] + velocity[1] * deltaTime * t;
-    const hitZ = position[2] + velocity[2] * deltaTime * t;
-
-    if (
-      hitX < bounds.minX - COLLISION_EPSILON ||
-      hitX > bounds.maxX + COLLISION_EPSILON ||
-      hitY < bounds.minY - COLLISION_EPSILON ||
-      hitY > bounds.maxY + COLLISION_EPSILON ||
-      hitZ < bounds.minZ - COLLISION_EPSILON ||
-      hitZ > bounds.maxZ + COLLISION_EPSILON
-    ) {
-      return;
-    }
-
-    earliestT = t;
-    const normal = new Float32Array(3);
-    // The surface normal always opposes the projectile's travel direction so that
-    // impacts provide consistent orientation data for gameplay and rendering logic.
-    normal[axis] = velocityComponent > 0 ? -1 : 1;
-    impact = {
-      position: new Float32Array([
-        axis === 0 ? planeValue : hitX,
-        axis === 1 ? planeValue : hitY,
-        axis === 2 ? planeValue : hitZ
-      ]),
-      normal,
-      time: t
-    };
-  };
-
-  tryPlane(0, bounds.minX);
-  tryPlane(0, bounds.maxX);
-  tryPlane(1, bounds.minY);
-  tryPlane(1, bounds.maxY);
-  tryPlane(2, bounds.minZ);
-  tryPlane(2, bounds.maxZ);
-
-  return impact;
-}
-
 export function createProjectileManager(device, options = {}) {
   const maxProjectiles = clampMaxProjectiles(options.maxProjectiles ?? DEFAULT_MAX_PROJECTILES);
   const collisionBounds = options.bounds ?? null;
@@ -281,7 +220,7 @@ export function createProjectileManager(device, options = {}) {
           if (!colliderBounds) {
             continue;
           }
-          const hit = computeBoundsCollision(
+          const hit = sweepAABB(
             projectile.position,
             projectile.velocity,
             deltaTime,
@@ -298,7 +237,7 @@ export function createProjectileManager(device, options = {}) {
       }
 
       const worldHit = collisionBounds
-        ? computeBoundsCollision(projectile.position, projectile.velocity, deltaTime, collisionBounds)
+        ? sweepAABB(projectile.position, projectile.velocity, deltaTime, collisionBounds)
         : null;
 
       const dynamicTime = dynamicHit ? dynamicHit.time ?? Infinity : Infinity;
