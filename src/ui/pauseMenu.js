@@ -704,7 +704,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       emitSlotChange(slot);
     };
 
-    const createInventoryDropDetails = (slot) => {
+    const createSlotDropDetails = (slot) => {
       if (!slot || slot.dataset.slot === 'empty') {
         return null;
       }
@@ -722,13 +722,13 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       };
     };
 
-    const clearInventorySlot = (slot) => {
-      if (!slot || slot.dataset.slotKind !== 'inventory') {
+    const clearDroppedSlot = (slot) => {
+      if (!slot || slot.dataset.slot === 'empty') {
         return null;
       }
-      slot.innerHTML = '<span class="item-slot__placeholder">Empty Pack Slot</span>';
+      const slotKind = slot.dataset.slotKind || '';
       slot.dataset.slot = 'empty';
-      slot.dataset.description = 'This pack slot is empty.';
+      delete slot.dataset.description;
       delete slot.dataset.bonuses;
       delete slot.dataset.itemType;
       delete slot.dataset.rarity;
@@ -737,6 +737,12 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       delete slot.dataset.itemName;
       delete slot.dataset.itemAbbr;
       delete slot.dataset.itemTag;
+      if (slotKind === 'inventory') {
+        slot.innerHTML = '<span class="item-slot__placeholder">Empty Pack Slot</span>';
+        slot.dataset.description = 'This pack slot is empty.';
+      } else {
+        slot.innerHTML = '';
+      }
       refreshEmptySlotLabel(slot);
       requestPlayerStatsUpdate();
       emitSlotChange(slot);
@@ -835,19 +841,20 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         applySlotState(draggingSlot, dropState);
         setDropTarget(null);
         handled = true;
-      } else if (draggingSlot.dataset.slotKind === 'inventory') {
+      } else if (draggingSlot.dataset.slotKind === 'inventory' || draggingSlot.dataset.slotKind === 'gear') {
         const droppedOutside = event
           ? !isPointInsidePauseContainer(event.clientX, event.clientY)
           : false;
         if (droppedOutside) {
-          const itemDetails = createInventoryDropDetails(draggingSlot);
+          const slotKind = draggingSlot.dataset.slotKind || 'inventory';
+          const itemDetails = createSlotDropDetails(draggingSlot);
           if (itemDetails) {
-            clearInventorySlot(draggingSlot);
+            clearDroppedSlot(draggingSlot);
             window.dispatchEvent(
               new CustomEvent('player-inventory-drop', {
                 detail: {
                   slot: draggingSlot,
-                  slotKind: draggingSlot.dataset.slotKind || 'inventory',
+                  slotKind,
                   itemState: itemDetails,
                   sourceState: dragSourceState
                 }
