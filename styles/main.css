@@ -69,6 +69,28 @@ html, body {
   transition: width 160ms ease-out;
 }
 
+.floating-damage-numbers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  font-family: inherit;
+  justify-self: stretch;
+  align-self: stretch;
+}
+
+.floating-damage-number {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  color: #ffd27f;
+  font-weight: 700;
+  font-size: clamp(14px, 1.8vw, 22px);
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.85);
+  will-change: transform, opacity;
+  opacity: 0;
+}
+
 .hud-reticle {
   --hud-reticle-primary: rgba(255, 255, 255, 0.92);
   --hud-reticle-accent: rgba(78, 196, 112, 0.95);

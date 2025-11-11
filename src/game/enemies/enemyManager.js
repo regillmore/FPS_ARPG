@@ -1,13 +1,15 @@
 import { createTargetDummy } from './targetDummy.js';
 import { createBarrel } from './barrel.js';
 
-export function createEnemyManager(device) {
+export function createEnemyManager(device, managerOptions = {}) {
   if (!device) {
     throw new Error('A GPUDevice is required to create enemies.');
   }
 
   const enemies = [];
   const scratchHitBoxes = [];
+  const onEnemyDamaged =
+    typeof managerOptions.onEnemyDamaged === 'function' ? managerOptions.onEnemyDamaged : null;
 
   function addEnemy(enemy) {
     if (!enemy) {
@@ -37,7 +39,7 @@ export function createEnemyManager(device) {
   }
 
   function spawnBarrel(options) {
-    const { onDeath: userOnDeath, ...rest } = options ?? {};
+    const { onDeath: userOnDeath, onDamaged: userOnDamaged, ...rest } = options ?? {};
     let barrel = null;
 
     const enemyOptions = {
@@ -51,6 +53,22 @@ export function createEnemyManager(device) {
           }
         }
         removeEnemy(barrel);
+      },
+      onDamaged(details) {
+        if (typeof userOnDamaged === 'function') {
+          try {
+            userOnDamaged(details);
+          } catch (error) {
+            console.error('Error while handling barrel damage callback:', error);
+          }
+        }
+        if (onEnemyDamaged) {
+          try {
+            onEnemyDamaged(details);
+          } catch (error) {
+            console.error('Error while handling global enemy damage callback:', error);
+          }
+        }
       }
     };
 
