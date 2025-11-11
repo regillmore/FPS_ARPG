@@ -5,7 +5,8 @@ const KEY_BINDINGS = {
   KeyD: 'right',
   Space: 'up',
   ShiftLeft: 'down',
-  ShiftRight: 'down'
+  ShiftRight: 'down',
+  KeyE: 'use'
 };
 
 export class FirstPersonController {
@@ -27,7 +28,11 @@ export class FirstPersonController {
       down: false
     };
     this.triggers = {
-      primary: false
+      primary: false,
+      use: false
+    };
+    this.triggerPresses = {
+      use: false
     };
     this.#bindEvents();
   }
@@ -83,6 +88,17 @@ export class FirstPersonController {
   #handleKey(event, pressed) {
     if (event.code in KEY_BINDINGS) {
       const action = KEY_BINDINGS[event.code];
+      if (action === 'use') {
+        if (pressed && document.pointerLockElement !== this.canvas) {
+          return;
+        }
+        if (pressed) {
+          this.triggerPresses.use = true;
+        }
+        this.triggers.use = pressed;
+        event.preventDefault();
+        return;
+      }
       this.movement[action] = pressed;
       event.preventDefault();
     }
@@ -96,6 +112,8 @@ export class FirstPersonController {
 
   #resetTriggers() {
     this.triggers.primary = false;
+    this.triggers.use = false;
+    this.triggerPresses.use = false;
   }
 
   resetMovement() {
@@ -173,5 +191,15 @@ export class FirstPersonController {
 
   isPrimaryFireActive() {
     return this.triggers.primary;
+  }
+
+  isUseActive() {
+    return this.triggers.use;
+  }
+
+  consumeUsePress() {
+    const wasPressed = this.triggerPresses.use;
+    this.triggerPresses.use = false;
+    return wasPressed;
   }
 }
