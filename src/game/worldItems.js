@@ -78,20 +78,20 @@ function createBoxVertices(bounds, faceColors) {
       normal: [0, 0, 1],
       color: faceColors.side,
       corners: [
-        [minX, minY, maxZ],
-        [maxX, minY, maxZ],
+        [minX, maxY, maxZ],
         [maxX, maxY, maxZ],
-        [minX, maxY, maxZ]
+        [maxX, minY, maxZ],
+        [minX, minY, maxZ]
       ]
     },
     {
       normal: [0, 0, -1],
       color: faceColors.side,
       corners: [
-        [maxX, minY, minZ],
         [minX, minY, minZ],
-        [minX, maxY, minZ],
-        [maxX, maxY, minZ]
+        [maxX, minY, minZ],
+        [maxX, maxY, minZ],
+        [minX, maxY, minZ]
       ]
     }
   ];
