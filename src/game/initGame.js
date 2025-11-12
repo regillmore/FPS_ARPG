@@ -1,0 +1,865 @@
+import { mat4FromRotationTranslation, mat4LookAt, mat4Multiply, mat4Perspective } from '../math.js';
+import { FirstPersonController } from '../fpsController.js';
+import { initWebGPU } from '../webgpu/initWebGPU.js';
+import { createBasicPipeline } from '../webgpu/pipeline.js';
+import { createRoomGeometry } from '../world/roomGeometry.js';
+import { getWeapon } from './playerWeapons.js';
+import { createEnemyManager } from './enemies/enemyManager.js';
+import { createProjectileManager } from './projectiles.js';
+import { createBulletHoleManager } from './bulletHoles.js';
+import { traceRayAABB } from './collisions.js';
+import { createWorldItemManager } from './worldItems.js';
+import {
+  ACTIVE_LIGHTS,
+  AMBIENT_LIGHT,
+  DEFAULT_PROJECTILE_SETTINGS,
+  DEFAULT_WEAPON_OFFSET,
+  DEFAULT_WEAPON_ROLL,
+  IDENTITY_MATRIX,
+  ITEM_AIM_MAX_DISTANCE,
+  ITEM_INTERACTION_DISTANCE_SQ,
+  ITEM_INTERACTION_VERTICAL_LIMIT,
+  MAX_AIM_DISTANCE,
+  MAX_LIGHTS,
+  PICKUP_PROMPT_BLOCKED_COLOR,
+  PICKUP_PROMPT_FAILURE_COLOR,
+  PICKUP_PROMPT_FAILURE_DURATION,
+  PICKUP_PROMPT_SUCCESS_DURATION,
+  PICKUP_USE_KEY,
+  UNIFORM_BYTE_LENGTH,
+  UNIFORM_FLOAT_COUNT,
+  WORLD_UP
+} from './constants.js';
+import { blendWithWhite, floatColorToCss } from './ui/colorUtils.js';
+
+export async function initializeGame({
+  canvas,
+  pauseControls,
+  hudController,
+  overlayController,
+  experienceTracker,
+  inventoryManager
+}) {
+  try {
+    const {
+      device,
+      context,
+      format,
+      depthFormat,
+      resize,
+      getDepthTextureView
+    } = await initWebGPU(canvas);
+
+    const pipeline = createBasicPipeline(device, format, depthFormat);
+    const uniformBindGroupLayout = pipeline.getBindGroupLayout(0);
+    const { vertexBuffer, vertexCount, bounds } = createRoomGeometry(device);
+    const bulletHoleManager = createBulletHoleManager(device);
+    const enemyManager = createEnemyManager(device, {
+      onEnemyDamaged: (details) => {
+        hudController?.spawnFloatingDamageNumber?.(details);
+      },
+      onEnemyDeath: (details) => {
+        const reward = Number(details?.experienceReward);
+        if (experienceTracker && Number.isFinite(reward) && reward > 0) {
+          experienceTracker.addExperience(reward, {
+            source: 'enemy',
+            enemyType: details?.enemy?.type ?? '',
+            enemy: details?.enemy ?? null,
+            context: details?.context ?? null
+          });
+        }
+      }
+    });
+
+    const projectileManager = createProjectileManager(device, {
+      bounds,
+      getDynamicColliders: () => enemyManager.getHitBoxes(),
+      onImpact: (impact) => {
+        const size = Number.isFinite(impact.projectileSize)
+          ? Math.max(impact.projectileSize * 3, 0.12)
+          : undefined;
+        bulletHoleManager.spawnBulletHole({
+          position: impact.position,
+          normal: impact.normal,
+          size,
+          color: impact.projectileColor
+        });
+      }
+    });
+
+    const worldItemManager = createWorldItemManager(device);
+    enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
+    enemyManager.spawnBarrel({
+      position: [2.5, 0, -4.25],
+      onDeath() {
+        window.dispatchEvent(
+          new CustomEvent('bestiary-unlock', {
+            detail: {
+              enemyType: 'barrel'
+            }
+          })
+        );
+      }
+    });
+
+    worldItemManager.spawnPickup({
+      id: 'pickup-field-medkit',
+      itemId: 'field-medkit',
+      displayName: 'Field Medkit',
+      rarity: 'uncommon',
+      position: [0.85, 0, -1.35],
+      inventory: {
+        itemId: 'field-medkit',
+        itemType: 'consumable',
+        rarity: 'uncommon',
+        description: 'Rapidly mends 40% health over 5 seconds. Shares cooldown.',
+        bonuses: 'Health Restored:+40%;Regeneration:+8% per second',
+        name: 'Field Medkit',
+        abbreviation: 'FM',
+        tag: 'Consume'
+      }
+    });
+
+    const {
+      primaryWeaponSlot,
+      grantInventoryItem,
+      findFirstEmptyInventorySlot
+    } = inventoryManager ?? {};
+
+    const fallbackWeapon = getWeapon('pea-shooter');
+
+    const handleWorldItemPickup = (item) => {
+      if (!item) {
+        return false;
+      }
+      const inventoryDetails = item.inventory ?? null;
+      if (!inventoryDetails) {
+        worldItemManager.removeItem(item);
+        return true;
+      }
+      const itemName =
+        inventoryDetails.name ?? inventoryDetails.displayName ?? item.displayName ?? 'Item';
+      const granted = grantInventoryItem?.({
+        itemId: inventoryDetails.itemId ?? item.itemId ?? '',
+        itemType: inventoryDetails.itemType ?? '',
+        rarity: inventoryDetails.rarity ?? item.rarity ?? '',
+        description: inventoryDetails.description ?? '',
+        bonuses: inventoryDetails.bonuses ?? '',
+        name: itemName,
+        abbreviation: inventoryDetails.abbreviation ?? inventoryDetails.itemAbbr ?? '',
+        tag: inventoryDetails.tag ?? 'Item',
+        weaponId: inventoryDetails.weaponId ?? ''
+      });
+      if (!granted) {
+        return false;
+      }
+      worldItemManager.removeItem(item);
+      return true;
+    };
+
+    const controller = new FirstPersonController(canvas);
+    pauseControls?.setController?.(controller);
+
+    const handleInventoryDrop = (detail) => {
+      if (!detail || !controller) {
+        return;
+      }
+      const itemState = detail.itemState;
+      if (!itemState) {
+        return;
+      }
+      const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+      const dropDistance = 1.1;
+      const forwardX = Math.sin(controller.yaw);
+      const forwardZ = Math.cos(controller.yaw);
+      const dropX = controller.position[0] + forwardX * dropDistance;
+      const dropZ = controller.position[2] + forwardZ * dropDistance;
+      const verticalBase = bounds ? clamp(bounds.minY + 0.05, bounds.minY, bounds.maxY) : 0;
+      const margin = 0.35;
+      const resolvedX = bounds ? clamp(dropX, bounds.minX + margin, bounds.maxX - margin) : dropX;
+      const resolvedZ = bounds ? clamp(dropZ, bounds.minZ + margin, bounds.maxZ - margin) : dropZ;
+      const resolvedY = bounds ? clamp(verticalBase, bounds.minY, bounds.maxY) : verticalBase;
+      const displayName = itemState.name || itemState.abbreviation || 'Item';
+      const abbreviation = itemState.abbreviation || displayName.slice(0, 2).toUpperCase();
+      const tagLabel = itemState.tag || 'Item';
+
+      worldItemManager.spawnPickup({
+        itemId: itemState.itemId || '',
+        displayName,
+        rarity: itemState.rarity || 'common',
+        position: [resolvedX, resolvedY, resolvedZ],
+        inventory: {
+          itemId: itemState.itemId || '',
+          itemType: itemState.itemType || '',
+          rarity: itemState.rarity || '',
+          description: itemState.description || '',
+          bonuses: itemState.bonuses || '',
+          name: itemState.name || displayName,
+          abbreviation,
+          tag: tagLabel,
+          weaponId: itemState.weaponId || ''
+        }
+      });
+    };
+
+    window.addEventListener('player-inventory-drop', (event) => {
+      handleInventoryDrop(event?.detail ?? null);
+    });
+
+    let weaponGeometry = null;
+    let equippedWeaponDefinition = null;
+    let primaryFireCooldown = 0;
+
+    const setEquippedWeaponDefinition = (weaponDefinition) => {
+      if (equippedWeaponDefinition === weaponDefinition) {
+        overlayController?.setEquippedWeaponLabel?.(
+          equippedWeaponDefinition?.displayName ?? ''
+        );
+        return;
+      }
+
+      if (weaponGeometry?.vertexBuffer) {
+        weaponGeometry.vertexBuffer.destroy?.();
+      }
+
+      weaponGeometry = null;
+      equippedWeaponDefinition = weaponDefinition ?? null;
+      primaryFireCooldown = 0;
+
+      if (equippedWeaponDefinition) {
+        weaponGeometry = equippedWeaponDefinition.createGeometry(device);
+        if (!weaponGeometry) {
+          console.warn(`Failed to create geometry for weapon "${equippedWeaponDefinition.id}".`);
+        }
+      }
+
+      overlayController?.setEquippedWeaponLabel?.(
+        equippedWeaponDefinition?.displayName ?? ''
+      );
+      hudController?.setWeaponTheme?.(equippedWeaponDefinition);
+    };
+
+    const resolveWeaponForSlot = (slot) => {
+      if (!slot) {
+        return fallbackWeapon ?? null;
+      }
+      if (slot.dataset.slot === 'empty') {
+        return null;
+      }
+      const weaponId = slot.dataset.weaponId;
+      if (!weaponId) {
+        return null;
+      }
+      const weapon = getWeapon(weaponId);
+      if (!weapon) {
+        console.warn(`Unknown weapon id "${weaponId}".`);
+        return null;
+      }
+      return weapon;
+    };
+
+    const syncPrimaryWeapon = () => {
+      const nextWeapon = resolveWeaponForSlot(primaryWeaponSlot);
+      setEquippedWeaponDefinition(nextWeapon);
+    };
+
+    syncPrimaryWeapon();
+
+    window.addEventListener('player-slot-change', (event) => {
+      const slot = event.detail?.slot ?? null;
+      if (slot === primaryWeaponSlot) {
+        syncPrimaryWeapon();
+      }
+    });
+
+    const worldUniformBuffer = device.createBuffer({
+      size: UNIFORM_BYTE_LENGTH,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+
+    const worldUniformBindGroup = device.createBindGroup({
+      layout: uniformBindGroupLayout,
+      entries: [
+        {
+          binding: 0,
+          resource: {
+            buffer: worldUniformBuffer
+          }
+        }
+      ]
+    });
+
+    const weaponUniformBuffer = device.createBuffer({
+      size: UNIFORM_BYTE_LENGTH,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+
+    const weaponUniformBindGroup = device.createBindGroup({
+      layout: uniformBindGroupLayout,
+      entries: [
+        {
+          binding: 0,
+          resource: {
+            buffer: weaponUniformBuffer
+          }
+        }
+      ]
+    });
+
+    const projection = new Float32Array(16);
+    const view = new Float32Array(16);
+    const viewProj = new Float32Array(16);
+    const weaponModel = new Float32Array(16);
+    const worldUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
+    const weaponUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
+    const activeLightCount = Math.min(ACTIVE_LIGHTS.length, MAX_LIGHTS);
+
+    const ensureRenderableUniformResources = (entity) => {
+      if (!entity || entity.uniformBuffer) {
+        return;
+      }
+
+      const uniformBuffer = device.createBuffer({
+        size: UNIFORM_BYTE_LENGTH,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+      });
+
+      const uniformBindGroup = device.createBindGroup({
+        layout: uniformBindGroupLayout,
+        entries: [
+          {
+            binding: 0,
+            resource: {
+              buffer: uniformBuffer
+            }
+          }
+        ]
+      });
+
+      const uniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
+      const originalDestroy = typeof entity.destroy === 'function' ? entity.destroy.bind(entity) : null;
+
+      entity.uniformBuffer = uniformBuffer;
+      entity.uniformBindGroup = uniformBindGroup;
+      entity.uniformData = uniformData;
+      entity.destroy = () => {
+        uniformBuffer.destroy?.();
+        entity.uniformBuffer = null;
+        entity.uniformBindGroup = null;
+        entity.uniformData = null;
+        if (originalDestroy) {
+          originalDestroy();
+        }
+      };
+    };
+
+    const writeUniformData = (target, viewProjection, modelMatrix) => {
+      target.set(viewProjection, 0);
+      target.set(modelMatrix, 16);
+      target[32] = AMBIENT_LIGHT[0];
+      target[33] = AMBIENT_LIGHT[1];
+      target[34] = AMBIENT_LIGHT[2];
+      target[35] = activeLightCount;
+      for (let i = 0; i < MAX_LIGHTS; i += 1) {
+        const base = 36 + i * 8;
+        const light = ACTIVE_LIGHTS[i];
+        if (light) {
+          target[base + 0] = light.position[0];
+          target[base + 1] = light.position[1];
+          target[base + 2] = light.position[2];
+          target[base + 3] = light.position[3] ?? 1.0;
+          target[base + 4] = light.color[0];
+          target[base + 5] = light.color[1];
+          target[base + 6] = light.color[2];
+          target[base + 7] = light.color[3] ?? 1.0;
+        } else {
+          target.fill(0, base, base + 8);
+        }
+      }
+    };
+
+    const weaponForward = new Float32Array(3);
+    const weaponRight = new Float32Array(3);
+    const weaponUp = new Float32Array(3);
+    const weaponTranslation = new Float32Array(3);
+    const muzzlePosition = new Float32Array(3);
+    const cameraAimPoint = new Float32Array(3);
+    const projectileDirection = new Float32Array(3);
+    const viewDirection = new Float32Array(3);
+
+    let lastTime = performance.now();
+
+    function frame(now) {
+      const deltaTime = Math.min((now - lastTime) / 1000, 0.2);
+      lastTime = now;
+
+      const isPaused = pauseControls?.isPaused?.();
+      const usePressedThisFrame =
+        typeof controller.consumeUsePress === 'function' ? controller.consumeUsePress() : false;
+
+      hudController?.setReticleVisible?.(!isPaused && Boolean(equippedWeaponDefinition));
+
+      if (!isPaused) {
+        controller.update(deltaTime);
+      }
+
+      const padding = 0.25;
+      controller.position[0] = Math.min(
+        Math.max(controller.position[0], bounds.minX + padding),
+        bounds.maxX - padding
+      );
+      controller.position[1] = Math.min(
+        Math.max(controller.position[1], bounds.minY + padding),
+        bounds.maxY - padding
+      );
+      controller.position[2] = Math.min(
+        Math.max(controller.position[2], bounds.minZ + padding),
+        bounds.maxZ - padding
+      );
+
+      resize();
+
+      const aspect = canvas.width / canvas.height;
+      mat4Perspective(projection, Math.PI / 3, aspect, 0.1, 100.0);
+      const eye = controller.position;
+      const center = controller.getViewTarget();
+      viewDirection[0] = center[0] - eye[0];
+      viewDirection[1] = center[1] - eye[1];
+      viewDirection[2] = center[2] - eye[2];
+      mat4LookAt(view, eye, center, WORLD_UP);
+      mat4Multiply(viewProj, projection, view);
+
+      let weaponTransformReady = false;
+      if (equippedWeaponDefinition) {
+        const cosPitch = Math.cos(controller.pitch);
+        const sinPitch = Math.sin(controller.pitch);
+        const cosYaw = Math.cos(controller.yaw);
+        const sinYaw = Math.sin(controller.yaw);
+
+        weaponForward[0] = sinYaw * cosPitch;
+        weaponForward[1] = sinPitch;
+        weaponForward[2] = cosYaw * cosPitch;
+
+        weaponRight[0] = WORLD_UP[1] * weaponForward[2] - WORLD_UP[2] * weaponForward[1];
+        weaponRight[1] = WORLD_UP[2] * weaponForward[0] - WORLD_UP[0] * weaponForward[2];
+        weaponRight[2] = WORLD_UP[0] * weaponForward[1] - WORLD_UP[1] * weaponForward[0];
+
+        let length = Math.hypot(weaponRight[0], weaponRight[1], weaponRight[2]);
+        if (length < 1e-5) {
+          weaponRight[0] = 1;
+          weaponRight[1] = 0;
+          weaponRight[2] = 0;
+        } else {
+          weaponRight[0] /= length;
+          weaponRight[1] /= length;
+          weaponRight[2] /= length;
+        }
+
+        weaponUp[0] = weaponForward[1] * weaponRight[2] - weaponForward[2] * weaponRight[1];
+        weaponUp[1] = weaponForward[2] * weaponRight[0] - weaponForward[0] * weaponRight[2];
+        weaponUp[2] = weaponForward[0] * weaponRight[1] - weaponForward[1] * weaponRight[0];
+
+        length = Math.hypot(weaponUp[0], weaponUp[1], weaponUp[2]);
+        if (length < 1e-5) {
+          weaponUp[0] = WORLD_UP[0];
+          weaponUp[1] = WORLD_UP[1];
+          weaponUp[2] = WORLD_UP[2];
+
+          weaponRight[0] = weaponUp[1] * weaponForward[2] - weaponUp[2] * weaponForward[1];
+          weaponRight[1] = weaponUp[2] * weaponForward[0] - weaponUp[0] * weaponForward[2];
+          weaponRight[2] = weaponUp[0] * weaponForward[1] - weaponUp[1] * weaponForward[0];
+
+          length = Math.hypot(weaponRight[0], weaponRight[1], weaponRight[2]);
+          if (length < 1e-5) {
+            weaponRight[0] = 1;
+            weaponRight[1] = 0;
+            weaponRight[2] = 0;
+          } else {
+            weaponRight[0] /= length;
+            weaponRight[1] /= length;
+            weaponRight[2] /= length;
+          }
+
+          weaponUp[0] = weaponForward[1] * weaponRight[2] - weaponForward[2] * weaponRight[1];
+          weaponUp[1] = weaponForward[2] * weaponRight[0] - weaponForward[0] * weaponRight[2];
+          weaponUp[2] = weaponForward[0] * weaponRight[1] - weaponForward[1] * weaponRight[0];
+          length = Math.hypot(weaponUp[0], weaponUp[1], weaponUp[2]);
+        }
+
+        if (length < 1e-5) {
+          weaponUp[0] = WORLD_UP[0];
+          weaponUp[1] = WORLD_UP[1];
+          weaponUp[2] = WORLD_UP[2];
+        } else {
+          weaponUp[0] /= length;
+          weaponUp[1] /= length;
+          weaponUp[2] /= length;
+        }
+
+        const cosRoll = Math.cos(DEFAULT_WEAPON_ROLL);
+        const sinRoll = Math.sin(DEFAULT_WEAPON_ROLL);
+        const baseRightX = weaponRight[0];
+        const baseRightY = weaponRight[1];
+        const baseRightZ = weaponRight[2];
+        const baseUpX = weaponUp[0];
+        const baseUpY = weaponUp[1];
+        const baseUpZ = weaponUp[2];
+
+        weaponRight[0] = baseRightX * cosRoll + baseUpX * sinRoll;
+        weaponRight[1] = baseRightY * cosRoll + baseUpY * sinRoll;
+        weaponRight[2] = baseRightZ * cosRoll + baseUpZ * sinRoll;
+
+        weaponUp[0] = baseUpX * cosRoll - baseRightX * sinRoll;
+        weaponUp[1] = baseUpY * cosRoll - baseRightY * sinRoll;
+        weaponUp[2] = baseUpZ * cosRoll - baseRightZ * sinRoll;
+
+        weaponTranslation[0] =
+          eye[0] +
+          weaponForward[0] * DEFAULT_WEAPON_OFFSET.forward +
+          weaponRight[0] * DEFAULT_WEAPON_OFFSET.right +
+          weaponUp[0] * DEFAULT_WEAPON_OFFSET.up;
+        weaponTranslation[1] =
+          eye[1] +
+          weaponForward[1] * DEFAULT_WEAPON_OFFSET.forward +
+          weaponRight[1] * DEFAULT_WEAPON_OFFSET.right +
+          weaponUp[1] * DEFAULT_WEAPON_OFFSET.up;
+        weaponTranslation[2] =
+          eye[2] +
+          weaponForward[2] * DEFAULT_WEAPON_OFFSET.forward +
+          weaponRight[2] * DEFAULT_WEAPON_OFFSET.right +
+          weaponUp[2] * DEFAULT_WEAPON_OFFSET.up;
+
+        mat4FromRotationTranslation(
+          weaponModel,
+          weaponRight,
+          weaponUp,
+          weaponForward,
+          weaponTranslation
+        );
+        weaponTransformReady = true;
+      }
+
+      if (!isPaused) {
+        bulletHoleManager.update(deltaTime);
+        projectileManager.update(deltaTime);
+        enemyManager.update(deltaTime);
+        if (primaryFireCooldown > 0) {
+          primaryFireCooldown = Math.max(primaryFireCooldown - deltaTime, 0);
+        }
+
+        if (
+          weaponTransformReady &&
+          controller.isPrimaryFireActive() &&
+          primaryFireCooldown <= 0 &&
+          equippedWeaponDefinition
+        ) {
+          const stats = equippedWeaponDefinition.stats ?? {};
+          const rateOfFire = Number(stats.rateOfFire);
+          const muzzleVelocity = Number(stats.muzzleVelocity);
+          const sizeValue = Number(stats.projectileSize);
+          const lifetimeValue = Number(stats.projectileLifetime);
+          const muzzleOffsetValue = Number(stats.projectileMuzzleOffset);
+          const projectileSize = Number.isFinite(sizeValue) && sizeValue > 0
+            ? sizeValue
+            : DEFAULT_PROJECTILE_SETTINGS.size;
+          const projectileLifetime = Number.isFinite(lifetimeValue) && lifetimeValue > 0
+            ? lifetimeValue
+            : DEFAULT_PROJECTILE_SETTINGS.lifetime;
+          const muzzleOffset = Number.isFinite(muzzleOffsetValue)
+            ? muzzleOffsetValue
+            : DEFAULT_PROJECTILE_SETTINGS.muzzleOffset;
+          const projectileColor = Array.isArray(stats.projectileColor)
+            ? stats.projectileColor
+            : DEFAULT_PROJECTILE_SETTINGS.color;
+          const damageStat = 'projectileDamage' in stats ? stats.projectileDamage : stats.baseDamage;
+          const damageValue = Number(damageStat);
+          const projectileDamage =
+            Number.isFinite(damageValue) && damageValue > 0
+              ? damageValue
+              : DEFAULT_PROJECTILE_SETTINGS.damage;
+
+          const resolvedRateOfFire = Number.isFinite(rateOfFire) && rateOfFire > 0 ? rateOfFire : 1;
+          const resolvedVelocity = Number.isFinite(muzzleVelocity) && muzzleVelocity > 0 ? muzzleVelocity : 20;
+
+          muzzlePosition[0] =
+            weaponTranslation[0] + weaponForward[0] * muzzleOffset;
+          muzzlePosition[1] =
+            weaponTranslation[1] + weaponForward[1] * muzzleOffset;
+          muzzlePosition[2] =
+            weaponTranslation[2] + weaponForward[2] * muzzleOffset;
+
+          let closestAimHit = null;
+          const tryAimHit = (hit) => {
+            if (!hit) {
+              return;
+            }
+            if (!closestAimHit || hit.distance < closestAimHit.distance) {
+              closestAimHit = hit;
+            }
+          };
+
+          const dynamicAimColliders = enemyManager.getHitBoxes?.();
+          if (Array.isArray(dynamicAimColliders)) {
+            for (let i = 0; i < dynamicAimColliders.length; i += 1) {
+              const colliderBounds = dynamicAimColliders[i]?.bounds;
+              if (!colliderBounds) {
+                continue;
+              }
+              tryAimHit(traceRayAABB(eye, weaponForward, MAX_AIM_DISTANCE, colliderBounds));
+            }
+          }
+
+          tryAimHit(traceRayAABB(eye, weaponForward, MAX_AIM_DISTANCE, bounds));
+
+          if (closestAimHit) {
+            cameraAimPoint.set(closestAimHit.position);
+          } else {
+            cameraAimPoint[0] = eye[0] + weaponForward[0] * MAX_AIM_DISTANCE;
+            cameraAimPoint[1] = eye[1] + weaponForward[1] * MAX_AIM_DISTANCE;
+            cameraAimPoint[2] = eye[2] + weaponForward[2] * MAX_AIM_DISTANCE;
+          }
+
+          projectileDirection[0] = cameraAimPoint[0] - muzzlePosition[0];
+          projectileDirection[1] = cameraAimPoint[1] - muzzlePosition[1];
+          projectileDirection[2] = cameraAimPoint[2] - muzzlePosition[2];
+
+          let projectileDirectionLength = Math.hypot(
+            projectileDirection[0],
+            projectileDirection[1],
+            projectileDirection[2]
+          );
+
+          if (projectileDirectionLength <= 1e-5) {
+            projectileDirection[0] = weaponForward[0];
+            projectileDirection[1] = weaponForward[1];
+            projectileDirection[2] = weaponForward[2];
+            projectileDirectionLength = 1;
+          } else {
+            projectileDirection[0] /= projectileDirectionLength;
+            projectileDirection[1] /= projectileDirectionLength;
+            projectileDirection[2] /= projectileDirectionLength;
+          }
+
+          projectileManager.spawnProjectile({
+            position: muzzlePosition,
+            direction: projectileDirection,
+            speed: resolvedVelocity,
+            color: projectileColor,
+            size: projectileSize,
+            lifetime: projectileLifetime,
+            damage: projectileDamage
+          });
+
+          primaryFireCooldown = 1 / resolvedRateOfFire;
+        }
+      }
+
+      const worldItems = typeof worldItemManager.getItems === 'function' ? worldItemManager.getItems() : [];
+
+      if (isPaused) {
+        overlayController?.hideUsePrompt?.();
+        hudController?.setReticleAccentOverride?.(null);
+      } else {
+        let highlightedPickup = null;
+        let closestPickupDistance = Infinity;
+
+        if (Array.isArray(worldItems) && worldItems.length > 0) {
+          for (const item of worldItems) {
+            if (!item || !item.bounds || !item.center) {
+              continue;
+            }
+
+            const dx = controller.position[0] - item.center[0];
+            const dz = controller.position[2] - item.center[2];
+            const horizontalDistanceSq = dx * dx + dz * dz;
+            if (horizontalDistanceSq > ITEM_INTERACTION_DISTANCE_SQ) {
+              continue;
+            }
+
+            const verticalDistance = Math.abs(controller.position[1] - item.center[1]);
+            if (verticalDistance > ITEM_INTERACTION_VERTICAL_LIMIT) {
+              continue;
+            }
+
+            const hit = traceRayAABB(eye, viewDirection, ITEM_AIM_MAX_DISTANCE, item.bounds);
+            if (!hit) {
+              continue;
+            }
+
+            if (hit.distance < closestPickupDistance) {
+              closestPickupDistance = hit.distance;
+              highlightedPickup = item;
+            }
+          }
+        }
+
+        if (highlightedPickup) {
+          const pickupName = highlightedPickup.displayName ?? 'Pickup';
+          const highlightColor =
+            blendWithWhite(highlightedPickup.accentColor, 0.25) ?? highlightedPickup.accentColor;
+          const promptColor = floatColorToCss(
+            highlightColor ?? highlightedPickup.accentColor,
+            'rgb(255, 255, 255)'
+          );
+          const canPickup = Boolean(findFirstEmptyInventorySlot?.());
+          let shouldShowPrompt = true;
+
+          hudController?.setReticleAccentOverride?.(highlightColor ?? highlightedPickup.accentColor);
+
+          if (usePressedThisFrame) {
+            if (canPickup) {
+              if (handleWorldItemPickup(highlightedPickup)) {
+                hudController?.setReticleAccentOverride?.(null);
+                overlayController?.showPersistentUsePrompt?.('', '');
+                overlayController?.showTemporaryUsePrompt?.(
+                  `${pickupName} added to pack`,
+                  promptColor,
+                  PICKUP_PROMPT_SUCCESS_DURATION
+                );
+                highlightedPickup = null;
+                shouldShowPrompt = false;
+              }
+            } else {
+              overlayController?.showTemporaryUsePrompt?.(
+                'Pack inventory is full',
+                PICKUP_PROMPT_FAILURE_COLOR,
+                PICKUP_PROMPT_FAILURE_DURATION
+              );
+            }
+          }
+
+          if (highlightedPickup && shouldShowPrompt) {
+            if (canPickup) {
+              const rarityLabel = highlightedPickup.rarityLabel || '';
+              overlayController?.showPersistentUsePrompt?.(
+                `Press ${PICKUP_USE_KEY} to pick up ${pickupName}${rarityLabel ? ` (${rarityLabel})` : ''}`,
+                promptColor
+              );
+            } else {
+              overlayController?.showPersistentUsePrompt?.(
+                `Pack is full — ${pickupName}`,
+                PICKUP_PROMPT_BLOCKED_COLOR
+              );
+            }
+          }
+        } else {
+          hudController?.setReticleAccentOverride?.(null);
+          overlayController?.showPersistentUsePrompt?.('', '');
+        }
+      }
+
+      const enemies = enemyManager.getEnemies();
+      const viewportWidth = canvas.clientWidth ?? canvas.width;
+      const viewportHeight = canvas.clientHeight ?? canvas.height;
+
+      hudController?.updateWorldSpaceUI?.({
+        enemies,
+        viewProjectionMatrix: viewProj,
+        viewportWidth,
+        viewportHeight,
+        deltaTime,
+        paused: Boolean(isPaused)
+      });
+
+      writeUniformData(worldUniformData, viewProj, IDENTITY_MATRIX);
+      device.queue.writeBuffer(worldUniformBuffer, 0, worldUniformData);
+
+      bulletHoleManager.syncGPU();
+      projectileManager.syncGPU();
+
+      const encoder = device.createCommandEncoder();
+      const textureView = context.getCurrentTexture().createView();
+      const depthTextureView = getDepthTextureView();
+
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [
+          {
+            view: textureView,
+            clearValue: { r: 0.05, g: 0.06, b: 0.08, a: 1.0 },
+            loadOp: 'clear',
+            storeOp: 'store'
+          }
+        ],
+        depthStencilAttachment: {
+          view: depthTextureView,
+          depthClearValue: 1.0,
+          depthLoadOp: 'clear',
+          depthStoreOp: 'store'
+        }
+      });
+
+      pass.setPipeline(pipeline);
+      pass.setBindGroup(0, worldUniformBindGroup);
+      pass.setVertexBuffer(0, vertexBuffer);
+      pass.draw(vertexCount, 1, 0, 0);
+
+      if (Array.isArray(worldItems) && worldItems.length > 0) {
+        for (const item of worldItems) {
+          if (!item || !item.vertexBuffer || !item.vertexCount) {
+            continue;
+          }
+          ensureRenderableUniformResources(item);
+          if (!item.uniformBuffer || !item.uniformBindGroup || !item.uniformData) {
+            continue;
+          }
+          writeUniformData(item.uniformData, viewProj, item.modelMatrix ?? IDENTITY_MATRIX);
+          device.queue.writeBuffer(item.uniformBuffer, 0, item.uniformData);
+          pass.setBindGroup(0, item.uniformBindGroup);
+          pass.setVertexBuffer(0, item.vertexBuffer);
+          pass.draw(item.vertexCount, 1, 0, 0);
+        }
+        pass.setBindGroup(0, worldUniformBindGroup);
+        pass.setVertexBuffer(0, vertexBuffer);
+      }
+
+      if (enemies.length > 0) {
+        for (const enemy of enemies) {
+          if (!enemy || !enemy.vertexBuffer || !enemy.vertexCount) {
+            continue;
+          }
+          ensureRenderableUniformResources(enemy);
+          if (!enemy.uniformBuffer || !enemy.uniformBindGroup || !enemy.uniformData) {
+            continue;
+          }
+          writeUniformData(enemy.uniformData, viewProj, enemy.modelMatrix ?? IDENTITY_MATRIX);
+          device.queue.writeBuffer(enemy.uniformBuffer, 0, enemy.uniformData);
+          pass.setBindGroup(0, enemy.uniformBindGroup);
+          pass.setVertexBuffer(0, enemy.vertexBuffer);
+          pass.draw(enemy.vertexCount, 1, 0, 0);
+        }
+        pass.setBindGroup(0, worldUniformBindGroup);
+        pass.setVertexBuffer(0, vertexBuffer);
+      }
+
+      const bulletHoleVertexCount = bulletHoleManager.getVertexCount();
+      if (bulletHoleVertexCount > 0) {
+        pass.setVertexBuffer(0, bulletHoleManager.getVertexBuffer());
+        pass.draw(bulletHoleVertexCount, 1, 0, 0);
+      }
+
+      const projectileVertexCount = projectileManager.getVertexCount();
+      if (projectileVertexCount > 0) {
+        pass.setVertexBuffer(0, projectileManager.getVertexBuffer());
+        pass.draw(projectileVertexCount, 1, 0, 0);
+      }
+
+      if (weaponTransformReady && weaponGeometry) {
+        writeUniformData(weaponUniformData, viewProj, weaponModel);
+        device.queue.writeBuffer(weaponUniformBuffer, 0, weaponUniformData);
+        pass.setBindGroup(0, weaponUniformBindGroup);
+        pass.setVertexBuffer(0, weaponGeometry.vertexBuffer);
+        pass.draw(weaponGeometry.vertexCount, 1, 0, 0);
+        pass.setBindGroup(0, worldUniformBindGroup);
+      }
+      pass.end();
+
+      device.queue.submit([encoder.finish()]);
+      requestAnimationFrame(frame);
+    }
+
+    requestAnimationFrame(frame);
+  } catch (error) {
+    console.error(error);
+    overlayController?.showOverlayError?.(error.message);
+  }
+}
