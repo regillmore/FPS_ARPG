@@ -160,18 +160,38 @@ export async function initializeGame({
 
     const worldItemManager = createWorldItemManager(device);
     enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
-    enemyManager.spawnBarrel({
-      position: [2.5, 0, -4.25],
-      onDeath() {
-        window.dispatchEvent(
-          new CustomEvent('bestiary-unlock', {
-            detail: {
-              enemyType: 'barrel'
-            }
-          })
-        );
+
+    let barrelBestiaryUnlocked = false;
+
+    const spawnProceduralBarrels = () => {
+      const spawns = roomSystem.consumeBarrelSpawnPoints();
+      if (!spawns || spawns.length === 0) {
+        return;
       }
-    });
+
+      for (const spawn of spawns) {
+        const position = Array.isArray(spawn?.position) ? [...spawn.position] : null;
+        if (!position) {
+          continue;
+        }
+
+        enemyManager.spawnBarrel({
+          position,
+          onDeath() {
+            if (!barrelBestiaryUnlocked) {
+              barrelBestiaryUnlocked = true;
+              window.dispatchEvent(
+                new CustomEvent('bestiary-unlock', {
+                  detail: { enemyType: 'barrel' }
+                })
+              );
+            }
+          }
+        });
+      }
+    };
+
+    spawnProceduralBarrels();
 
     worldItemManager.spawnPickup({
       id: 'pickup-field-medkit',
@@ -478,6 +498,7 @@ export async function initializeGame({
       if (geometryChanged) {
         roomVertexBuffer = roomSystem.getVertexBuffer();
         roomVertexCount = roomSystem.getVertexCount();
+        spawnProceduralBarrels();
       }
 
       resolvePlayerCollisions(controller.position, roomColliders);
