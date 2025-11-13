@@ -321,6 +321,92 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   const cellProfiles = new Map();
   const colliders = [];
+  const cellEdgeStates = new Map();
+  const discoveredBarrelRooms = new Set();
+  const pendingBarrelSpawns = [];
+
+  function getCellKey(x, z) {
+    return `${x},${z}`;
+  }
+
+  function getCellEdges(x, z) {
+    const key = getCellKey(x, z);
+    let edges = cellEdgeStates.get(key);
+    if (!edges) {
+      edges = { north: null, south: null, east: null, west: null };
+      cellEdgeStates.set(key, edges);
+    }
+    return edges;
+  }
+
+  function evaluateCellForBarrel(x, z) {
+    const key = getCellKey(x, z);
+    if (discoveredBarrelRooms.has(key)) {
+      return;
+    }
+
+    const edges = cellEdgeStates.get(key);
+    if (!edges) {
+      return;
+    }
+
+    const doorNorth = edges.north === 'doorway';
+    const doorSouth = edges.south === 'doorway';
+    const doorEast = edges.east === 'doorway';
+    const doorWest = edges.west === 'doorway';
+    const doorwayCount = (doorNorth ? 1 : 0) + (doorSouth ? 1 : 0) + (doorEast ? 1 : 0) + (doorWest ? 1 : 0);
+
+    if (doorwayCount !== 2) {
+      return;
+    }
+
+    const hasNorthSouth = doorNorth && doorSouth;
+    const hasEastWest = doorEast && doorWest;
+
+    if (!hasNorthSouth && !hasEastWest) {
+      return;
+    }
+
+    const perpendicularSolid = hasNorthSouth
+      ? edges.east === 'solid' && edges.west === 'solid'
+      : edges.north === 'solid' && edges.south === 'solid';
+
+    if (!perpendicularSolid) {
+      return;
+    }
+
+    const position = [x * roomSize, 0, z * roomSize];
+    pendingBarrelSpawns.push({ key, position });
+    discoveredBarrelRooms.add(key);
+  }
+
+  function recordEdge(ax, az, bx, bz, type) {
+    if (!Number.isFinite(ax) || !Number.isFinite(az) || !Number.isFinite(bx) || !Number.isFinite(bz)) {
+      return;
+    }
+
+    const edgeA = getCellEdges(ax, az);
+    const edgeB = getCellEdges(bx, bz);
+    const dx = bx - ax;
+    const dz = bz - az;
+
+    if (dx === 1 && dz === 0) {
+      edgeA.east = type;
+      edgeB.west = type;
+    } else if (dx === -1 && dz === 0) {
+      edgeA.west = type;
+      edgeB.east = type;
+    } else if (dx === 0 && dz === 1) {
+      edgeA.south = type;
+      edgeB.north = type;
+    } else if (dx === 0 && dz === -1) {
+      edgeA.north = type;
+      edgeB.south = type;
+    }
+
+    evaluateCellForBarrel(ax, az);
+    evaluateCellForBarrel(bx, bz);
+  }
 
   function resetBounds() {
     bounds.minX = Infinity;
@@ -348,6 +434,7 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   function buildGeometryForCenter(cx, cz) {
     const vertices = [];
+    pendingBarrelSpawns.length = 0;
     resetBounds();
     colliders.length = 0;
 
@@ -415,6 +502,7 @@ export function createProceduralRoomSystem(device, options = {}) {
           processedEdges.add(edgeKey);
 
           const type = determineEdgeType(gx, gz, nx, nz, cellProfiles);
+          recordEdge(gx, gz, nx, nz, type);
           const neighborProfileKey = `${nx},${nz}`;
           let neighborProfile = cellProfiles.get(neighborProfileKey);
           if (!neighborProfile) {
@@ -556,6 +644,12 @@ export function createProceduralRoomSystem(device, options = {}) {
     getBounds: () => bounds,
     getColliders: () => colliders,
     getGeometry: () => ({ vertexBuffer, vertexCount, bounds }),
+    consumeBarrelSpawnPoints: () => {
+      if (pendingBarrelSpawns.length === 0) {
+        return [];
+      }
+      return pendingBarrelSpawns.splice(0, pendingBarrelSpawns.length);
+    },
     dispose: () => {
       if (vertexBuffer) {
         vertexBuffer.destroy();
