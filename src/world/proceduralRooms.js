@@ -40,12 +40,16 @@ function hashValue(value, salt) {
   return hash >>> 0;
 }
 
-function hashCoords(x, z, salt = 0) {
-  let hash = 0x811c9dc5;
+function hashCoords(x, z, salt = 0, seed = 0) {
+  const seedValue = seed >>> 0;
+  let hash = 0x811c9dc5 ^ seedValue;
   hash = Math.imul(hash ^ hashValue(x, salt + 1), 0x01000193);
   hash = Math.imul(hash ^ hashValue(z, salt + 2), 0x01000193);
   hash ^= hash >>> 13;
   hash = Math.imul(hash, 0x5bd1e995);
+  hash ^= hash >>> 15;
+  hash ^= seedValue;
+  hash = Math.imul(hash ^ 0x27d4eb2d, 0x165667b1);
   hash ^= hash >>> 15;
   return hash >>> 0;
 }
@@ -54,23 +58,25 @@ function randomFloatFromHash(hash) {
   return (hash & 0x00ffffff) / 0x01000000;
 }
 
-function randomFloatForCell(x, z, salt = 0) {
-  return randomFloatFromHash(hashCoords(x, z, salt));
+function randomFloatForCell(x, z, salt = 0, seed = 0) {
+  return randomFloatFromHash(hashCoords(x, z, salt, seed));
 }
 
-function randomFloatForEdge(ax, az, bx, bz, salt = 0) {
+function randomFloatForEdge(ax, az, bx, bz, salt = 0, seed = 0) {
   const fromX = Math.min(ax, bx);
   const toX = Math.max(ax, bx);
   const fromZ = Math.min(az, bz);
   const toZ = Math.max(az, bz);
-  return randomFloatFromHash(hashCoords(fromX * 131 + toX * 137, fromZ * 149 + toZ * 163, salt));
+  return randomFloatFromHash(
+    hashCoords(fromX * 131 + toX * 137, fromZ * 149 + toZ * 163, salt, seed)
+  );
 }
 
-function createCellProfile(x, z) {
-  const openness = randomFloatForCell(x, z, 11);
-  const toneOffset = (randomFloatForCell(x, z, 23) - 0.5) * 0.18;
-  const wallShift = (randomFloatForCell(x, z, 31) - 0.5) * 0.14;
-  const accentShift = (randomFloatForCell(x, z, 47) - 0.5) * 0.2;
+function createCellProfile(x, z, seed = 0) {
+  const openness = randomFloatForCell(x, z, 11, seed);
+  const toneOffset = (randomFloatForCell(x, z, 23, seed) - 0.5) * 0.18;
+  const wallShift = (randomFloatForCell(x, z, 31, seed) - 0.5) * 0.14;
+  const accentShift = (randomFloatForCell(x, z, 47, seed) - 0.5) * 0.2;
 
   return {
     openness,
@@ -88,15 +94,15 @@ function createEdgeKey(ax, az, bx, bz) {
   return `${bx},${bz}:${ax},${az}`;
 }
 
-function determineEdgeType(ax, az, bx, bz, profiles) {
+function determineEdgeType(ax, az, bx, bz, profiles, seed = 0) {
   const keyA = `${ax},${az}`;
   const keyB = `${bx},${bz}`;
-  const profileA = profiles.get(keyA) ?? createCellProfile(ax, az);
-  const profileB = profiles.get(keyB) ?? createCellProfile(bx, bz);
+  const profileA = profiles.get(keyA) ?? createCellProfile(ax, az, seed);
+  const profileB = profiles.get(keyB) ?? createCellProfile(bx, bz, seed);
   profiles.set(keyA, profileA);
   profiles.set(keyB, profileB);
 
-  const baseRandom = randomFloatForEdge(ax, az, bx, bz, 3);
+  const baseRandom = randomFloatForEdge(ax, az, bx, bz, 3, seed);
   const openness = (profileA.openness + profileB.openness) * 0.5;
   const variance = Math.abs(profileA.openness - profileB.openness);
   const openThreshold = clamp01(0.12 + openness * 0.5);
@@ -301,6 +307,8 @@ export function createProceduralRoomSystem(device, options = {}) {
   const generationRadius = Math.max(1, Math.floor(options.generationRadius ?? DEFAULT_GENERATION_RADIUS));
   const halfRoom = roomSize * 0.5;
 
+  const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
+
   const clampedDoorHeight =
     clamp01(Math.min(Math.max(doorHeight, roomHeight * 0.3), roomHeight - 0.2) / roomHeight) * roomHeight;
   const clampedDoorWidth = Math.max(roomSize * 0.2, Math.min(roomSize * 0.95, doorWidth));
@@ -445,7 +453,7 @@ export function createProceduralRoomSystem(device, options = {}) {
         const key = `${gx},${gz}`;
         let profile = cellProfiles.get(key);
         if (!profile) {
-          profile = createCellProfile(gx, gz);
+          profile = createCellProfile(gx, gz, worldSeed);
           cellProfiles.set(key, profile);
         }
 
@@ -501,12 +509,12 @@ export function createProceduralRoomSystem(device, options = {}) {
           }
           processedEdges.add(edgeKey);
 
-          const type = determineEdgeType(gx, gz, nx, nz, cellProfiles);
+          const type = determineEdgeType(gx, gz, nx, nz, cellProfiles, worldSeed);
           recordEdge(gx, gz, nx, nz, type);
           const neighborProfileKey = `${nx},${nz}`;
           let neighborProfile = cellProfiles.get(neighborProfileKey);
           if (!neighborProfile) {
-            neighborProfile = createCellProfile(nx, nz);
+            neighborProfile = createCellProfile(nx, nz, worldSeed);
             cellProfiles.set(neighborProfileKey, neighborProfile);
           }
 
@@ -530,8 +538,8 @@ export function createProceduralRoomSystem(device, options = {}) {
                 colliders
               );
             } else if (type === 'doorway') {
-              const widthFactor = 0.55 + randomFloatForEdge(gx, gz, nx, nz, 19) * 0.45;
-              const heightFactor = 0.7 + randomFloatForEdge(gx, gz, nx, nz, 23) * 0.3;
+              const widthFactor = 0.55 + randomFloatForEdge(gx, gz, nx, nz, 19, worldSeed) * 0.45;
+              const heightFactor = 0.7 + randomFloatForEdge(gx, gz, nx, nz, 23, worldSeed) * 0.3;
               const localDoorWidth = Math.min(clampedDoorWidth * widthFactor, roomSize * 0.95);
               const localDoorHeight = Math.min(
                 Math.max(clampedDoorHeight * heightFactor, roomHeight * 0.35),
@@ -569,8 +577,8 @@ export function createProceduralRoomSystem(device, options = {}) {
                 colliders
               );
             } else if (type === 'doorway') {
-              const widthFactor = 0.55 + randomFloatForEdge(gx, gz, nx, nz, 19) * 0.45;
-              const heightFactor = 0.7 + randomFloatForEdge(gx, gz, nx, nz, 23) * 0.3;
+              const widthFactor = 0.55 + randomFloatForEdge(gx, gz, nx, nz, 19, worldSeed) * 0.45;
+              const heightFactor = 0.7 + randomFloatForEdge(gx, gz, nx, nz, 23, worldSeed) * 0.3;
               const localDoorWidth = Math.min(clampedDoorWidth * widthFactor, roomSize * 0.95);
               const localDoorHeight = Math.min(
                 Math.max(clampedDoorHeight * heightFactor, roomHeight * 0.35),
@@ -644,6 +652,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     getBounds: () => bounds,
     getColliders: () => colliders,
     getGeometry: () => ({ vertexBuffer, vertexCount, bounds }),
+    getSeed: () => worldSeed,
     consumeBarrelSpawnPoints: () => {
       if (pendingBarrelSpawns.length === 0) {
         return [];
