@@ -538,10 +538,20 @@ export function createDungeonManager(device, options = {}) {
   const behindCullDistance = options.behindCullDistance ?? 45;
   const minActiveModules = Math.max(3, options.minActiveModules ?? 6);
 
-  let nextStartZ = -6;
-
   const boundsTransitionPadding = Math.max(0, options.boundsTransitionPadding ?? 0.85);
-  let lastKnownPlayerZ = 0;
+  let lastKnownPlayerPath = 0;
+  const lastKnownPlayerXZ = { x: 0, z: 0 };
+
+  const directionVectors = [
+    { x: 0, z: 1 },
+    { x: 1, z: 0 },
+    { x: 0, z: -1 },
+    { x: -1, z: 0 }
+  ];
+
+  let currentDirectionIndex = 0;
+  let nextAnchor = { x: 0, z: -6 };
+  let nextPathPosition = -6;
 
   function ensureFiniteBounds(target, fallback) {
     if (!Number.isFinite(target.minX) || !Number.isFinite(target.maxX)) {
@@ -559,16 +569,20 @@ export function createDungeonManager(device, options = {}) {
   }
 
   function updateActiveBounds(playerPosition) {
-    let targetZ = lastKnownPlayerZ;
-    const inputZ = playerPosition && Number.isFinite(playerPosition[2]) ? playerPosition[2] : null;
-    if (inputZ !== null) {
-      targetZ = inputZ;
-      lastKnownPlayerZ = inputZ;
-    } else if (!Number.isFinite(targetZ)) {
+    let targetX = lastKnownPlayerXZ.x;
+    let targetZ = lastKnownPlayerXZ.z;
+    const validX = playerPosition && Number.isFinite(playerPosition[0]) ? playerPosition[0] : null;
+    const validZ = playerPosition && Number.isFinite(playerPosition[2]) ? playerPosition[2] : null;
+    if (validX !== null && validZ !== null) {
+      targetX = validX;
+      targetZ = validZ;
+      lastKnownPlayerXZ.x = validX;
+      lastKnownPlayerXZ.z = validZ;
+    }
+
+    if (!Number.isFinite(targetX) || !Number.isFinite(targetZ)) {
+      targetX = (globalBounds.minX + globalBounds.maxX) * 0.5;
       targetZ = (globalBounds.minZ + globalBounds.maxZ) * 0.5;
-      if (!Number.isFinite(targetZ)) {
-        targetZ = 0;
-      }
     }
 
     let closest = null;
@@ -578,18 +592,19 @@ export function createDungeonManager(device, options = {}) {
       if (!m) {
         continue;
       }
+      const paddedMinX = m.minX - boundsTransitionPadding;
+      const paddedMaxX = m.maxX + boundsTransitionPadding;
       const paddedMinZ = m.minZ - boundsTransitionPadding;
       const paddedMaxZ = m.maxZ + boundsTransitionPadding;
-      let distance = 0;
-      if (targetZ < paddedMinZ) {
-        distance = paddedMinZ - targetZ;
-      } else if (targetZ > paddedMaxZ) {
-        distance = targetZ - paddedMaxZ;
-      }
+
+      const dx = targetX < paddedMinX ? paddedMinX - targetX : targetX > paddedMaxX ? targetX - paddedMaxX : 0;
+      const dz = targetZ < paddedMinZ ? paddedMinZ - targetZ : targetZ > paddedMaxZ ? targetZ - paddedMaxZ : 0;
+      const distance = Math.hypot(dx, dz);
+
       if (distance < closestDistance) {
         closestDistance = distance;
         closest = m;
-        if (distance <= 0) {
+        if (distance <= 1e-3) {
           break;
         }
       }
@@ -611,6 +626,224 @@ export function createDungeonManager(device, options = {}) {
     bounds.maxZ = globalBounds.maxZ;
 
     ensureFiniteBounds(bounds, defaultBounds);
+  }
+
+  function boxesOverlap2D(a, b, epsilon = 0.05) {
+    if (!a || !b) {
+      return false;
+    }
+    if (a.maxX <= b.minX + epsilon) {
+      return false;
+    }
+    if (a.minX >= b.maxX - epsilon) {
+      return false;
+    }
+    if (a.maxZ <= b.minZ + epsilon) {
+      return false;
+    }
+    if (a.minZ >= b.maxZ - epsilon) {
+      return false;
+    }
+    return true;
+  }
+
+  function transformModule(baseModule, anchor, orientationIndex, pathStart) {
+    const baseBounds = baseModule.bounds;
+    const localBounds = {
+      minX: baseBounds.minX,
+      maxX: baseBounds.maxX,
+      minY: baseBounds.minY,
+      maxY: baseBounds.maxY,
+      minZ: baseBounds.minZ,
+      maxZ: baseBounds.maxZ
+    };
+    const length = localBounds.maxZ - localBounds.minZ;
+    const direction = directionVectors[((orientationIndex % 4) + 4) % 4];
+    const forward = { x: direction.x, z: direction.z };
+    const right = { x: forward.z, z: -forward.x };
+
+    const transformedVertexData = new Float32Array(baseModule.vertexData.length);
+    for (let i = 0; i < baseModule.vertexData.length; i += FLOATS_PER_VERTEX) {
+      const x = baseModule.vertexData[i];
+      const y = baseModule.vertexData[i + 1];
+      const z = baseModule.vertexData[i + 2];
+      const nx = baseModule.vertexData[i + 3];
+      const ny = baseModule.vertexData[i + 4];
+      const nz = baseModule.vertexData[i + 5];
+
+      const worldX = anchor.x + x * right.x + z * forward.x;
+      const worldZ = anchor.z + x * right.z + z * forward.z;
+      const worldNX = nx * right.x + nz * forward.x;
+      const worldNZ = nx * right.z + nz * forward.z;
+
+      transformedVertexData[i] = worldX;
+      transformedVertexData[i + 1] = y;
+      transformedVertexData[i + 2] = worldZ;
+      transformedVertexData[i + 3] = worldNX;
+      transformedVertexData[i + 4] = ny;
+      transformedVertexData[i + 5] = worldNZ;
+      transformedVertexData[i + 6] = baseModule.vertexData[i + 6];
+      transformedVertexData[i + 7] = baseModule.vertexData[i + 7];
+      transformedVertexData[i + 8] = baseModule.vertexData[i + 8];
+    }
+
+    const corners = [
+      { x: localBounds.minX, z: localBounds.minZ },
+      { x: localBounds.minX, z: localBounds.maxZ },
+      { x: localBounds.maxX, z: localBounds.minZ },
+      { x: localBounds.maxX, z: localBounds.maxZ }
+    ];
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (const corner of corners) {
+      const worldX = anchor.x + corner.x * right.x + corner.z * forward.x;
+      const worldZ = anchor.z + corner.x * right.z + corner.z * forward.z;
+      minX = Math.min(minX, worldX);
+      maxX = Math.max(maxX, worldX);
+      minZ = Math.min(minZ, worldZ);
+      maxZ = Math.max(maxZ, worldZ);
+    }
+
+    const bounds = {
+      minX,
+      maxX,
+      minY: localBounds.minY,
+      maxY: localBounds.maxY,
+      minZ,
+      maxZ
+    };
+
+    return {
+      ...baseModule,
+      vertexData: transformedVertexData,
+      bounds,
+      anchor: { x: anchor.x, z: anchor.z },
+      orientationIndex: ((orientationIndex % 4) + 4) % 4,
+      forward,
+      right,
+      length,
+      localBounds,
+      pathStart,
+      pathEnd: pathStart + length,
+      startZ: pathStart,
+      endZ: pathStart + length
+    };
+  }
+
+  function computePlayerPathPosition(playerPosition) {
+    let px = Number.isFinite(playerPosition?.[0]) ? playerPosition[0] : null;
+    let pz = Number.isFinite(playerPosition?.[2]) ? playerPosition[2] : null;
+
+    if (px !== null && pz !== null) {
+      lastKnownPlayerXZ.x = px;
+      lastKnownPlayerXZ.z = pz;
+    } else if (Number.isFinite(lastKnownPlayerXZ.x) && Number.isFinite(lastKnownPlayerXZ.z)) {
+      px = lastKnownPlayerXZ.x;
+      pz = lastKnownPlayerXZ.z;
+    }
+
+    if (px === null || pz === null) {
+      return lastKnownPlayerPath;
+    }
+
+    let closest = null;
+    let closestDistanceSq = Infinity;
+    for (const module of modules) {
+      const b = module?.bounds;
+      if (!b) {
+        continue;
+      }
+      const clampedX = clamp(px, b.minX, b.maxX);
+      const clampedZ = clamp(pz, b.minZ, b.maxZ);
+      const dx = px - clampedX;
+      const dz = pz - clampedZ;
+      const distanceSq = dx * dx + dz * dz;
+      if (distanceSq < closestDistanceSq) {
+        closestDistanceSq = distanceSq;
+        closest = module;
+      }
+    }
+
+    if (!closest) {
+      return lastKnownPlayerPath;
+    }
+
+    const relX = px - closest.anchor.x;
+    const relZ = pz - closest.anchor.z;
+    const along = relX * closest.forward.x + relZ * closest.forward.z;
+    const clampedAlong = clamp(along, 0, closest.length);
+    const pathPosition = closest.pathStart + clampedAlong;
+    lastKnownPlayerPath = pathPosition;
+    return pathPosition;
+  }
+
+  function moduleCollides(candidate) {
+    const lastModule = modules.length > 0 ? modules[modules.length - 1] : null;
+    for (const existing of modules) {
+      if (existing === lastModule) {
+        continue;
+      }
+      if (boxesOverlap2D(candidate.bounds, existing.bounds)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function appendModule(type, orientationCandidates) {
+    const previous = modules.length > 0 ? modules[modules.length - 1] : null;
+    const anchor = previous ? { x: nextAnchor.x, z: nextAnchor.z } : { x: 0, z: -6 };
+    const pathStart = previous ? nextPathPosition : -6;
+
+    let baseModule;
+    if (!previous) {
+      baseModule = buildEntryModule(0, rng);
+    } else if (type === 'hallway') {
+      baseModule = buildHallwayModule(0, rng, previous);
+    } else {
+      baseModule = buildRoomModule(0, rng, previous);
+    }
+
+    const candidates = Array.isArray(orientationCandidates) ? orientationCandidates : [orientationCandidates];
+    for (const orientationIndex of candidates) {
+      const placed = transformModule(baseModule, anchor, orientationIndex, pathStart);
+      if (moduleCollides(placed)) {
+        continue;
+      }
+      modules.push(placed);
+      nextAnchor = {
+        x: placed.anchor.x + placed.forward.x * placed.length,
+        z: placed.anchor.z + placed.forward.z * placed.length
+      };
+      nextPathPosition = placed.pathEnd;
+      currentDirectionIndex = placed.orientationIndex;
+      needsRebuild = true;
+      return true;
+    }
+
+    return false;
+  }
+
+  function getOrientationCandidates() {
+    const candidates = [];
+    if (modules.length > 0) {
+      const turnChance = 0.3;
+      if (rng() < turnChance) {
+        const deltas = rng() < 0.5 ? [-1, 1] : [1, -1];
+        for (const delta of deltas) {
+          const index = ((currentDirectionIndex + delta) % 4 + 4) % 4;
+          if (!candidates.includes(index)) {
+            candidates.push(index);
+          }
+        }
+      }
+    }
+    if (!candidates.includes(currentDirectionIndex)) {
+      candidates.push(currentDirectionIndex);
+    }
+    return candidates;
   }
 
   function rebuildBounds() {
@@ -682,35 +915,29 @@ export function createDungeonManager(device, options = {}) {
     gpuDirty = false;
   }
 
-  function appendModule(type) {
-    const previous = modules.length > 0 ? modules[modules.length - 1] : null;
-    let module;
-    if (!previous) {
-      module = buildEntryModule(nextStartZ, rng);
-      nextStartZ = module.endZ;
-    } else if (type === 'hallway') {
-      module = buildHallwayModule(nextStartZ, rng, previous);
-      nextStartZ = module.endZ;
-    } else {
-      module = buildRoomModule(nextStartZ, rng, previous);
-      nextStartZ = module.endZ;
-    }
-    modules.push(module);
-    needsRebuild = true;
-  }
-
   function initializeModules() {
-    appendModule('entry');
+    if (!appendModule('entry', [0])) {
+      throw new Error('Failed to create entry module.');
+    }
     let previousType = 'entry';
     const initialCount = Math.max(minActiveModules, options.initialModuleCount ?? 8);
     while (modules.length < initialCount) {
       const nextType = chooseNextType(rng, previousType);
-      appendModule(nextType);
-      previousType = nextType;
+      const orientations = getOrientationCandidates();
+      if (!appendModule(nextType, orientations)) {
+        if (!orientations.includes(currentDirectionIndex)) {
+          if (!appendModule(nextType, [currentDirectionIndex])) {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+      previousType = modules[modules.length - 1]?.type ?? nextType;
     }
   }
 
-  function cullBehind(playerZ) {
+  function cullBehind(playerPathPosition) {
     if (modules.length <= minActiveModules) {
       return;
     }
@@ -719,7 +946,7 @@ export function createDungeonManager(device, options = {}) {
       if (!first) {
         break;
       }
-      if (playerZ - first.endZ < behindCullDistance) {
+      if (playerPathPosition - first.pathEnd < behindCullDistance) {
         break;
       }
       modules.shift();
@@ -727,13 +954,22 @@ export function createDungeonManager(device, options = {}) {
     }
   }
 
-  function extendAhead(playerZ) {
+  function extendAhead(playerPathPosition) {
     let safety = 0;
-    while (playerZ + aheadDistance > nextStartZ && safety < 32) {
+    while (playerPathPosition + aheadDistance > nextPathPosition && safety < 32) {
       const previous = modules[modules.length - 1];
       const previousType = previous?.type ?? 'room';
       const nextType = chooseNextType(rng, previousType);
-      appendModule(nextType);
+      const orientations = getOrientationCandidates();
+      if (!appendModule(nextType, orientations)) {
+        if (!orientations.includes(currentDirectionIndex)) {
+          if (!appendModule(nextType, [currentDirectionIndex])) {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
       safety += 1;
     }
   }
@@ -751,9 +987,9 @@ export function createDungeonManager(device, options = {}) {
       return bounds;
     },
     update(playerPosition) {
-      const playerZ = playerPosition && Number.isFinite(playerPosition[2]) ? playerPosition[2] : 0;
-      extendAhead(playerZ);
-      cullBehind(playerZ);
+      const pathPosition = computePlayerPathPosition(playerPosition);
+      extendAhead(pathPosition);
+      cullBehind(pathPosition);
       if (needsRebuild) {
         rebuildVertexData();
         needsRebuild = false;
