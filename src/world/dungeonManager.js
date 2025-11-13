@@ -692,7 +692,7 @@ function buildLeftTurnModule(rng, previous) {
     length,
     exitPosition,
     exitForward,
-    exitRotationDelta: -1,
+    exitRotationDelta: 1,
     centerline: [
       { start: [0, 0], end: [0, forwardLength], length: forwardLength },
       { start: [0, forwardLength], end: [-sideLength, forwardLength], length: sideLength }
@@ -738,7 +738,7 @@ function mirrorTurnModule(base) {
     length: base.length,
     exitPosition: [-base.exitPosition[0], base.exitPosition[1], base.exitPosition[2]],
     exitForward: [-base.exitForward[0], base.exitForward[1], base.exitForward[2]],
-    exitRotationDelta: 1,
+    exitRotationDelta: -1,
     centerline
   };
 }
