@@ -2,7 +2,7 @@ import { mat4FromRotationTranslation, mat4LookAt, mat4Multiply, mat4Perspective 
 import { FirstPersonController } from '../fpsController.js';
 import { initWebGPU } from '../webgpu/initWebGPU.js';
 import { createBasicPipeline } from '../webgpu/pipeline.js';
-import { createDungeonManager } from '../world/dungeonManager.js';
+import { createRoomGeometry } from '../world/roomGeometry.js';
 import { getWeapon } from './playerWeapons.js';
 import { createEnemyManager } from './enemies/enemyManager.js';
 import { createProjectileManager } from './projectiles.js';
@@ -52,14 +52,7 @@ export async function initializeGame({
 
     const pipeline = createBasicPipeline(device, format, depthFormat);
     const uniformBindGroupLayout = pipeline.getBindGroupLayout(0);
-    const dungeonManager = createDungeonManager(device, {
-      seed: 0xdecafbad
-    });
-    dungeonManager.update([0, 0, 0]);
-    dungeonManager.syncGPU();
-    let vertexBuffer = dungeonManager.getVertexBuffer();
-    let vertexCount = dungeonManager.getVertexCount();
-    const worldBounds = dungeonManager.getBounds();
+    const { vertexBuffer, vertexCount, bounds } = createRoomGeometry(device);
     const bulletHoleManager = createBulletHoleManager(device);
     const enemyManager = createEnemyManager(device, {
       onEnemyDamaged: (details) => {
@@ -79,7 +72,7 @@ export async function initializeGame({
     });
 
     const projectileManager = createProjectileManager(device, {
-      bounds: worldBounds,
+      bounds,
       getDynamicColliders: () => enemyManager.getHitBoxes(),
       onImpact: (impact) => {
         const size = Number.isFinite(impact.projectileSize)
@@ -95,9 +88,9 @@ export async function initializeGame({
     });
 
     const worldItemManager = createWorldItemManager(device);
-    enemyManager.spawnTargetDummy({ position: [0, 0, 4] });
+    enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
     enemyManager.spawnBarrel({
-      position: [2.75, 0, 7.5],
+      position: [2.5, 0, -4.25],
       onDeath() {
         window.dispatchEvent(
           new CustomEvent('bestiary-unlock', {
@@ -114,7 +107,7 @@ export async function initializeGame({
       itemId: 'field-medkit',
       displayName: 'Field Medkit',
       rarity: 'uncommon',
-      position: [0.85, 0, 3.25],
+      position: [0.85, 0, -1.35],
       inventory: {
         itemId: 'field-medkit',
         itemType: 'consumable',
@@ -181,19 +174,11 @@ export async function initializeGame({
       const forwardZ = Math.cos(controller.yaw);
       const dropX = controller.position[0] + forwardX * dropDistance;
       const dropZ = controller.position[2] + forwardZ * dropDistance;
-      const verticalBase = worldBounds
-        ? clamp(worldBounds.minY + 0.05, worldBounds.minY, worldBounds.maxY)
-        : 0;
+      const verticalBase = bounds ? clamp(bounds.minY + 0.05, bounds.minY, bounds.maxY) : 0;
       const margin = 0.35;
-      const resolvedX = worldBounds
-        ? clamp(dropX, worldBounds.minX + margin, worldBounds.maxX - margin)
-        : dropX;
-      const resolvedZ = worldBounds
-        ? clamp(dropZ, worldBounds.minZ + margin, worldBounds.maxZ - margin)
-        : dropZ;
-      const resolvedY = worldBounds
-        ? clamp(verticalBase, worldBounds.minY, worldBounds.maxY)
-        : verticalBase;
+      const resolvedX = bounds ? clamp(dropX, bounds.minX + margin, bounds.maxX - margin) : dropX;
+      const resolvedZ = bounds ? clamp(dropZ, bounds.minZ + margin, bounds.maxZ - margin) : dropZ;
+      const resolvedY = bounds ? clamp(verticalBase, bounds.minY, bounds.maxY) : verticalBase;
       const displayName = itemState.name || itemState.abbreviation || 'Item';
       const abbreviation = itemState.abbreviation || displayName.slice(0, 2).toUpperCase();
       const tagLabel = itemState.tag || 'Item';
@@ -418,23 +403,18 @@ export async function initializeGame({
         controller.update(deltaTime);
       }
 
-      dungeonManager.update(controller.position);
-      dungeonManager.syncGPU();
-      vertexBuffer = dungeonManager.getVertexBuffer();
-      vertexCount = dungeonManager.getVertexCount();
-
       const padding = 0.25;
       controller.position[0] = Math.min(
-        Math.max(controller.position[0], worldBounds.minX + padding),
-        worldBounds.maxX - padding
+        Math.max(controller.position[0], bounds.minX + padding),
+        bounds.maxX - padding
       );
       controller.position[1] = Math.min(
-        Math.max(controller.position[1], worldBounds.minY + padding),
-        worldBounds.maxY - padding
+        Math.max(controller.position[1], bounds.minY + padding),
+        bounds.maxY - padding
       );
       controller.position[2] = Math.min(
-        Math.max(controller.position[2], worldBounds.minZ + padding),
-        worldBounds.maxZ - padding
+        Math.max(controller.position[2], bounds.minZ + padding),
+        bounds.maxZ - padding
       );
 
       resize();
@@ -629,7 +609,7 @@ export async function initializeGame({
             }
           }
 
-          tryAimHit(traceRayAABB(eye, weaponForward, MAX_AIM_DISTANCE, worldBounds));
+          tryAimHit(traceRayAABB(eye, weaponForward, MAX_AIM_DISTANCE, bounds));
 
           if (closestAimHit) {
             cameraAimPoint.set(closestAimHit.position);
