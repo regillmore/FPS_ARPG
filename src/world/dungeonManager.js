@@ -779,15 +779,31 @@ export function createDungeonManager(device, options = {}) {
     return pathPosition;
   }
 
+  const DOORWAY_OVERLAP_TOLERANCE = 0.9;
+
   function moduleCollides(candidate) {
     const lastModule = modules.length > 0 ? modules[modules.length - 1] : null;
     for (const existing of modules) {
-      if (existing === lastModule) {
+      if (!boxesOverlap2D(candidate.bounds, existing.bounds)) {
         continue;
       }
-      if (boxesOverlap2D(candidate.bounds, existing.bounds)) {
-        return true;
+
+      if (existing === lastModule) {
+        const overlapMinX = Math.max(candidate.bounds.minX, existing.bounds.minX);
+        const overlapMaxX = Math.min(candidate.bounds.maxX, existing.bounds.maxX);
+        const overlapMinZ = Math.max(candidate.bounds.minZ, existing.bounds.minZ);
+        const overlapMaxZ = Math.min(candidate.bounds.maxZ, existing.bounds.maxZ);
+        const overlapX = overlapMaxX - overlapMinX;
+        const overlapZ = overlapMaxZ - overlapMinZ;
+        if (overlapX <= 0 || overlapZ <= 0) {
+          continue;
+        }
+        if (Math.min(overlapX, overlapZ) <= DOORWAY_OVERLAP_TOLERANCE) {
+          continue;
+        }
       }
+
+      return true;
     }
     return false;
   }
