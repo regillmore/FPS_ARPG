@@ -96,55 +96,55 @@ function emitBox(buffer, bounds, color) {
   const { minX, maxX, minY, maxY, minZ, maxZ } = bounds;
   pushQuad(
     buffer,
-    [minX, minY, maxZ],
-    [maxX, minY, maxZ],
-    [maxX, maxY, maxZ],
-    [minX, maxY, maxZ],
+    [minX, minY, minZ],
+    [maxX, minY, minZ],
+    [maxX, maxY, minZ],
+    [minX, maxY, minZ],
     [0, 0, -1],
     color
   );
   pushQuad(
     buffer,
-    [maxX, minY, minZ],
-    [minX, minY, minZ],
-    [minX, maxY, minZ],
-    [maxX, maxY, minZ],
+    [minX, maxY, maxZ],
+    [maxX, maxY, maxZ],
+    [maxX, minY, maxZ],
+    [minX, minY, maxZ],
     [0, 0, 1],
     color
   );
   pushQuad(
     buffer,
-    [minX, minY, minZ],
-    [minX, minY, maxZ],
-    [minX, maxY, maxZ],
-    [minX, maxY, minZ],
+    [maxX, minY, minZ],
+    [maxX, minY, maxZ],
+    [maxX, maxY, maxZ],
+    [maxX, maxY, minZ],
     [1, 0, 0],
     color
   );
   pushQuad(
     buffer,
-    [maxX, minY, maxZ],
-    [maxX, minY, minZ],
-    [maxX, maxY, minZ],
-    [maxX, maxY, maxZ],
+    [minX, minY, maxZ],
+    [minX, minY, minZ],
+    [minX, maxY, minZ],
+    [minX, maxY, maxZ],
     [-1, 0, 0],
     color
   );
   pushQuad(
     buffer,
-    [minX, maxY, maxZ],
-    [maxX, maxY, maxZ],
-    [maxX, maxY, minZ],
-    [minX, maxY, minZ],
+    [minX, minY, maxZ],
+    [maxX, minY, maxZ],
+    [maxX, minY, minZ],
+    [minX, minY, minZ],
     [0, -1, 0],
     color
   );
   pushQuad(
     buffer,
-    [minX, minY, minZ],
-    [maxX, minY, minZ],
-    [maxX, minY, maxZ],
-    [minX, minY, maxZ],
+    [minX, maxY, minZ],
+    [maxX, maxY, minZ],
+    [maxX, maxY, maxZ],
+    [minX, maxY, maxZ],
     [0, 1, 0],
     color
   );
