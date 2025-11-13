@@ -689,6 +689,16 @@ export async function initializeGame({
             }
           }
 
+          if (Array.isArray(roomColliders) && roomColliders.length > 0) {
+            for (let i = 0; i < roomColliders.length; i += 1) {
+              const colliderBounds = roomColliders[i];
+              if (!colliderBounds) {
+                continue;
+              }
+              tryAimHit(traceRayAABB(eye, weaponForward, MAX_AIM_DISTANCE, colliderBounds));
+            }
+          }
+
           tryAimHit(traceRayAABB(eye, weaponForward, MAX_AIM_DISTANCE, bounds));
 
           if (closestAimHit) {
