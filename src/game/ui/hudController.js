@@ -104,12 +104,23 @@ export function createHudController({ hudLayer, pauseControls, experienceTracker
     spawnFloatingDamageNumber: (details) => {
       floatingDamageNumbers?.spawn?.(details);
     },
-    updateWorldSpaceUI({ enemies = [], viewProjectionMatrix, viewportWidth, viewportHeight, deltaTime = 0, paused = false }) {
+    updateWorldSpaceUI({
+      enemies = [],
+      viewProjectionMatrix,
+      viewportWidth,
+      viewportHeight,
+      deltaTime = 0,
+      paused = false,
+      cameraPosition,
+      occlusionColliders
+    }) {
       enemyHealthBars?.update?.({
         enemies,
         viewProjectionMatrix,
         viewportWidth,
-        viewportHeight
+        viewportHeight,
+        cameraPosition,
+        occlusionColliders
       });
 
       floatingDamageNumbers?.update?.({

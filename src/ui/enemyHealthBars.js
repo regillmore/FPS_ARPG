@@ -1,6 +1,12 @@
+import { traceRayAABB } from '../game/collisions.js';
+
 const DEFAULT_WORLD_OFFSET = 0.35;
 const DEFAULT_PIXEL_OFFSET = 16;
 const MIN_CLIP_W = 1e-5;
+const OCCLUSION_DISTANCE_EPSILON = 0.1;
+const OCCLUSION_MIN_TRACE_DISTANCE = 0.05;
+
+const occlusionDirection = new Float32Array(3);
 
 function clamp(value, min, max) {
   if (!Number.isFinite(value)) {
@@ -111,6 +117,50 @@ function projectToScreen(worldPosition, viewProjectionMatrix, viewportWidth, vie
   return { x: screenX, y: screenY };
 }
 
+function isOccluded(cameraPosition, worldPosition, occlusionColliders) {
+  if (!cameraPosition || !Array.isArray(occlusionColliders) || occlusionColliders.length === 0) {
+    return false;
+  }
+
+  const camX = Number(cameraPosition[0]);
+  const camY = Number(cameraPosition[1]);
+  const camZ = Number(cameraPosition[2]);
+  if (!Number.isFinite(camX) || !Number.isFinite(camY) || !Number.isFinite(camZ)) {
+    return false;
+  }
+
+  const targetX = Number(worldPosition?.[0]);
+  const targetY = Number(worldPosition?.[1]);
+  const targetZ = Number(worldPosition?.[2]);
+  if (!Number.isFinite(targetX) || !Number.isFinite(targetY) || !Number.isFinite(targetZ)) {
+    return false;
+  }
+
+  occlusionDirection[0] = targetX - camX;
+  occlusionDirection[1] = targetY - camY;
+  occlusionDirection[2] = targetZ - camZ;
+
+  const distance = Math.hypot(occlusionDirection[0], occlusionDirection[1], occlusionDirection[2]);
+  if (!Number.isFinite(distance) || distance <= OCCLUSION_DISTANCE_EPSILON) {
+    return false;
+  }
+
+  const maxDistance = Math.max(distance - OCCLUSION_DISTANCE_EPSILON, OCCLUSION_MIN_TRACE_DISTANCE);
+
+  for (let i = 0; i < occlusionColliders.length; i += 1) {
+    const bounds = occlusionColliders[i];
+    if (!bounds) {
+      continue;
+    }
+    const hit = traceRayAABB(cameraPosition, occlusionDirection, maxDistance, bounds);
+    if (hit) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function createBarElement() {
   const element = document.createElement('div');
   element.className = 'enemy-health-bar';
@@ -154,7 +204,14 @@ export function createEnemyHealthBars(options = {}) {
     tracked.delete(enemy);
   };
 
-  const update = ({ enemies, viewProjectionMatrix, viewportWidth, viewportHeight } = {}) => {
+  const update = ({
+    enemies,
+    viewProjectionMatrix,
+    viewportWidth,
+    viewportHeight,
+    cameraPosition,
+    occlusionColliders
+  } = {}) => {
     if (!Array.isArray(enemies) || enemies.length === 0) {
       for (const enemy of Array.from(tracked.keys())) {
         detach(enemy);
@@ -195,6 +252,11 @@ export function createEnemyHealthBars(options = {}) {
       }
 
       if (!resolveAnchorPosition(enemy, worldPosition)) {
+        detach(enemy);
+        continue;
+      }
+
+      if (isOccluded(cameraPosition, worldPosition, occlusionColliders)) {
         detach(enemy);
         continue;
       }

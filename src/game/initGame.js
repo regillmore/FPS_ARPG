@@ -869,7 +869,9 @@ export async function initializeGame({
         viewportWidth,
         viewportHeight,
         deltaTime,
-        paused: Boolean(isPaused)
+        paused: Boolean(isPaused),
+        cameraPosition: eye,
+        occlusionColliders: roomColliders
       });
 
       writeUniformData(worldUniformData, viewProj, IDENTITY_MATRIX);
