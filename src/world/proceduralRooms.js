@@ -139,11 +139,11 @@ function pushVertex(vertices, point, normal, color, bounds) {
 function addQuad(vertices, corners, normal, color, bounds) {
   const [a, b, c, d] = corners;
   pushVertex(vertices, a, normal, color, bounds);
-  pushVertex(vertices, c, normal, color, bounds);
   pushVertex(vertices, b, normal, color, bounds);
-  pushVertex(vertices, a, normal, color, bounds);
-  pushVertex(vertices, d, normal, color, bounds);
   pushVertex(vertices, c, normal, color, bounds);
+  pushVertex(vertices, a, normal, color, bounds);
+  pushVertex(vertices, c, normal, color, bounds);
+  pushVertex(vertices, d, normal, color, bounds);
 }
 
 function addBox(vertices, minX, minY, minZ, maxX, maxY, maxZ, color, bounds) {
