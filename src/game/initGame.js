@@ -2,7 +2,7 @@ import { mat4FromRotationTranslation, mat4LookAt, mat4Multiply, mat4Perspective 
 import { FirstPersonController } from '../fpsController.js';
 import { initWebGPU } from '../webgpu/initWebGPU.js';
 import { createBasicPipeline } from '../webgpu/pipeline.js';
-import { createRoomGeometry } from '../world/roomGeometry.js';
+import { createProceduralRoomSystem } from '../world/proceduralRooms.js';
 import { getWeapon } from './playerWeapons.js';
 import { createEnemyManager } from './enemies/enemyManager.js';
 import { createProjectileManager } from './projectiles.js';
@@ -52,7 +52,10 @@ export async function initializeGame({
 
     const pipeline = createBasicPipeline(device, format, depthFormat);
     const uniformBindGroupLayout = pipeline.getBindGroupLayout(0);
-    const { vertexBuffer, vertexCount, bounds } = createRoomGeometry(device);
+    const roomSystem = createProceduralRoomSystem(device, { generationRadius: 5 });
+    let roomVertexBuffer = roomSystem.getVertexBuffer();
+    let roomVertexCount = roomSystem.getVertexCount();
+    const bounds = roomSystem.getBounds();
     const bulletHoleManager = createBulletHoleManager(device);
     const enemyManager = createEnemyManager(device, {
       onEnemyDamaged: (details) => {
@@ -401,6 +404,12 @@ export async function initializeGame({
 
       if (!isPaused) {
         controller.update(deltaTime);
+      }
+
+      const geometryChanged = roomSystem.update(controller.position);
+      if (geometryChanged) {
+        roomVertexBuffer = roomSystem.getVertexBuffer();
+        roomVertexCount = roomSystem.getVertexCount();
       }
 
       const padding = 0.25;
@@ -790,8 +799,8 @@ export async function initializeGame({
 
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, worldUniformBindGroup);
-      pass.setVertexBuffer(0, vertexBuffer);
-      pass.draw(vertexCount, 1, 0, 0);
+      pass.setVertexBuffer(0, roomVertexBuffer);
+      pass.draw(roomVertexCount, 1, 0, 0);
 
       if (Array.isArray(worldItems) && worldItems.length > 0) {
         for (const item of worldItems) {
@@ -809,7 +818,7 @@ export async function initializeGame({
           pass.draw(item.vertexCount, 1, 0, 0);
         }
         pass.setBindGroup(0, worldUniformBindGroup);
-        pass.setVertexBuffer(0, vertexBuffer);
+        pass.setVertexBuffer(0, roomVertexBuffer);
       }
 
       if (enemies.length > 0) {
@@ -828,7 +837,7 @@ export async function initializeGame({
           pass.draw(enemy.vertexCount, 1, 0, 0);
         }
         pass.setBindGroup(0, worldUniformBindGroup);
-        pass.setVertexBuffer(0, vertexBuffer);
+        pass.setVertexBuffer(0, roomVertexBuffer);
       }
 
       const bulletHoleVertexCount = bulletHoleManager.getVertexCount();
