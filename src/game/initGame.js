@@ -32,6 +32,72 @@ import {
 } from './constants.js';
 import { blendWithWhite, floatColorToCss } from './ui/colorUtils.js';
 
+const PLAYER_COLLISION_RADIUS = 0.25;
+const PLAYER_COLLISION_HALF_HEIGHT = 0.5;
+const PLAYER_COLLISION_ITERATIONS = 6;
+
+function resolvePlayerCollisions(position, colliders) {
+  if (!colliders || colliders.length === 0) {
+    return;
+  }
+
+  const radius = PLAYER_COLLISION_RADIUS;
+  const halfHeight = PLAYER_COLLISION_HALF_HEIGHT;
+  const maxIterations = PLAYER_COLLISION_ITERATIONS;
+
+  for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+    let adjusted = false;
+    const playerMinY = position[1] - halfHeight;
+    const playerMaxY = position[1] + halfHeight;
+
+    for (let i = 0; i < colliders.length; i += 1) {
+      const collider = colliders[i];
+      if (!collider) {
+        continue;
+      }
+
+      if (playerMaxY <= collider.minY || playerMinY >= collider.maxY) {
+        continue;
+      }
+
+      const playerMinX = position[0] - radius;
+      const playerMaxX = position[0] + radius;
+      const playerMinZ = position[2] - radius;
+      const playerMaxZ = position[2] + radius;
+
+      if (
+        playerMaxX <= collider.minX ||
+        playerMinX >= collider.maxX ||
+        playerMaxZ <= collider.minZ ||
+        playerMinZ >= collider.maxZ
+      ) {
+        continue;
+      }
+
+      const overlapX1 = playerMaxX - collider.minX;
+      const overlapX2 = collider.maxX - playerMinX;
+      const resolveX = overlapX1 < overlapX2 ? -overlapX1 : overlapX2;
+
+      const overlapZ1 = playerMaxZ - collider.minZ;
+      const overlapZ2 = collider.maxZ - playerMinZ;
+      const resolveZ = overlapZ1 < overlapZ2 ? -overlapZ1 : overlapZ2;
+
+      if (Math.abs(resolveX) < Math.abs(resolveZ)) {
+        position[0] += resolveX;
+      } else {
+        position[2] += resolveZ;
+      }
+
+      adjusted = true;
+      break;
+    }
+
+    if (!adjusted) {
+      break;
+    }
+  }
+}
+
 export async function initializeGame({
   canvas,
   pauseControls,
@@ -53,6 +119,7 @@ export async function initializeGame({
     const pipeline = createBasicPipeline(device, format, depthFormat);
     const uniformBindGroupLayout = pipeline.getBindGroupLayout(0);
     const roomSystem = createProceduralRoomSystem(device, { generationRadius: 5 });
+    const roomColliders = roomSystem.getColliders();
     let roomVertexBuffer = roomSystem.getVertexBuffer();
     let roomVertexCount = roomSystem.getVertexCount();
     const bounds = roomSystem.getBounds();
@@ -77,6 +144,7 @@ export async function initializeGame({
     const projectileManager = createProjectileManager(device, {
       bounds,
       getDynamicColliders: () => enemyManager.getHitBoxes(),
+      getStaticColliders: () => roomColliders,
       onImpact: (impact) => {
         const size = Number.isFinite(impact.projectileSize)
           ? Math.max(impact.projectileSize * 3, 0.12)
@@ -412,18 +480,21 @@ export async function initializeGame({
         roomVertexCount = roomSystem.getVertexCount();
       }
 
-      const padding = 0.25;
+      resolvePlayerCollisions(controller.position, roomColliders);
+
+      const horizontalPadding = Math.max(PLAYER_COLLISION_RADIUS, 0.25);
+      const verticalPadding = Math.max(PLAYER_COLLISION_HALF_HEIGHT, 0.25);
       controller.position[0] = Math.min(
-        Math.max(controller.position[0], bounds.minX + padding),
-        bounds.maxX - padding
+        Math.max(controller.position[0], bounds.minX + horizontalPadding),
+        bounds.maxX - horizontalPadding
       );
       controller.position[1] = Math.min(
-        Math.max(controller.position[1], bounds.minY + padding),
-        bounds.maxY - padding
+        Math.max(controller.position[1], bounds.minY + verticalPadding),
+        bounds.maxY - verticalPadding
       );
       controller.position[2] = Math.min(
-        Math.max(controller.position[2], bounds.minZ + padding),
-        bounds.maxZ - padding
+        Math.max(controller.position[2], bounds.minZ + horizontalPadding),
+        bounds.maxZ - horizontalPadding
       );
 
       resize();
@@ -611,6 +682,16 @@ export async function initializeGame({
           if (Array.isArray(dynamicAimColliders)) {
             for (let i = 0; i < dynamicAimColliders.length; i += 1) {
               const colliderBounds = dynamicAimColliders[i]?.bounds;
+              if (!colliderBounds) {
+                continue;
+              }
+              tryAimHit(traceRayAABB(eye, weaponForward, MAX_AIM_DISTANCE, colliderBounds));
+            }
+          }
+
+          if (Array.isArray(roomColliders) && roomColliders.length > 0) {
+            for (let i = 0; i < roomColliders.length; i += 1) {
+              const colliderBounds = roomColliders[i];
               if (!colliderBounds) {
                 continue;
               }
