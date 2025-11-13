@@ -98,8 +98,8 @@ function determineEdgeType(ax, az, bx, bz, profiles) {
   const baseRandom = randomFloatForEdge(ax, az, bx, bz, 3);
   const openness = (profileA.openness + profileB.openness) * 0.5;
   const variance = Math.abs(profileA.openness - profileB.openness);
-  const openThreshold = clamp01(0.18 + openness * 0.65);
-  const doorwayThreshold = clamp01(openThreshold + 0.25 + (1 - variance) * 0.2);
+  const openThreshold = clamp01(0.12 + openness * 0.5);
+  const doorwayThreshold = clamp01(openThreshold + 0.18 + (1 - variance) * 0.12);
 
   if (baseRandom < openThreshold) {
     return 'open';
