@@ -502,13 +502,29 @@ function chooseNextType(rng, previousType) {
 
 export function createDungeonManager(device, options = {}) {
   const rng = createRng(options.seed ?? Date.now());
-  const bounds = {
-    minX: Infinity,
-    maxX: -Infinity,
+  const defaultBounds = {
+    minX: -5,
+    maxX: 5,
     minY: 0,
-    maxY: 0,
-    minZ: Infinity,
-    maxZ: -Infinity
+    maxY: 4,
+    minZ: -6,
+    maxZ: 6
+  };
+  const bounds = {
+    minX: defaultBounds.minX,
+    maxX: defaultBounds.maxX,
+    minY: defaultBounds.minY,
+    maxY: defaultBounds.maxY,
+    minZ: defaultBounds.minZ,
+    maxZ: defaultBounds.maxZ
+  };
+  const globalBounds = {
+    minX: defaultBounds.minX,
+    maxX: defaultBounds.maxX,
+    minY: defaultBounds.minY,
+    maxY: defaultBounds.maxY,
+    minZ: defaultBounds.minZ,
+    maxZ: defaultBounds.maxZ
   };
 
   const modules = [];
@@ -524,35 +540,102 @@ export function createDungeonManager(device, options = {}) {
 
   let nextStartZ = -6;
 
+  const boundsTransitionPadding = Math.max(0, options.boundsTransitionPadding ?? 0.85);
+  let lastKnownPlayerZ = 0;
+
+  function ensureFiniteBounds(target, fallback) {
+    if (!Number.isFinite(target.minX) || !Number.isFinite(target.maxX)) {
+      target.minX = fallback.minX;
+      target.maxX = fallback.maxX;
+    }
+    if (!Number.isFinite(target.minY) || !Number.isFinite(target.maxY)) {
+      target.minY = fallback.minY;
+      target.maxY = fallback.maxY;
+    }
+    if (!Number.isFinite(target.minZ) || !Number.isFinite(target.maxZ)) {
+      target.minZ = fallback.minZ;
+      target.maxZ = fallback.maxZ;
+    }
+  }
+
+  function updateActiveBounds(playerPosition) {
+    let targetZ = lastKnownPlayerZ;
+    const inputZ = playerPosition && Number.isFinite(playerPosition[2]) ? playerPosition[2] : null;
+    if (inputZ !== null) {
+      targetZ = inputZ;
+      lastKnownPlayerZ = inputZ;
+    } else if (!Number.isFinite(targetZ)) {
+      targetZ = (globalBounds.minZ + globalBounds.maxZ) * 0.5;
+      if (!Number.isFinite(targetZ)) {
+        targetZ = 0;
+      }
+    }
+
+    let closest = null;
+    let closestDistance = Infinity;
+    for (const module of modules) {
+      const m = module?.bounds;
+      if (!m) {
+        continue;
+      }
+      const paddedMinZ = m.minZ - boundsTransitionPadding;
+      const paddedMaxZ = m.maxZ + boundsTransitionPadding;
+      let distance = 0;
+      if (targetZ < paddedMinZ) {
+        distance = paddedMinZ - targetZ;
+      } else if (targetZ > paddedMaxZ) {
+        distance = targetZ - paddedMaxZ;
+      }
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closest = m;
+        if (distance <= 0) {
+          break;
+        }
+      }
+    }
+
+    if (closest) {
+      bounds.minX = closest.minX;
+      bounds.maxX = closest.maxX;
+      bounds.minY = closest.minY;
+      bounds.maxY = closest.maxY;
+    } else {
+      bounds.minX = globalBounds.minX;
+      bounds.maxX = globalBounds.maxX;
+      bounds.minY = globalBounds.minY;
+      bounds.maxY = globalBounds.maxY;
+    }
+
+    bounds.minZ = globalBounds.minZ;
+    bounds.maxZ = globalBounds.maxZ;
+
+    ensureFiniteBounds(bounds, defaultBounds);
+  }
+
   function rebuildBounds() {
-    bounds.minX = Infinity;
-    bounds.maxX = -Infinity;
-    bounds.minY = Infinity;
-    bounds.maxY = -Infinity;
-    bounds.minZ = Infinity;
-    bounds.maxZ = -Infinity;
+    globalBounds.minX = Infinity;
+    globalBounds.maxX = -Infinity;
+    globalBounds.minY = Infinity;
+    globalBounds.maxY = -Infinity;
+    globalBounds.minZ = Infinity;
+    globalBounds.maxZ = -Infinity;
 
     for (const module of modules) {
       if (!module || !module.bounds) {
         continue;
       }
       const m = module.bounds;
-      bounds.minX = Math.min(bounds.minX, m.minX);
-      bounds.maxX = Math.max(bounds.maxX, m.maxX);
-      bounds.minY = Math.min(bounds.minY, m.minY);
-      bounds.maxY = Math.max(bounds.maxY, m.maxY);
-      bounds.minZ = Math.min(bounds.minZ, m.minZ);
-      bounds.maxZ = Math.max(bounds.maxZ, m.maxZ);
+      globalBounds.minX = Math.min(globalBounds.minX, m.minX);
+      globalBounds.maxX = Math.max(globalBounds.maxX, m.maxX);
+      globalBounds.minY = Math.min(globalBounds.minY, m.minY);
+      globalBounds.maxY = Math.max(globalBounds.maxY, m.maxY);
+      globalBounds.minZ = Math.min(globalBounds.minZ, m.minZ);
+      globalBounds.maxZ = Math.max(globalBounds.maxZ, m.maxZ);
     }
 
-    if (!Number.isFinite(bounds.minX)) {
-      bounds.minX = -5;
-      bounds.maxX = 5;
-      bounds.minY = 0;
-      bounds.maxY = 4;
-      bounds.minZ = -6;
-      bounds.maxZ = 6;
-    }
+    ensureFiniteBounds(globalBounds, defaultBounds);
+    updateActiveBounds(null);
   }
 
   function rebuildVertexData() {
@@ -675,6 +758,7 @@ export function createDungeonManager(device, options = {}) {
         rebuildVertexData();
         needsRebuild = false;
       }
+      updateActiveBounds(playerPosition);
     },
     syncGPU() {
       ensureGpuResources();
