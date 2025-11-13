@@ -2,6 +2,7 @@ const DEFAULT_ROOM_SIZE = 10;
 const DEFAULT_ROOM_HEIGHT = 4;
 const DEFAULT_DOOR_HEIGHT = 2.6;
 const DEFAULT_DOOR_WIDTH = 1.8;
+const DEFAULT_WALL_THICKNESS = 0.35;
 const DEFAULT_GENERATION_RADIUS = 4;
 const VERTEX_STRIDE = 9;
 
@@ -145,30 +146,67 @@ function addQuad(vertices, corners, normal, color, bounds) {
   pushVertex(vertices, c, normal, color, bounds);
 }
 
-function addDoubleSidedQuad(vertices, corners, normal, color, bounds) {
-  addQuad(vertices, corners, normal, color, bounds);
-  const oppositeCorners = [corners[0], corners[3], corners[2], corners[1]];
-  addQuad(vertices, oppositeCorners, [-normal[0], -normal[1], -normal[2]], color, bounds);
+function addBox(vertices, minX, minY, minZ, maxX, maxY, maxZ, color, bounds) {
+  const corners = {
+    nbl: [minX, minY, minZ],
+    nbr: [maxX, minY, minZ],
+    ntl: [minX, maxY, minZ],
+    ntr: [maxX, maxY, minZ],
+    fbl: [minX, minY, maxZ],
+    fbr: [maxX, minY, maxZ],
+    ftl: [minX, maxY, maxZ],
+    ftr: [maxX, maxY, maxZ]
+  };
+
+  addQuad(vertices, [corners.fbl, corners.fbr, corners.ftr, corners.ftl], [0, 0, 1], color, bounds);
+  addQuad(vertices, [corners.nbr, corners.nbl, corners.ntl, corners.ntr], [0, 0, -1], color, bounds);
+  addQuad(vertices, [corners.nbl, corners.fbl, corners.ftl, corners.ntl], [-1, 0, 0], color, bounds);
+  addQuad(vertices, [corners.fbr, corners.nbr, corners.ntr, corners.ftr], [1, 0, 0], color, bounds);
+  addQuad(vertices, [corners.ntl, corners.ftl, corners.ftr, corners.ntr], [0, 1, 0], color, bounds);
+  addQuad(vertices, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], [0, -1, 0], color, bounds);
 }
 
-function buildSolidWallAlongX(vertices, wallX, minZ, maxZ, height, color, bounds) {
-  const corners = [
-    [wallX, 0, minZ],
-    [wallX, 0, maxZ],
-    [wallX, height, maxZ],
-    [wallX, height, minZ]
-  ];
-  addDoubleSidedQuad(vertices, corners, [1, 0, 0], color, bounds);
+function addCollider(colliders, minX, minY, minZ, maxX, maxY, maxZ) {
+  if (!colliders) {
+    return;
+  }
+  colliders.push({ minX, minY, minZ, maxX, maxY, maxZ });
 }
 
-function buildSolidWallAlongZ(vertices, wallZ, minX, maxX, height, color, bounds) {
-  const corners = [
-    [minX, 0, wallZ],
-    [maxX, 0, wallZ],
-    [maxX, height, wallZ],
-    [minX, height, wallZ]
-  ];
-  addDoubleSidedQuad(vertices, corners, [0, 0, 1], color, bounds);
+function buildSolidWallAlongX(
+  vertices,
+  wallX,
+  minZ,
+  maxZ,
+  height,
+  color,
+  bounds,
+  thickness,
+  colliders
+) {
+  const halfThickness = thickness * 0.5;
+  const minX = wallX - halfThickness;
+  const maxX = wallX + halfThickness;
+  addBox(vertices, minX, 0, minZ, maxX, height, maxZ, color, bounds);
+  addCollider(colliders, minX, 0, minZ, maxX, height, maxZ);
+}
+
+function buildSolidWallAlongZ(
+  vertices,
+  wallZ,
+  minX,
+  maxX,
+  height,
+  color,
+  bounds,
+  thickness,
+  colliders
+) {
+  const halfThickness = thickness * 0.5;
+  const minZ = wallZ - halfThickness;
+  const maxZ = wallZ + halfThickness;
+  addBox(vertices, minX, 0, minZ, maxX, height, maxZ, color, bounds);
+  addCollider(colliders, minX, 0, minZ, maxX, height, maxZ);
 }
 
 function buildDoorwayAlongX(
@@ -181,40 +219,32 @@ function buildDoorwayAlongX(
   doorWidth,
   wallColor,
   accentColor,
-  bounds
+  bounds,
+  thickness,
+  colliders
 ) {
   const openingCenter = (minZ + maxZ) * 0.5;
   const halfOpening = Math.min(Math.max(doorWidth * 0.5, 0.5), (maxZ - minZ) * 0.45);
   const openingMin = openingCenter - halfOpening;
   const openingMax = openingCenter + halfOpening;
+  const halfThickness = thickness * 0.5;
+  const minX = wallX - halfThickness;
+  const maxX = wallX + halfThickness;
 
   if (openingMin > minZ) {
-    const corners = [
-      [wallX, 0, minZ],
-      [wallX, 0, openingMin],
-      [wallX, height, openingMin],
-      [wallX, height, minZ]
-    ];
-    addDoubleSidedQuad(vertices, corners, [1, 0, 0], wallColor, bounds);
+    addBox(vertices, minX, 0, minZ, maxX, height, openingMin, wallColor, bounds);
+    addCollider(colliders, minX, 0, minZ, maxX, height, openingMin);
   }
 
   if (openingMax < maxZ) {
-    const corners = [
-      [wallX, 0, openingMax],
-      [wallX, 0, maxZ],
-      [wallX, height, maxZ],
-      [wallX, height, openingMax]
-    ];
-    addDoubleSidedQuad(vertices, corners, [1, 0, 0], wallColor, bounds);
+    addBox(vertices, minX, 0, openingMax, maxX, height, maxZ, wallColor, bounds);
+    addCollider(colliders, minX, 0, openingMax, maxX, height, maxZ);
   }
 
-  const lintelCorners = [
-    [wallX, doorHeight, openingMin],
-    [wallX, doorHeight, openingMax],
-    [wallX, height, openingMax],
-    [wallX, height, openingMin]
-  ];
-  addDoubleSidedQuad(vertices, lintelCorners, [1, 0, 0], accentColor, bounds);
+  if (doorHeight < height - 1e-5) {
+    addBox(vertices, minX, doorHeight, openingMin, maxX, height, openingMax, accentColor, bounds);
+    addCollider(colliders, minX, doorHeight, openingMin, maxX, height, openingMax);
+  }
 }
 
 function buildDoorwayAlongZ(
@@ -227,40 +257,32 @@ function buildDoorwayAlongZ(
   doorWidth,
   wallColor,
   accentColor,
-  bounds
+  bounds,
+  thickness,
+  colliders
 ) {
   const openingCenter = (minX + maxX) * 0.5;
   const halfOpening = Math.min(Math.max(doorWidth * 0.5, 0.5), (maxX - minX) * 0.45);
   const openingMin = openingCenter - halfOpening;
   const openingMax = openingCenter + halfOpening;
+  const halfThickness = thickness * 0.5;
+  const minZ = wallZ - halfThickness;
+  const maxZ = wallZ + halfThickness;
 
   if (openingMin > minX) {
-    const corners = [
-      [minX, 0, wallZ],
-      [openingMin, 0, wallZ],
-      [openingMin, height, wallZ],
-      [minX, height, wallZ]
-    ];
-    addDoubleSidedQuad(vertices, corners, [0, 0, 1], wallColor, bounds);
+    addBox(vertices, minX, 0, minZ, openingMin, height, maxZ, wallColor, bounds);
+    addCollider(colliders, minX, 0, minZ, openingMin, height, maxZ);
   }
 
   if (openingMax < maxX) {
-    const corners = [
-      [openingMax, 0, wallZ],
-      [maxX, 0, wallZ],
-      [maxX, height, wallZ],
-      [openingMax, height, wallZ]
-    ];
-    addDoubleSidedQuad(vertices, corners, [0, 0, 1], wallColor, bounds);
+    addBox(vertices, openingMax, 0, minZ, maxX, height, maxZ, wallColor, bounds);
+    addCollider(colliders, openingMax, 0, minZ, maxX, height, maxZ);
   }
 
-  const lintelCorners = [
-    [openingMin, doorHeight, wallZ],
-    [openingMax, doorHeight, wallZ],
-    [openingMax, height, wallZ],
-    [openingMin, height, wallZ]
-  ];
-  addDoubleSidedQuad(vertices, lintelCorners, [0, 0, 1], accentColor, bounds);
+  if (doorHeight < height - 1e-5) {
+    addBox(vertices, openingMin, doorHeight, minZ, openingMax, height, maxZ, accentColor, bounds);
+    addCollider(colliders, openingMin, doorHeight, minZ, openingMax, height, maxZ);
+  }
 }
 
 function positionToCell(value, roomSize, halfRoom) {
@@ -272,6 +294,10 @@ export function createProceduralRoomSystem(device, options = {}) {
   const roomHeight = options.roomHeight ?? DEFAULT_ROOM_HEIGHT;
   const doorHeight = options.doorHeight ?? DEFAULT_DOOR_HEIGHT;
   const doorWidth = options.doorWidth ?? DEFAULT_DOOR_WIDTH;
+  const wallThickness = Math.max(
+    0.05,
+    Math.min(roomSize * 0.5, options.wallThickness ?? DEFAULT_WALL_THICKNESS)
+  );
   const generationRadius = Math.max(1, Math.floor(options.generationRadius ?? DEFAULT_GENERATION_RADIUS));
   const halfRoom = roomSize * 0.5;
 
@@ -294,6 +320,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   let centerCellZ = 0;
 
   const cellProfiles = new Map();
+  const colliders = [];
 
   function resetBounds() {
     bounds.minX = Infinity;
@@ -322,6 +349,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   function buildGeometryForCenter(cx, cz) {
     const vertices = [];
     resetBounds();
+    colliders.length = 0;
 
     const processedEdges = new Set();
 
@@ -402,7 +430,17 @@ export function createProceduralRoomSystem(device, options = {}) {
             const edgeMinZ = Math.min(gz, nz) * roomSize - halfRoom;
             const edgeMaxZ = Math.max(gz, nz) * roomSize + halfRoom;
             if (type === 'solid') {
-              buildSolidWallAlongX(vertices, wallX, edgeMinZ, edgeMaxZ, roomHeight, wallColor, bounds);
+              buildSolidWallAlongX(
+                vertices,
+                wallX,
+                edgeMinZ,
+                edgeMaxZ,
+                roomHeight,
+                wallColor,
+                bounds,
+                wallThickness,
+                colliders
+              );
             } else if (type === 'doorway') {
               const widthFactor = 0.55 + randomFloatForEdge(gx, gz, nx, nz, 19) * 0.45;
               const heightFactor = 0.7 + randomFloatForEdge(gx, gz, nx, nz, 23) * 0.3;
@@ -421,7 +459,9 @@ export function createProceduralRoomSystem(device, options = {}) {
                 localDoorWidth,
                 wallColor,
                 accentColor,
-                bounds
+                bounds,
+                wallThickness,
+                colliders
               );
             }
           } else if (nz !== gz) {
@@ -429,7 +469,17 @@ export function createProceduralRoomSystem(device, options = {}) {
             const edgeMinX = Math.min(gx, nx) * roomSize - halfRoom;
             const edgeMaxX = Math.max(gx, nx) * roomSize + halfRoom;
             if (type === 'solid') {
-              buildSolidWallAlongZ(vertices, wallZ, edgeMinX, edgeMaxX, roomHeight, wallColor, bounds);
+              buildSolidWallAlongZ(
+                vertices,
+                wallZ,
+                edgeMinX,
+                edgeMaxX,
+                roomHeight,
+                wallColor,
+                bounds,
+                wallThickness,
+                colliders
+              );
             } else if (type === 'doorway') {
               const widthFactor = 0.55 + randomFloatForEdge(gx, gz, nx, nz, 19) * 0.45;
               const heightFactor = 0.7 + randomFloatForEdge(gx, gz, nx, nz, 23) * 0.3;
@@ -448,7 +498,9 @@ export function createProceduralRoomSystem(device, options = {}) {
                 localDoorWidth,
                 wallColor,
                 accentColor,
-                bounds
+                bounds,
+                wallThickness,
+                colliders
               );
             }
           }
@@ -502,6 +554,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     getVertexBuffer: () => vertexBuffer,
     getVertexCount: () => vertexCount,
     getBounds: () => bounds,
+    getColliders: () => colliders,
     getGeometry: () => ({ vertexBuffer, vertexCount, bounds }),
     dispose: () => {
       if (vertexBuffer) {

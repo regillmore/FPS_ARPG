@@ -149,6 +149,8 @@ export function createProjectileManager(device, options = {}) {
   const impactCallback = typeof options.onImpact === 'function' ? options.onImpact : null;
   const dynamicColliderProvider =
     typeof options.getDynamicColliders === 'function' ? options.getDynamicColliders : null;
+  const staticColliderProvider =
+    typeof options.getStaticColliders === 'function' ? options.getStaticColliders : null;
   const projectiles = [];
   const vertexData = new Float32Array(maxProjectiles * FLOATS_PER_PROJECTILE);
   const vertexBuffer = device.createBuffer({
@@ -221,6 +223,19 @@ export function createProjectileManager(device, options = {}) {
       }
     }
 
+    let staticColliders = null;
+    if (staticColliderProvider) {
+      try {
+        const providedColliders = staticColliderProvider();
+        if (Array.isArray(providedColliders)) {
+          staticColliders = providedColliders;
+        }
+      } catch (error) {
+        console.error('Error while retrieving static projectile colliders:', error);
+        staticColliders = null;
+      }
+    }
+
     let changed = false;
     for (let index = projectiles.length - 1; index >= 0; index -= 1) {
       const projectile = projectiles[index];
@@ -256,18 +271,48 @@ export function createProjectileManager(device, options = {}) {
         }
       }
 
+      let staticHit = null;
+      if (staticColliders && staticColliders.length > 0) {
+        for (let colliderIndex = 0; colliderIndex < staticColliders.length; colliderIndex += 1) {
+          const collider = staticColliders[colliderIndex];
+          if (!collider) {
+            continue;
+          }
+          const colliderBounds = collider.bounds ?? collider;
+          if (!colliderBounds) {
+            continue;
+          }
+          const hit = sweepAABB(projectile.position, projectile.velocity, deltaTime, colliderBounds);
+          if (!hit) {
+            continue;
+          }
+          if (!staticHit || hit.time < staticHit.time) {
+            staticHit = hit;
+          }
+        }
+      }
+
       const worldHit = collisionBounds
         ? sweepAABB(projectile.position, projectile.velocity, deltaTime, collisionBounds)
         : null;
 
       const dynamicTime = dynamicHit ? dynamicHit.time ?? Infinity : Infinity;
+      const staticTime = staticHit ? staticHit.time ?? Infinity : Infinity;
       const worldTime = worldHit ? worldHit.time ?? Infinity : Infinity;
-      const hasDynamicHit = dynamicHit && dynamicTime <= worldTime;
-      const hasWorldHit = worldHit && worldTime < dynamicTime;
 
-      if (hasDynamicHit || hasWorldHit) {
-        const finalHit = hasDynamicHit ? dynamicHit : worldHit;
-        if (hasDynamicHit) {
+      let finalHit = null;
+      let handledDynamic = false;
+      if (dynamicHit && dynamicTime <= staticTime && dynamicTime <= worldTime) {
+        finalHit = dynamicHit;
+        handledDynamic = true;
+      } else if (staticHit && staticTime <= worldTime) {
+        finalHit = staticHit;
+      } else if (worldHit) {
+        finalHit = worldHit;
+      }
+
+      if (finalHit) {
+        if (handledDynamic) {
           if (dynamicCollider && typeof dynamicCollider.onHit === 'function') {
             try {
               dynamicCollider.onHit(createImpactPayload(projectile, finalHit));
