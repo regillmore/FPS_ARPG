@@ -6,6 +6,7 @@ const DEFAULT_DOUBLE_DOOR_WIDTH = DEFAULT_DOOR_WIDTH * 2;
 const DEFAULT_WALL_THICKNESS = 0.35;
 const DEFAULT_GENERATION_RADIUS = 4;
 const DEFAULT_VERTICAL_LAYERS = 3;
+const DEFAULT_FLOOR_THICKNESS = 0.4;
 const DEFAULT_FLOOR_OPENING_MARGIN_RATIO = 0.22;
 const VERTEX_STRIDE = 9;
 
@@ -176,17 +177,17 @@ function addHorizontalSection(
   function createCorners(x0, x1, z0, z1) {
     if (isUpward) {
       return [
+        [x0, y, z1],
+        [x1, y, z1],
+        [x1, y, z0],
+        [x0, y, z0]
+      ];
+    }
+    return [
         [x0, y, z0],
         [x1, y, z0],
         [x1, y, z1],
         [x0, y, z1]
-      ];
-    }
-    return [
-      [x0, y, z1],
-      [x1, y, z1],
-      [x1, y, z0],
-      [x0, y, z0]
     ];
   }
 
@@ -210,6 +211,137 @@ function addHorizontalSection(
   if (holeMaxZ < maxZ) {
     addQuad(vertices, createCorners(holeMinX, holeMaxX, holeMaxZ, maxZ), normal, color, bounds);
   }
+}
+
+function addFloorSlab(
+  vertices,
+  topY,
+  thickness,
+  minX,
+  maxX,
+  minZ,
+  maxZ,
+  topColor,
+  bottomColor,
+  bounds,
+  hasHole,
+  holeMinX,
+  holeMaxX,
+  holeMinZ,
+  holeMaxZ
+) {
+  const effectiveThickness = Math.max(thickness, 0);
+  const holeValid =
+    hasHole && holeMinX < holeMaxX && holeMinZ < holeMaxZ;
+
+  if (effectiveThickness <= 1e-4) {
+    addHorizontalSection(
+      vertices,
+      topY,
+      minX,
+      maxX,
+      minZ,
+      maxZ,
+      [0, 1, 0],
+      topColor,
+      bounds,
+      holeValid,
+      holeMinX,
+      holeMaxX,
+      holeMinZ,
+      holeMaxZ
+    );
+    addHorizontalSection(
+      vertices,
+      topY,
+      minX,
+      maxX,
+      minZ,
+      maxZ,
+      [0, -1, 0],
+      bottomColor,
+      bounds,
+      holeValid,
+      holeMinX,
+      holeMaxX,
+      holeMinZ,
+      holeMaxZ
+    );
+    return;
+  }
+
+  const bottomY = topY - effectiveThickness;
+  const sideColor = mixColors(topColor, bottomColor, 0.5);
+
+  addHorizontalSection(
+    vertices,
+    topY,
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    [0, 1, 0],
+    topColor,
+    bounds,
+    holeValid,
+    holeMinX,
+    holeMaxX,
+    holeMinZ,
+    holeMaxZ
+  );
+
+  addHorizontalSection(
+    vertices,
+    bottomY,
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    [0, -1, 0],
+    bottomColor,
+    bounds,
+    holeValid,
+    holeMinX,
+    holeMaxX,
+    holeMinZ,
+    holeMaxZ
+  );
+
+  const outer = {
+    nbl: [minX, bottomY, minZ],
+    nbr: [maxX, bottomY, minZ],
+    ntl: [minX, topY, minZ],
+    ntr: [maxX, topY, minZ],
+    fbl: [minX, bottomY, maxZ],
+    fbr: [maxX, bottomY, maxZ],
+    ftl: [minX, topY, maxZ],
+    ftr: [maxX, topY, maxZ]
+  };
+
+  addQuad(vertices, [outer.fbl, outer.fbr, outer.ftr, outer.ftl], [0, 0, 1], sideColor, bounds);
+  addQuad(vertices, [outer.nbr, outer.nbl, outer.ntl, outer.ntr], [0, 0, -1], sideColor, bounds);
+  addQuad(vertices, [outer.nbl, outer.fbl, outer.ftl, outer.ntl], [-1, 0, 0], sideColor, bounds);
+  addQuad(vertices, [outer.fbr, outer.nbr, outer.ntr, outer.ftr], [1, 0, 0], sideColor, bounds);
+
+  if (!holeValid) {
+    return;
+  }
+
+  const inner = {
+    nbl: [holeMinX, bottomY, holeMinZ],
+    nbr: [holeMaxX, bottomY, holeMinZ],
+    ntl: [holeMinX, topY, holeMinZ],
+    ntr: [holeMaxX, topY, holeMinZ],
+    fbl: [holeMinX, bottomY, holeMaxZ],
+    fbr: [holeMaxX, bottomY, holeMaxZ],
+    ftl: [holeMinX, topY, holeMaxZ],
+    ftr: [holeMaxX, topY, holeMaxZ]
+  };
+
+  addQuad(vertices, [inner.fbl, inner.nbl, inner.ntl, inner.ftl], [1, 0, 0], sideColor, bounds);
+  addQuad(vertices, [inner.nbr, inner.fbr, inner.ftr, inner.ntr], [-1, 0, 0], sideColor, bounds);
+  addQuad(vertices, [inner.nbl, inner.nbr, inner.ntr, inner.ntl], [0, 0, 1], sideColor, bounds);
+  addQuad(vertices, [inner.fbr, inner.fbl, inner.ftl, inner.ftr], [0, 0, -1], sideColor, bounds);
 }
 
 function addBox(vertices, minX, minY, minZ, maxX, maxY, maxZ, color, bounds) {
@@ -391,6 +523,10 @@ export function createProceduralRoomSystem(device, options = {}) {
     0.05,
     Math.min(roomSize * 0.5, options.wallThickness ?? DEFAULT_WALL_THICKNESS)
   );
+  const floorThickness = Math.max(
+    0,
+    Math.min(roomHeight * 0.5, options.floorThickness ?? DEFAULT_FLOOR_THICKNESS)
+  );
   const generationRadius = Math.max(1, Math.floor(options.generationRadius ?? DEFAULT_GENERATION_RADIUS));
   const verticalLayers = Math.max(1, Math.floor(options.verticalLayers ?? DEFAULT_VERTICAL_LAYERS));
   const floorOpeningMarginRatio = Math.min(
@@ -399,7 +535,8 @@ export function createProceduralRoomSystem(device, options = {}) {
   );
   const floorOpeningMargin = roomSize * floorOpeningMarginRatio;
   const halfRoom = roomSize * 0.5;
-  const totalStructureHeight = roomHeight * verticalLayers;
+  const levelHeight = roomHeight + floorThickness;
+  const totalStructureHeight = roomHeight + Math.max(0, verticalLayers - 1) * levelHeight;
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
@@ -411,7 +548,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   const bounds = {
     minX: -halfRoom,
     maxX: halfRoom,
-    minY: 0,
+    minY: -floorThickness,
     maxY: totalStructureHeight,
     minZ: -halfRoom,
     maxZ: halfRoom
@@ -633,7 +770,7 @@ export function createProceduralRoomSystem(device, options = {}) {
             const localDoorHeight = clampedDoorHeight;
 
             for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
-              const baseY = layerIndex * roomHeight;
+              const baseY = layerIndex * levelHeight;
               if (type === 'solid') {
                 buildSolidWallAlongX(
                   vertices,
@@ -676,7 +813,7 @@ export function createProceduralRoomSystem(device, options = {}) {
             const localDoorHeight = clampedDoorHeight;
 
             for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
-              const baseY = layerIndex * roomHeight;
+              const baseY = layerIndex * levelHeight;
               if (type === 'solid') {
                 buildSolidWallAlongZ(
                   vertices,
@@ -714,36 +851,22 @@ export function createProceduralRoomSystem(device, options = {}) {
         const hasVerticalOpening = cellVerticalOpenings.get(key) ?? false;
 
         for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
-          const baseY = layerIndex * roomHeight;
+          const baseY = layerIndex * levelHeight;
           const ceilingY = baseY + roomHeight;
           const openFloor = hasVerticalOpening && layerIndex > 0;
           const openCeiling = hasVerticalOpening && layerIndex < verticalLayers - 1;
+          const isTopLayer = layerIndex === verticalLayers - 1;
 
-          addHorizontalSection(
+          addFloorSlab(
             vertices,
             baseY,
+            floorThickness,
             minX,
             maxX,
             minZ,
             maxZ,
-            [0, 1, 0],
             profile.floorColor,
-            bounds,
-            openFloor,
-            holeMinX,
-            holeMaxX,
-            holeMinZ,
-            holeMaxZ
-          );
-          addHorizontalSection(
-            vertices,
-            baseY,
-            minX,
-            maxX,
-            minZ,
-            maxZ,
-            [0, -1, 0],
-            profile.floorColor,
+            profile.ceilingColor,
             bounds,
             openFloor,
             holeMinX,
@@ -752,38 +875,40 @@ export function createProceduralRoomSystem(device, options = {}) {
             holeMaxZ
           );
 
-          addHorizontalSection(
-            vertices,
-            ceilingY,
-            minX,
-            maxX,
-            minZ,
-            maxZ,
-            [0, -1, 0],
-            profile.ceilingColor,
-            bounds,
-            openCeiling,
-            holeMinX,
-            holeMaxX,
-            holeMinZ,
-            holeMaxZ
-          );
-          addHorizontalSection(
-            vertices,
-            ceilingY,
-            minX,
-            maxX,
-            minZ,
-            maxZ,
-            [0, 1, 0],
-            profile.ceilingColor,
-            bounds,
-            openCeiling,
-            holeMinX,
-            holeMaxX,
-            holeMinZ,
-            holeMaxZ
-          );
+          if (isTopLayer) {
+            addHorizontalSection(
+              vertices,
+              ceilingY,
+              minX,
+              maxX,
+              minZ,
+              maxZ,
+              [0, -1, 0],
+              profile.ceilingColor,
+              bounds,
+              openCeiling,
+              holeMinX,
+              holeMaxX,
+              holeMinZ,
+              holeMaxZ
+            );
+            addHorizontalSection(
+              vertices,
+              ceilingY,
+              minX,
+              maxX,
+              minZ,
+              maxZ,
+              [0, 1, 0],
+              profile.ceilingColor,
+              bounds,
+              openCeiling,
+              holeMinX,
+              holeMaxX,
+              holeMinZ,
+              holeMaxZ
+            );
+          }
         }
 
       }
@@ -792,13 +917,13 @@ export function createProceduralRoomSystem(device, options = {}) {
     if (!Number.isFinite(bounds.minX)) {
       bounds.minX = cx * roomSize - halfRoom;
       bounds.maxX = cx * roomSize + halfRoom;
-      bounds.minY = 0;
+      bounds.minY = -floorThickness;
       bounds.maxY = totalStructureHeight;
       bounds.minZ = cz * roomSize - halfRoom;
       bounds.maxZ = cz * roomSize + halfRoom;
     }
 
-    bounds.minY = Math.min(bounds.minY, 0);
+    bounds.minY = Math.min(bounds.minY, -floorThickness);
     bounds.maxY = Math.max(bounds.maxY, totalStructureHeight);
 
     const vertexArray = new Float32Array(vertices);
