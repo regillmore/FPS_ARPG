@@ -1,7 +1,8 @@
 const DEFAULT_ROOM_SIZE = 10;
 const DEFAULT_ROOM_HEIGHT = 4;
-const DEFAULT_DOOR_HEIGHT = 2.6;
-const DEFAULT_DOOR_WIDTH = 1.8;
+const DEFAULT_DOOR_HEIGHT = 2.13; // Approx. 7ft commercial doorway height
+const DEFAULT_DOOR_WIDTH = 0.91; // Approx. 3ft single commercial doorway width
+const DEFAULT_DOUBLE_DOOR_WIDTH = DEFAULT_DOOR_WIDTH * 2;
 const DEFAULT_WALL_THICKNESS = 0.35;
 const DEFAULT_GENERATION_RADIUS = 4;
 const VERTEX_STRIDE = 9;
@@ -230,7 +231,7 @@ function buildDoorwayAlongX(
   colliders
 ) {
   const openingCenter = (minZ + maxZ) * 0.5;
-  const halfOpening = Math.min(Math.max(doorWidth * 0.5, 0.5), (maxZ - minZ) * 0.45);
+  const halfOpening = Math.min(doorWidth * 0.5, (maxZ - minZ) * 0.45);
   const openingMin = openingCenter - halfOpening;
   const openingMax = openingCenter + halfOpening;
   const halfThickness = thickness * 0.5;
@@ -268,7 +269,7 @@ function buildDoorwayAlongZ(
   colliders
 ) {
   const openingCenter = (minX + maxX) * 0.5;
-  const halfOpening = Math.min(Math.max(doorWidth * 0.5, 0.5), (maxX - minX) * 0.45);
+  const halfOpening = Math.min(doorWidth * 0.5, (maxX - minX) * 0.45);
   const openingMin = openingCenter - halfOpening;
   const openingMax = openingCenter + halfOpening;
   const halfThickness = thickness * 0.5;
@@ -299,7 +300,8 @@ export function createProceduralRoomSystem(device, options = {}) {
   const roomSize = options.roomSize ?? DEFAULT_ROOM_SIZE;
   const roomHeight = options.roomHeight ?? DEFAULT_ROOM_HEIGHT;
   const doorHeight = options.doorHeight ?? DEFAULT_DOOR_HEIGHT;
-  const doorWidth = options.doorWidth ?? DEFAULT_DOOR_WIDTH;
+  const singleDoorWidth = options.doorWidth ?? DEFAULT_DOOR_WIDTH;
+  const doubleDoorWidth = options.doubleDoorWidth ?? DEFAULT_DOUBLE_DOOR_WIDTH;
   const wallThickness = Math.max(
     0.05,
     Math.min(roomSize * 0.5, options.wallThickness ?? DEFAULT_WALL_THICKNESS)
@@ -309,9 +311,10 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
-  const clampedDoorHeight =
-    clamp01(Math.min(Math.max(doorHeight, roomHeight * 0.3), roomHeight - 0.2) / roomHeight) * roomHeight;
-  const clampedDoorWidth = Math.max(roomSize * 0.2, Math.min(roomSize * 0.95, doorWidth));
+  const clampedDoorHeight = Math.min(
+    Math.max(doorHeight, roomHeight * 0.3),
+    roomHeight - 0.2
+  );
 
   const bounds = {
     minX: -halfRoom,
@@ -538,13 +541,9 @@ export function createProceduralRoomSystem(device, options = {}) {
                 colliders
               );
             } else if (type === 'doorway') {
-              const widthFactor = 0.55 + randomFloatForEdge(gx, gz, nx, nz, 19, worldSeed) * 0.45;
-              const heightFactor = 0.7 + randomFloatForEdge(gx, gz, nx, nz, 23, worldSeed) * 0.3;
-              const localDoorWidth = Math.min(clampedDoorWidth * widthFactor, roomSize * 0.95);
-              const localDoorHeight = Math.min(
-                Math.max(clampedDoorHeight * heightFactor, roomHeight * 0.35),
-                roomHeight - 0.2
-              );
+              const isDoubleDoor = randomFloatForEdge(gx, gz, nx, nz, 29, worldSeed) < 0.5;
+              const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
+              const localDoorHeight = clampedDoorHeight;
               buildDoorwayAlongX(
                 vertices,
                 wallX,
@@ -577,13 +576,9 @@ export function createProceduralRoomSystem(device, options = {}) {
                 colliders
               );
             } else if (type === 'doorway') {
-              const widthFactor = 0.55 + randomFloatForEdge(gx, gz, nx, nz, 19, worldSeed) * 0.45;
-              const heightFactor = 0.7 + randomFloatForEdge(gx, gz, nx, nz, 23, worldSeed) * 0.3;
-              const localDoorWidth = Math.min(clampedDoorWidth * widthFactor, roomSize * 0.95);
-              const localDoorHeight = Math.min(
-                Math.max(clampedDoorHeight * heightFactor, roomHeight * 0.35),
-                roomHeight - 0.2
-              );
+              const isDoubleDoor = randomFloatForEdge(gx, gz, nx, nz, 29, worldSeed) < 0.5;
+              const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
+              const localDoorHeight = clampedDoorHeight;
               buildDoorwayAlongZ(
                 vertices,
                 wallZ,
