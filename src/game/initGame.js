@@ -153,6 +153,46 @@ function resolvePlayerCollisions(position, colliders) {
     }
   }
 
+  if (!result.grounded) {
+    const playerMinY = position[1] - halfHeight;
+    const playerCenterX = position[0];
+    const playerCenterZ = position[2];
+    const groundSnapDistance = Math.max(nearFloorEpsilon * 10, 0.01);
+    const horizontalTolerance = radius * 0.1;
+
+    for (let i = 0; i < colliders.length; i += 1) {
+      const collider = colliders[i];
+      if (!collider) {
+        continue;
+      }
+
+      const colliderHeight = collider.maxY - collider.minY;
+      if (colliderHeight > halfHeight * 2 + 0.1) {
+        continue;
+      }
+
+      if (
+        playerCenterX < collider.minX - horizontalTolerance ||
+        playerCenterX > collider.maxX + horizontalTolerance ||
+        playerCenterZ < collider.minZ - horizontalTolerance ||
+        playerCenterZ > collider.maxZ + horizontalTolerance
+      ) {
+        continue;
+      }
+
+      if (
+        playerMinY >= collider.maxY - groundSnapDistance &&
+        playerMinY <= collider.maxY + groundSnapDistance
+      ) {
+        if (playerMinY < collider.maxY) {
+          position[1] = collider.maxY + halfHeight;
+        }
+        result.grounded = true;
+        break;
+      }
+    }
+  }
+
   return result;
 }
 
