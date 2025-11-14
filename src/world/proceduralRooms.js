@@ -563,6 +563,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   const layerCellProfiles = Array.from({ length: verticalLayers }, () => new Map());
   const colliders = [];
   const cellEdgeStates = new Map();
+  const cellLayerEdgeStates = new Map();
   const cellVerticalOpenings = new Map();
   const discoveredBarrelRooms = new Set();
   const pendingBarrelSpawns = [];
@@ -590,6 +591,35 @@ export function createProceduralRoomSystem(device, options = {}) {
       cellEdgeStates.set(key, edges);
     }
     return edges;
+  }
+
+  function getCellEdgesForLayer(layerIndex, x, z) {
+    const key = getCellKey(x, z);
+    let perLayer = cellLayerEdgeStates.get(key);
+    if (!perLayer) {
+      perLayer = Array.from({ length: verticalLayers }, () => ({
+        north: null,
+        south: null,
+        east: null,
+        west: null
+      }));
+      cellLayerEdgeStates.set(key, perLayer);
+    }
+    let edges = perLayer[layerIndex];
+    if (!edges) {
+      edges = { north: null, south: null, east: null, west: null };
+      perLayer[layerIndex] = edges;
+    }
+    return edges;
+  }
+
+  function getVerticalOpeningStates(key) {
+    let openings = cellVerticalOpenings.get(key);
+    if (!openings) {
+      openings = new Array(verticalLayers).fill(false);
+      cellVerticalOpenings.set(key, openings);
+    }
+    return openings;
   }
 
   function evaluateCellForBarrel(x, z) {
@@ -633,62 +663,85 @@ export function createProceduralRoomSystem(device, options = {}) {
     discoveredBarrelRooms.add(key);
   }
 
-  function updateCellVerticalOpening(x, z) {
+  function updateCellVerticalOpeningForLayer(x, z, layerIndex) {
     const key = getCellKey(x, z);
-    const edges = cellEdgeStates.get(key);
-    if (!edges) {
-      cellVerticalOpenings.set(key, false);
-      return;
-    }
+    const perLayer = cellLayerEdgeStates.get(key);
+    const edges = perLayer ? perLayer[layerIndex] : null;
 
-    const edgeStates = [edges.north, edges.south, edges.east, edges.west];
     let doorwayCount = 0;
     let openEdge = false;
     let closedCount = 0;
 
-    for (let i = 0; i < edgeStates.length; i += 1) {
-      const state = edgeStates[i];
-      if (state === 'doorway') {
-        doorwayCount += 1;
-      } else if (state === 'open') {
-        openEdge = true;
-      } else {
-        closedCount += 1;
+    if (edges) {
+      const edgeStates = [edges.north, edges.south, edges.east, edges.west];
+      for (let i = 0; i < edgeStates.length; i += 1) {
+        const state = edgeStates[i];
+        if (state === 'doorway') {
+          doorwayCount += 1;
+        } else if (state === 'open') {
+          openEdge = true;
+        } else {
+          closedCount += 1;
+        }
       }
     }
 
     const shouldOpen = doorwayCount === 1 && closedCount >= 3 && !openEdge;
-    cellVerticalOpenings.set(key, shouldOpen);
+    const openings = getVerticalOpeningStates(key);
+    openings[layerIndex] = shouldOpen;
   }
 
-  function recordEdge(ax, az, bx, bz, type) {
+  function recordEdge(ax, az, bx, bz, layerTypes) {
     if (!Number.isFinite(ax) || !Number.isFinite(az) || !Number.isFinite(bx) || !Number.isFinite(bz)) {
       return;
     }
 
+    const effectiveLayerTypes = Array.isArray(layerTypes) ? layerTypes : [layerTypes];
     const edgeA = getCellEdges(ax, az);
     const edgeB = getCellEdges(bx, bz);
     const dx = bx - ax;
     const dz = bz - az;
+    const baseType = effectiveLayerTypes[0];
 
     if (dx === 1 && dz === 0) {
-      edgeA.east = type;
-      edgeB.west = type;
+      edgeA.east = baseType;
+      edgeB.west = baseType;
     } else if (dx === -1 && dz === 0) {
-      edgeA.west = type;
-      edgeB.east = type;
+      edgeA.west = baseType;
+      edgeB.east = baseType;
     } else if (dx === 0 && dz === 1) {
-      edgeA.south = type;
-      edgeB.north = type;
+      edgeA.south = baseType;
+      edgeB.north = baseType;
     } else if (dx === 0 && dz === -1) {
-      edgeA.north = type;
-      edgeB.south = type;
+      edgeA.north = baseType;
+      edgeB.south = baseType;
     }
 
     evaluateCellForBarrel(ax, az);
     evaluateCellForBarrel(bx, bz);
-    updateCellVerticalOpening(ax, az);
-    updateCellVerticalOpening(bx, bz);
+
+    for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
+      const type = effectiveLayerTypes[layerIndex] ?? baseType;
+      const edgesA = getCellEdgesForLayer(layerIndex, ax, az);
+      const edgesB = getCellEdgesForLayer(layerIndex, bx, bz);
+
+      if (dx === 1 && dz === 0) {
+        edgesA.east = type;
+        edgesB.west = type;
+      } else if (dx === -1 && dz === 0) {
+        edgesA.west = type;
+        edgesB.east = type;
+      } else if (dx === 0 && dz === 1) {
+        edgesA.south = type;
+        edgesB.north = type;
+      } else if (dx === 0 && dz === -1) {
+        edgesA.north = type;
+        edgesB.south = type;
+      }
+
+      updateCellVerticalOpeningForLayer(ax, az, layerIndex);
+      updateCellVerticalOpeningForLayer(bx, bz, layerIndex);
+    }
   }
 
   function resetBounds() {
@@ -767,7 +820,7 @@ export function createProceduralRoomSystem(device, options = {}) {
             neighborProfiles[layerIndex] = getCellProfileForLayer(layerIndex, nx, nz);
           }
 
-          recordEdge(gx, gz, nx, nz, edgeTypes[0]);
+          recordEdge(gx, gz, nx, nz, edgeTypes);
 
           if (nx !== gx) {
             const wallX = (gx + nx) * 0.5 * roomSize;
@@ -872,13 +925,17 @@ export function createProceduralRoomSystem(device, options = {}) {
           }
         }
 
-        const hasVerticalOpening = cellVerticalOpenings.get(key) ?? false;
+        const verticalOpeningStates = cellVerticalOpenings.get(key);
 
         for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
           const baseY = layerIndex * levelHeight;
           const ceilingY = baseY + roomHeight;
-          const openFloor = hasVerticalOpening && layerIndex > 0;
-          const openCeiling = hasVerticalOpening && layerIndex < verticalLayers - 1;
+          const openFloor =
+            layerIndex > 0 && verticalOpeningStates ? verticalOpeningStates[layerIndex - 1] : false;
+          const openCeiling =
+            layerIndex < verticalLayers - 1 && verticalOpeningStates
+              ? verticalOpeningStates[layerIndex]
+              : false;
           const isTopLayer = layerIndex === verticalLayers - 1;
           const profile = profilePerLayer[layerIndex];
 
