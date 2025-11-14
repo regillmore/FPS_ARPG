@@ -3,9 +3,7 @@ const KEY_BINDINGS = {
   KeyS: 'backward',
   KeyA: 'left',
   KeyD: 'right',
-  Space: 'up',
-  ShiftLeft: 'down',
-  ShiftRight: 'down',
+  Space: 'jump',
   KeyE: 'use'
 };
 
@@ -17,15 +15,18 @@ export class FirstPersonController {
     this.yaw = 0;
     this.pitch = 0;
     this.moveSpeed = 4.5;
-    this.verticalSpeed = 3.0;
+    this.gravity = -9.81;
+    this.jumpSpeed = 5.5;
+    this.verticalVelocity = 0;
+    this.isGrounded = false;
+    this.jumpQueued = false;
+    this.jumpButtonDown = false;
     this.mouseSensitivity = 0.0025;
     this.movement = {
       forward: false,
       backward: false,
       left: false,
-      right: false,
-      up: false,
-      down: false
+      right: false
     };
     this.triggers = {
       primary: false,
@@ -99,6 +100,22 @@ export class FirstPersonController {
         event.preventDefault();
         return;
       }
+      if (action === 'jump') {
+        if (pressed && document.pointerLockElement !== this.canvas) {
+          return;
+        }
+        if (pressed) {
+          if (!this.jumpButtonDown) {
+            this.jumpQueued = true;
+          }
+          this.jumpButtonDown = true;
+        } else {
+          this.jumpQueued = false;
+          this.jumpButtonDown = false;
+        }
+        event.preventDefault();
+        return;
+      }
       this.movement[action] = pressed;
       event.preventDefault();
     }
@@ -108,6 +125,8 @@ export class FirstPersonController {
     for (const key of Object.keys(this.movement)) {
       this.movement[key] = false;
     }
+    this.jumpQueued = false;
+    this.jumpButtonDown = false;
   }
 
   #resetTriggers() {
@@ -131,7 +150,6 @@ export class FirstPersonController {
     const right = [cosYaw, 0, -sinYaw];
 
     let vx = 0;
-    let vy = 0;
     let vz = 0;
 
     if (this.movement.forward) {
@@ -150,26 +168,31 @@ export class FirstPersonController {
       vx -= right[0];
       vz -= right[2];
     }
-    if (this.movement.up) {
-      vy += 1;
-    }
-    if (this.movement.down) {
-      vy -= 1;
-    }
-
     const horizontalLength = Math.hypot(vx, vz);
     if (horizontalLength > 0) {
       vx /= horizontalLength;
       vz /= horizontalLength;
     }
 
-    if (vy !== 0) {
-      vy = Math.sign(vy);
+    this.position[0] += vx * this.moveSpeed * deltaTime;
+    this.position[2] += vz * this.moveSpeed * deltaTime;
+
+    if (this.jumpQueued && this.isGrounded) {
+      this.verticalVelocity = this.jumpSpeed;
+      this.isGrounded = false;
+      this.jumpQueued = false;
     }
 
-    this.position[0] += vx * this.moveSpeed * deltaTime;
-    this.position[1] += vy * this.verticalSpeed * deltaTime;
-    this.position[2] += vz * this.moveSpeed * deltaTime;
+    if (this.isGrounded) {
+      if (this.verticalVelocity < 0) {
+        this.verticalVelocity = 0;
+      }
+    } else {
+      this.verticalVelocity += this.gravity * deltaTime;
+    }
+
+    this.position[1] += this.verticalVelocity * deltaTime;
+    this.isGrounded = false;
   }
 
   getViewTarget() {
@@ -201,5 +224,20 @@ export class FirstPersonController {
     const wasPressed = this.triggerPresses.use;
     this.triggerPresses.use = false;
     return wasPressed;
+  }
+
+  applyCollisionResult(result) {
+    if (!result) {
+      return;
+    }
+    if (result.grounded) {
+      if (this.verticalVelocity < 0) {
+        this.verticalVelocity = 0;
+      }
+      this.isGrounded = true;
+    }
+    if (result.hitCeiling && this.verticalVelocity > 0) {
+      this.verticalVelocity = 0;
+    }
   }
 }
