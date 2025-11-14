@@ -422,34 +422,47 @@ export function createProceduralRoomSystem(device, options = {}) {
   let centerCellX = 0;
   let centerCellZ = 0;
 
-  const cellProfiles = new Map();
   const colliders = [];
-  const cellEdgeStates = new Map();
-  const cellVerticalOpenings = new Map();
-  const discoveredBarrelRooms = new Set();
+  const layerCaches = new Map();
   const pendingBarrelSpawns = [];
 
   function getCellKey(x, z) {
     return `${x},${z}`;
   }
 
-  function getCellEdges(x, z) {
+  function getLayerCache(layerIndex) {
+    let cache = layerCaches.get(layerIndex);
+    if (!cache) {
+      cache = {
+        profiles: new Map(),
+        edgeStates: new Map(),
+        verticalOpenings: new Map(),
+        discoveredBarrelRooms: new Set()
+      };
+      layerCaches.set(layerIndex, cache);
+    }
+    return cache;
+  }
+
+  function getCellEdges(layerIndex, x, z) {
+    const cache = getLayerCache(layerIndex);
     const key = getCellKey(x, z);
-    let edges = cellEdgeStates.get(key);
+    let edges = cache.edgeStates.get(key);
     if (!edges) {
       edges = { north: null, south: null, east: null, west: null };
-      cellEdgeStates.set(key, edges);
+      cache.edgeStates.set(key, edges);
     }
     return edges;
   }
 
-  function evaluateCellForBarrel(x, z) {
+  function evaluateCellForBarrel(layerIndex, x, z) {
+    const cache = getLayerCache(layerIndex);
     const key = getCellKey(x, z);
-    if (discoveredBarrelRooms.has(key)) {
+    if (cache.discoveredBarrelRooms.has(key)) {
       return;
     }
 
-    const edges = cellEdgeStates.get(key);
+    const edges = cache.edgeStates.get(key);
     if (!edges) {
       return;
     }
@@ -479,16 +492,17 @@ export function createProceduralRoomSystem(device, options = {}) {
       return;
     }
 
-    const position = [x * roomSize, 0, z * roomSize];
-    pendingBarrelSpawns.push({ key, position });
-    discoveredBarrelRooms.add(key);
+    const position = [x * roomSize, layerIndex * roomHeight, z * roomSize];
+    pendingBarrelSpawns.push({ key: `${layerIndex}|${key}`, layerIndex, cellKey: key, position });
+    cache.discoveredBarrelRooms.add(key);
   }
 
-  function updateCellVerticalOpening(x, z) {
+  function updateCellVerticalOpening(layerIndex, x, z) {
+    const cache = getLayerCache(layerIndex);
     const key = getCellKey(x, z);
-    const edges = cellEdgeStates.get(key);
+    const edges = cache.edgeStates.get(key);
     if (!edges) {
-      cellVerticalOpenings.set(key, false);
+      cache.verticalOpenings.set(key, false);
       return;
     }
 
@@ -509,16 +523,16 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
 
     const shouldOpen = doorwayCount === 1 && closedCount >= 3 && !openEdge;
-    cellVerticalOpenings.set(key, shouldOpen);
+    cache.verticalOpenings.set(key, shouldOpen);
   }
 
-  function recordEdge(ax, az, bx, bz, type) {
+  function recordEdge(layerIndex, ax, az, bx, bz, type) {
     if (!Number.isFinite(ax) || !Number.isFinite(az) || !Number.isFinite(bx) || !Number.isFinite(bz)) {
       return;
     }
 
-    const edgeA = getCellEdges(ax, az);
-    const edgeB = getCellEdges(bx, bz);
+    const edgeA = getCellEdges(layerIndex, ax, az);
+    const edgeB = getCellEdges(layerIndex, bx, bz);
     const dx = bx - ax;
     const dz = bz - az;
 
@@ -536,10 +550,10 @@ export function createProceduralRoomSystem(device, options = {}) {
       edgeB.south = type;
     }
 
-    evaluateCellForBarrel(ax, az);
-    evaluateCellForBarrel(bx, bz);
-    updateCellVerticalOpening(ax, az);
-    updateCellVerticalOpening(bx, bz);
+    evaluateCellForBarrel(layerIndex, ax, az);
+    evaluateCellForBarrel(layerIndex, bx, bz);
+    updateCellVerticalOpening(layerIndex, ax, az);
+    updateCellVerticalOpening(layerIndex, bx, bz);
   }
 
   function resetBounds() {
@@ -572,68 +586,71 @@ export function createProceduralRoomSystem(device, options = {}) {
     resetBounds();
     colliders.length = 0;
 
-    const processedEdges = new Set();
+    for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
+      const layerSeed = (worldSeed + layerIndex) >>> 0;
+      const layerCache = getLayerCache(layerIndex);
+      const { profiles, verticalOpenings } = layerCache;
+      const processedEdges = new Set();
 
-    for (let gx = cx - generationRadius; gx <= cx + generationRadius; gx += 1) {
-      for (let gz = cz - generationRadius; gz <= cz + generationRadius; gz += 1) {
-        const key = `${gx},${gz}`;
-        let profile = cellProfiles.get(key);
-        if (!profile) {
-          profile = createCellProfile(gx, gz, worldSeed);
-          cellProfiles.set(key, profile);
-        }
-
-        const centerX = gx * roomSize;
-        const centerZ = gz * roomSize;
-        const minX = centerX - halfRoom;
-        const maxX = centerX + halfRoom;
-        const minZ = centerZ - halfRoom;
-        const maxZ = centerZ + halfRoom;
-
-        const holeMinX = minX + floorOpeningMargin;
-        const holeMaxX = maxX - floorOpeningMargin;
-        const holeMinZ = minZ + floorOpeningMargin;
-        const holeMaxZ = maxZ - floorOpeningMargin;
-
-        const neighbors = [
-          [gx + 1, gz],
-          [gx - 1, gz],
-          [gx, gz + 1],
-          [gx, gz - 1]
-        ];
-
-        for (let i = 0; i < neighbors.length; i += 1) {
-          const [nx, nz] = neighbors[i];
-          const edgeKey = createEdgeKey(gx, gz, nx, nz);
-          if (processedEdges.has(edgeKey)) {
-            continue;
-          }
-          processedEdges.add(edgeKey);
-
-          const type = determineEdgeType(gx, gz, nx, nz, cellProfiles, worldSeed);
-          recordEdge(gx, gz, nx, nz, type);
-          const neighborProfileKey = `${nx},${nz}`;
-          let neighborProfile = cellProfiles.get(neighborProfileKey);
-          if (!neighborProfile) {
-            neighborProfile = createCellProfile(nx, nz, worldSeed);
-            cellProfiles.set(neighborProfileKey, neighborProfile);
+      for (let gx = cx - generationRadius; gx <= cx + generationRadius; gx += 1) {
+        for (let gz = cz - generationRadius; gz <= cz + generationRadius; gz += 1) {
+          const key = `${gx},${gz}`;
+          let profile = profiles.get(key);
+          if (!profile) {
+            profile = createCellProfile(gx, gz, layerSeed);
+            profiles.set(key, profile);
           }
 
-          const wallColor = mixColors(profile.wallColor, neighborProfile.wallColor, 0.5);
-          const accentColor = mixColors(profile.accentColor, neighborProfile.accentColor, 0.5);
+          const centerX = gx * roomSize;
+          const centerZ = gz * roomSize;
+          const minX = centerX - halfRoom;
+          const maxX = centerX + halfRoom;
+          const minZ = centerZ - halfRoom;
+          const maxZ = centerZ + halfRoom;
 
-          if (nx !== gx) {
-            const wallX = (gx + nx) * 0.5 * roomSize;
-            const edgeMinZ = Math.min(gz, nz) * roomSize - halfRoom;
-            const edgeMaxZ = Math.max(gz, nz) * roomSize + halfRoom;
-            const isDoubleDoor = type === 'doorway'
-              ? randomFloatForEdge(gx, gz, nx, nz, 29, worldSeed) < 0.5
-              : false;
-            const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
-            const localDoorHeight = clampedDoorHeight;
+          const holeMinX = minX + floorOpeningMargin;
+          const holeMaxX = maxX - floorOpeningMargin;
+          const holeMinZ = minZ + floorOpeningMargin;
+          const holeMaxZ = maxZ - floorOpeningMargin;
 
-            for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
-              const baseY = layerIndex * roomHeight;
+          const neighbors = [
+            [gx + 1, gz],
+            [gx - 1, gz],
+            [gx, gz + 1],
+            [gx, gz - 1]
+          ];
+
+          for (let i = 0; i < neighbors.length; i += 1) {
+            const [nx, nz] = neighbors[i];
+            const edgeKey = createEdgeKey(gx, gz, nx, nz);
+            if (processedEdges.has(edgeKey)) {
+              continue;
+            }
+            processedEdges.add(edgeKey);
+
+            const type = determineEdgeType(gx, gz, nx, nz, profiles, layerSeed);
+            recordEdge(layerIndex, gx, gz, nx, nz, type);
+            const neighborProfileKey = `${nx},${nz}`;
+            let neighborProfile = profiles.get(neighborProfileKey);
+            if (!neighborProfile) {
+              neighborProfile = createCellProfile(nx, nz, layerSeed);
+              profiles.set(neighborProfileKey, neighborProfile);
+            }
+
+            const wallColor = mixColors(profile.wallColor, neighborProfile.wallColor, 0.5);
+            const accentColor = mixColors(profile.accentColor, neighborProfile.accentColor, 0.5);
+            const baseY = layerIndex * roomHeight;
+
+            if (nx !== gx) {
+              const wallX = (gx + nx) * 0.5 * roomSize;
+              const edgeMinZ = Math.min(gz, nz) * roomSize - halfRoom;
+              const edgeMaxZ = Math.max(gz, nz) * roomSize + halfRoom;
+              const isDoubleDoor = type === 'doorway'
+                ? randomFloatForEdge(gx, gz, nx, nz, 29, layerSeed) < 0.5
+                : false;
+              const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
+              const localDoorHeight = clampedDoorHeight;
+
               if (type === 'solid') {
                 buildSolidWallAlongX(
                   vertices,
@@ -664,19 +681,16 @@ export function createProceduralRoomSystem(device, options = {}) {
                   baseY
                 );
               }
-            }
-          } else if (nz !== gz) {
-            const wallZ = (gz + nz) * 0.5 * roomSize;
-            const edgeMinX = Math.min(gx, nx) * roomSize - halfRoom;
-            const edgeMaxX = Math.max(gx, nx) * roomSize + halfRoom;
-            const isDoubleDoor = type === 'doorway'
-              ? randomFloatForEdge(gx, gz, nx, nz, 29, worldSeed) < 0.5
-              : false;
-            const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
-            const localDoorHeight = clampedDoorHeight;
+            } else if (nz !== gz) {
+              const wallZ = (gz + nz) * 0.5 * roomSize;
+              const edgeMinX = Math.min(gx, nx) * roomSize - halfRoom;
+              const edgeMaxX = Math.max(gx, nx) * roomSize + halfRoom;
+              const isDoubleDoor = type === 'doorway'
+                ? randomFloatForEdge(gx, gz, nx, nz, 29, layerSeed) < 0.5
+                : false;
+              const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
+              const localDoorHeight = clampedDoorHeight;
 
-            for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
-              const baseY = layerIndex * roomHeight;
               if (type === 'solid') {
                 buildSolidWallAlongZ(
                   vertices,
@@ -709,11 +723,8 @@ export function createProceduralRoomSystem(device, options = {}) {
               }
             }
           }
-        }
 
-        const hasVerticalOpening = cellVerticalOpenings.get(key) ?? false;
-
-        for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
+          const hasVerticalOpening = verticalOpenings.get(key) ?? false;
           const baseY = layerIndex * roomHeight;
           const ceilingY = baseY + roomHeight;
           const openFloor = hasVerticalOpening && layerIndex > 0;
@@ -785,7 +796,6 @@ export function createProceduralRoomSystem(device, options = {}) {
             holeMaxZ
           );
         }
-
       }
     }
 
