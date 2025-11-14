@@ -5,6 +5,8 @@ const DEFAULT_DOOR_WIDTH = 1.0;
 const DEFAULT_DOUBLE_DOOR_WIDTH = DEFAULT_DOOR_WIDTH * 2;
 const DEFAULT_WALL_THICKNESS = 0.35;
 const DEFAULT_GENERATION_RADIUS = 4;
+const DEFAULT_VERTICAL_LAYERS = 3;
+const DEFAULT_FLOOR_OPENING_MARGIN_RATIO = 0.22;
 const VERTEX_STRIDE = 9;
 
 const BASE_FLOOR_COLOR = [0.36, 0.36, 0.42];
@@ -153,6 +155,63 @@ function addQuad(vertices, corners, normal, color, bounds) {
   pushVertex(vertices, d, normal, color, bounds);
 }
 
+function addHorizontalSection(
+  vertices,
+  y,
+  minX,
+  maxX,
+  minZ,
+  maxZ,
+  normal,
+  color,
+  bounds,
+  hasHole,
+  holeMinX,
+  holeMaxX,
+  holeMinZ,
+  holeMaxZ
+) {
+  const isUpward = normal[1] >= 0;
+
+  function createCorners(x0, x1, z0, z1) {
+    if (isUpward) {
+      return [
+        [x0, y, z0],
+        [x1, y, z0],
+        [x1, y, z1],
+        [x0, y, z1]
+      ];
+    }
+    return [
+      [x0, y, z1],
+      [x1, y, z1],
+      [x1, y, z0],
+      [x0, y, z0]
+    ];
+  }
+
+  if (!hasHole || holeMinX >= holeMaxX || holeMinZ >= holeMaxZ) {
+    addQuad(vertices, createCorners(minX, maxX, minZ, maxZ), normal, color, bounds);
+    return;
+  }
+
+  if (holeMinX > minX) {
+    addQuad(vertices, createCorners(minX, holeMinX, minZ, maxZ), normal, color, bounds);
+  }
+
+  if (holeMaxX < maxX) {
+    addQuad(vertices, createCorners(holeMaxX, maxX, minZ, maxZ), normal, color, bounds);
+  }
+
+  if (holeMinZ > minZ) {
+    addQuad(vertices, createCorners(holeMinX, holeMaxX, minZ, holeMinZ), normal, color, bounds);
+  }
+
+  if (holeMaxZ < maxZ) {
+    addQuad(vertices, createCorners(holeMinX, holeMaxX, holeMaxZ, maxZ), normal, color, bounds);
+  }
+}
+
 function addBox(vertices, minX, minY, minZ, maxX, maxY, maxZ, color, bounds) {
   const corners = {
     nbl: [minX, minY, minZ],
@@ -189,13 +248,14 @@ function buildSolidWallAlongX(
   color,
   bounds,
   thickness,
-  colliders
+  colliders,
+  baseY = 0
 ) {
   const halfThickness = thickness * 0.5;
   const minX = wallX - halfThickness;
   const maxX = wallX + halfThickness;
-  addBox(vertices, minX, 0, minZ, maxX, height, maxZ, color, bounds);
-  addCollider(colliders, minX, 0, minZ, maxX, height, maxZ);
+  addBox(vertices, minX, baseY, minZ, maxX, baseY + height, maxZ, color, bounds);
+  addCollider(colliders, minX, baseY, minZ, maxX, baseY + height, maxZ);
 }
 
 function buildSolidWallAlongZ(
@@ -207,13 +267,14 @@ function buildSolidWallAlongZ(
   color,
   bounds,
   thickness,
-  colliders
+  colliders,
+  baseY = 0
 ) {
   const halfThickness = thickness * 0.5;
   const minZ = wallZ - halfThickness;
   const maxZ = wallZ + halfThickness;
-  addBox(vertices, minX, 0, minZ, maxX, height, maxZ, color, bounds);
-  addCollider(colliders, minX, 0, minZ, maxX, height, maxZ);
+  addBox(vertices, minX, baseY, minZ, maxX, baseY + height, maxZ, color, bounds);
+  addCollider(colliders, minX, baseY, minZ, maxX, baseY + height, maxZ);
 }
 
 function buildDoorwayAlongX(
@@ -228,7 +289,8 @@ function buildDoorwayAlongX(
   accentColor,
   bounds,
   thickness,
-  colliders
+  colliders,
+  baseY = 0
 ) {
   const openingCenter = (minZ + maxZ) * 0.5;
   const halfOpening = Math.min(doorWidth * 0.5, (maxZ - minZ) * 0.45);
@@ -239,18 +301,29 @@ function buildDoorwayAlongX(
   const maxX = wallX + halfThickness;
 
   if (openingMin > minZ) {
-    addBox(vertices, minX, 0, minZ, maxX, height, openingMin, wallColor, bounds);
-    addCollider(colliders, minX, 0, minZ, maxX, height, openingMin);
+    addBox(vertices, minX, baseY, minZ, maxX, baseY + height, openingMin, wallColor, bounds);
+    addCollider(colliders, minX, baseY, minZ, maxX, baseY + height, openingMin);
   }
 
   if (openingMax < maxZ) {
-    addBox(vertices, minX, 0, openingMax, maxX, height, maxZ, wallColor, bounds);
-    addCollider(colliders, minX, 0, openingMax, maxX, height, maxZ);
+    addBox(vertices, minX, baseY, openingMax, maxX, baseY + height, maxZ, wallColor, bounds);
+    addCollider(colliders, minX, baseY, openingMax, maxX, baseY + height, maxZ);
   }
 
   if (doorHeight < height - 1e-5) {
-    addBox(vertices, minX, doorHeight, openingMin, maxX, height, openingMax, accentColor, bounds);
-    addCollider(colliders, minX, doorHeight, openingMin, maxX, height, openingMax);
+    const doorwayMinY = baseY + doorHeight;
+    addBox(
+      vertices,
+      minX,
+      doorwayMinY,
+      openingMin,
+      maxX,
+      baseY + height,
+      openingMax,
+      accentColor,
+      bounds
+    );
+    addCollider(colliders, minX, doorwayMinY, openingMin, maxX, baseY + height, openingMax);
   }
 }
 
@@ -266,7 +339,8 @@ function buildDoorwayAlongZ(
   accentColor,
   bounds,
   thickness,
-  colliders
+  colliders,
+  baseY = 0
 ) {
   const openingCenter = (minX + maxX) * 0.5;
   const halfOpening = Math.min(doorWidth * 0.5, (maxX - minX) * 0.45);
@@ -277,18 +351,29 @@ function buildDoorwayAlongZ(
   const maxZ = wallZ + halfThickness;
 
   if (openingMin > minX) {
-    addBox(vertices, minX, 0, minZ, openingMin, height, maxZ, wallColor, bounds);
-    addCollider(colliders, minX, 0, minZ, openingMin, height, maxZ);
+    addBox(vertices, minX, baseY, minZ, openingMin, baseY + height, maxZ, wallColor, bounds);
+    addCollider(colliders, minX, baseY, minZ, openingMin, baseY + height, maxZ);
   }
 
   if (openingMax < maxX) {
-    addBox(vertices, openingMax, 0, minZ, maxX, height, maxZ, wallColor, bounds);
-    addCollider(colliders, openingMax, 0, minZ, maxX, height, maxZ);
+    addBox(vertices, openingMax, baseY, minZ, maxX, baseY + height, maxZ, wallColor, bounds);
+    addCollider(colliders, openingMax, baseY, minZ, maxX, baseY + height, maxZ);
   }
 
   if (doorHeight < height - 1e-5) {
-    addBox(vertices, openingMin, doorHeight, minZ, openingMax, height, maxZ, accentColor, bounds);
-    addCollider(colliders, openingMin, doorHeight, minZ, openingMax, height, maxZ);
+    const doorwayMinY = baseY + doorHeight;
+    addBox(
+      vertices,
+      openingMin,
+      doorwayMinY,
+      minZ,
+      openingMax,
+      baseY + height,
+      maxZ,
+      accentColor,
+      bounds
+    );
+    addCollider(colliders, openingMin, doorwayMinY, minZ, openingMax, baseY + height, maxZ);
   }
 }
 
@@ -307,7 +392,14 @@ export function createProceduralRoomSystem(device, options = {}) {
     Math.min(roomSize * 0.5, options.wallThickness ?? DEFAULT_WALL_THICKNESS)
   );
   const generationRadius = Math.max(1, Math.floor(options.generationRadius ?? DEFAULT_GENERATION_RADIUS));
+  const verticalLayers = Math.max(1, Math.floor(options.verticalLayers ?? DEFAULT_VERTICAL_LAYERS));
+  const floorOpeningMarginRatio = Math.min(
+    0.45,
+    Math.max(0.05, options.floorOpeningMarginRatio ?? DEFAULT_FLOOR_OPENING_MARGIN_RATIO)
+  );
+  const floorOpeningMargin = roomSize * floorOpeningMarginRatio;
   const halfRoom = roomSize * 0.5;
+  const totalStructureHeight = roomHeight * verticalLayers;
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
@@ -320,7 +412,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     minX: -halfRoom,
     maxX: halfRoom,
     minY: 0,
-    maxY: roomHeight,
+    maxY: totalStructureHeight,
     minZ: -halfRoom,
     maxZ: halfRoom
   };
@@ -333,6 +425,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   const cellProfiles = new Map();
   const colliders = [];
   const cellEdgeStates = new Map();
+  const cellVerticalOpenings = new Map();
   const discoveredBarrelRooms = new Set();
   const pendingBarrelSpawns = [];
 
@@ -391,6 +484,34 @@ export function createProceduralRoomSystem(device, options = {}) {
     discoveredBarrelRooms.add(key);
   }
 
+  function updateCellVerticalOpening(x, z) {
+    const key = getCellKey(x, z);
+    const edges = cellEdgeStates.get(key);
+    if (!edges) {
+      cellVerticalOpenings.set(key, false);
+      return;
+    }
+
+    const edgeStates = [edges.north, edges.south, edges.east, edges.west];
+    let doorwayCount = 0;
+    let openEdge = false;
+    let closedCount = 0;
+
+    for (let i = 0; i < edgeStates.length; i += 1) {
+      const state = edgeStates[i];
+      if (state === 'doorway') {
+        doorwayCount += 1;
+      } else if (state === 'open') {
+        openEdge = true;
+      } else {
+        closedCount += 1;
+      }
+    }
+
+    const shouldOpen = doorwayCount === 1 && closedCount >= 3 && !openEdge;
+    cellVerticalOpenings.set(key, shouldOpen);
+  }
+
   function recordEdge(ax, az, bx, bz, type) {
     if (!Number.isFinite(ax) || !Number.isFinite(az) || !Number.isFinite(bx) || !Number.isFinite(bz)) {
       return;
@@ -417,6 +538,8 @@ export function createProceduralRoomSystem(device, options = {}) {
 
     evaluateCellForBarrel(ax, az);
     evaluateCellForBarrel(bx, bz);
+    updateCellVerticalOpening(ax, az);
+    updateCellVerticalOpening(bx, bz);
   }
 
   function resetBounds() {
@@ -467,35 +590,10 @@ export function createProceduralRoomSystem(device, options = {}) {
         const minZ = centerZ - halfRoom;
         const maxZ = centerZ + halfRoom;
 
-        const floorCorners = [
-          [minX, 0, minZ],
-          [maxX, 0, minZ],
-          [maxX, 0, maxZ],
-          [minX, 0, maxZ]
-        ];
-        addQuad(vertices, floorCorners, [0, 1, 0], profile.floorColor, bounds);
-        const floorUnderCorners = [
-          floorCorners[0],
-          floorCorners[3],
-          floorCorners[2],
-          floorCorners[1]
-        ];
-        addQuad(vertices, floorUnderCorners, [0, -1, 0], profile.floorColor, bounds);
-
-        const ceilingCorners = [
-          [minX, roomHeight, maxZ],
-          [maxX, roomHeight, maxZ],
-          [maxX, roomHeight, minZ],
-          [minX, roomHeight, minZ]
-        ];
-        addQuad(vertices, ceilingCorners, [0, -1, 0], profile.ceilingColor, bounds);
-        const ceilingTopCorners = [
-          ceilingCorners[0],
-          ceilingCorners[3],
-          ceilingCorners[2],
-          ceilingCorners[1]
-        ];
-        addQuad(vertices, ceilingTopCorners, [0, 1, 0], profile.ceilingColor, bounds);
+        const holeMinX = minX + floorOpeningMargin;
+        const holeMaxX = maxX - floorOpeningMargin;
+        const holeMinZ = minZ + floorOpeningMargin;
+        const holeMaxZ = maxZ - floorOpeningMargin;
 
         const neighbors = [
           [gx + 1, gz],
@@ -528,74 +626,166 @@ export function createProceduralRoomSystem(device, options = {}) {
             const wallX = (gx + nx) * 0.5 * roomSize;
             const edgeMinZ = Math.min(gz, nz) * roomSize - halfRoom;
             const edgeMaxZ = Math.max(gz, nz) * roomSize + halfRoom;
-            if (type === 'solid') {
-              buildSolidWallAlongX(
-                vertices,
-                wallX,
-                edgeMinZ,
-                edgeMaxZ,
-                roomHeight,
-                wallColor,
-                bounds,
-                wallThickness,
-                colliders
-              );
-            } else if (type === 'doorway') {
-              const isDoubleDoor = randomFloatForEdge(gx, gz, nx, nz, 29, worldSeed) < 0.5;
-              const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
-              const localDoorHeight = clampedDoorHeight;
-              buildDoorwayAlongX(
-                vertices,
-                wallX,
-                edgeMinZ,
-                edgeMaxZ,
-                roomHeight,
-                localDoorHeight,
-                localDoorWidth,
-                wallColor,
-                accentColor,
-                bounds,
-                wallThickness,
-                colliders
-              );
+            const isDoubleDoor = type === 'doorway'
+              ? randomFloatForEdge(gx, gz, nx, nz, 29, worldSeed) < 0.5
+              : false;
+            const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
+            const localDoorHeight = clampedDoorHeight;
+
+            for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
+              const baseY = layerIndex * roomHeight;
+              if (type === 'solid') {
+                buildSolidWallAlongX(
+                  vertices,
+                  wallX,
+                  edgeMinZ,
+                  edgeMaxZ,
+                  roomHeight,
+                  wallColor,
+                  bounds,
+                  wallThickness,
+                  colliders,
+                  baseY
+                );
+              } else if (type === 'doorway') {
+                buildDoorwayAlongX(
+                  vertices,
+                  wallX,
+                  edgeMinZ,
+                  edgeMaxZ,
+                  roomHeight,
+                  localDoorHeight,
+                  localDoorWidth,
+                  wallColor,
+                  accentColor,
+                  bounds,
+                  wallThickness,
+                  colliders,
+                  baseY
+                );
+              }
             }
           } else if (nz !== gz) {
             const wallZ = (gz + nz) * 0.5 * roomSize;
             const edgeMinX = Math.min(gx, nx) * roomSize - halfRoom;
             const edgeMaxX = Math.max(gx, nx) * roomSize + halfRoom;
-            if (type === 'solid') {
-              buildSolidWallAlongZ(
-                vertices,
-                wallZ,
-                edgeMinX,
-                edgeMaxX,
-                roomHeight,
-                wallColor,
-                bounds,
-                wallThickness,
-                colliders
-              );
-            } else if (type === 'doorway') {
-              const isDoubleDoor = randomFloatForEdge(gx, gz, nx, nz, 29, worldSeed) < 0.5;
-              const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
-              const localDoorHeight = clampedDoorHeight;
-              buildDoorwayAlongZ(
-                vertices,
-                wallZ,
-                edgeMinX,
-                edgeMaxX,
-                roomHeight,
-                localDoorHeight,
-                localDoorWidth,
-                wallColor,
-                accentColor,
-                bounds,
-                wallThickness,
-                colliders
-              );
+            const isDoubleDoor = type === 'doorway'
+              ? randomFloatForEdge(gx, gz, nx, nz, 29, worldSeed) < 0.5
+              : false;
+            const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
+            const localDoorHeight = clampedDoorHeight;
+
+            for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
+              const baseY = layerIndex * roomHeight;
+              if (type === 'solid') {
+                buildSolidWallAlongZ(
+                  vertices,
+                  wallZ,
+                  edgeMinX,
+                  edgeMaxX,
+                  roomHeight,
+                  wallColor,
+                  bounds,
+                  wallThickness,
+                  colliders,
+                  baseY
+                );
+              } else if (type === 'doorway') {
+                buildDoorwayAlongZ(
+                  vertices,
+                  wallZ,
+                  edgeMinX,
+                  edgeMaxX,
+                  roomHeight,
+                  localDoorHeight,
+                  localDoorWidth,
+                  wallColor,
+                  accentColor,
+                  bounds,
+                  wallThickness,
+                  colliders,
+                  baseY
+                );
+              }
             }
           }
         }
+
+        const hasVerticalOpening = cellVerticalOpenings.get(key) ?? false;
+
+        for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
+          const baseY = layerIndex * roomHeight;
+          const ceilingY = baseY + roomHeight;
+          const openFloor = hasVerticalOpening && layerIndex > 0;
+          const openCeiling = hasVerticalOpening && layerIndex < verticalLayers - 1;
+
+          addHorizontalSection(
+            vertices,
+            baseY,
+            minX,
+            maxX,
+            minZ,
+            maxZ,
+            [0, 1, 0],
+            profile.floorColor,
+            bounds,
+            openFloor,
+            holeMinX,
+            holeMaxX,
+            holeMinZ,
+            holeMaxZ
+          );
+          addHorizontalSection(
+            vertices,
+            baseY,
+            minX,
+            maxX,
+            minZ,
+            maxZ,
+            [0, -1, 0],
+            profile.floorColor,
+            bounds,
+            openFloor,
+            holeMinX,
+            holeMaxX,
+            holeMinZ,
+            holeMaxZ
+          );
+
+          addHorizontalSection(
+            vertices,
+            ceilingY,
+            minX,
+            maxX,
+            minZ,
+            maxZ,
+            [0, -1, 0],
+            profile.ceilingColor,
+            bounds,
+            openCeiling,
+            holeMinX,
+            holeMaxX,
+            holeMinZ,
+            holeMaxZ
+          );
+          addHorizontalSection(
+            vertices,
+            ceilingY,
+            minX,
+            maxX,
+            minZ,
+            maxZ,
+            [0, 1, 0],
+            profile.ceilingColor,
+            bounds,
+            openCeiling,
+            holeMinX,
+            holeMaxX,
+            holeMinZ,
+            holeMaxZ
+          );
+        }
+
       }
     }
 
@@ -603,13 +793,13 @@ export function createProceduralRoomSystem(device, options = {}) {
       bounds.minX = cx * roomSize - halfRoom;
       bounds.maxX = cx * roomSize + halfRoom;
       bounds.minY = 0;
-      bounds.maxY = roomHeight;
+      bounds.maxY = totalStructureHeight;
       bounds.minZ = cz * roomSize - halfRoom;
       bounds.maxZ = cz * roomSize + halfRoom;
     }
 
     bounds.minY = Math.min(bounds.minY, 0);
-    bounds.maxY = Math.max(bounds.maxY, roomHeight);
+    bounds.maxY = Math.max(bounds.maxY, totalStructureHeight);
 
     const vertexArray = new Float32Array(vertices);
     ensureBufferCapacity(vertexArray);
