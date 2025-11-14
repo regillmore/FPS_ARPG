@@ -590,84 +590,10 @@ export function createProceduralRoomSystem(device, options = {}) {
         const minZ = centerZ - halfRoom;
         const maxZ = centerZ + halfRoom;
 
-        const hasVerticalOpening = cellVerticalOpenings.get(key) ?? false;
         const holeMinX = minX + floorOpeningMargin;
         const holeMaxX = maxX - floorOpeningMargin;
         const holeMinZ = minZ + floorOpeningMargin;
         const holeMaxZ = maxZ - floorOpeningMargin;
-
-        for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
-          const baseY = layerIndex * roomHeight;
-          const ceilingY = baseY + roomHeight;
-          const openFloor = hasVerticalOpening && layerIndex > 0;
-          const openCeiling = hasVerticalOpening && layerIndex < verticalLayers - 1;
-
-          addHorizontalSection(
-            vertices,
-            baseY,
-            minX,
-            maxX,
-            minZ,
-            maxZ,
-            [0, 1, 0],
-            profile.floorColor,
-            bounds,
-            openFloor,
-            holeMinX,
-            holeMaxX,
-            holeMinZ,
-            holeMaxZ
-          );
-          addHorizontalSection(
-            vertices,
-            baseY,
-            minX,
-            maxX,
-            minZ,
-            maxZ,
-            [0, -1, 0],
-            profile.floorColor,
-            bounds,
-            openFloor,
-            holeMinX,
-            holeMaxX,
-            holeMinZ,
-            holeMaxZ
-          );
-
-          addHorizontalSection(
-            vertices,
-            ceilingY,
-            minX,
-            maxX,
-            minZ,
-            maxZ,
-            [0, -1, 0],
-            profile.ceilingColor,
-            bounds,
-            openCeiling,
-            holeMinX,
-            holeMaxX,
-            holeMinZ,
-            holeMaxZ
-          );
-          addHorizontalSection(
-            vertices,
-            ceilingY,
-            minX,
-            maxX,
-            minZ,
-            maxZ,
-            [0, 1, 0],
-            profile.ceilingColor,
-            bounds,
-            openCeiling,
-            holeMinX,
-            holeMaxX,
-            holeMinZ,
-            holeMaxZ
-          );
-        }
 
         const neighbors = [
           [gx + 1, gz],
@@ -784,6 +710,82 @@ export function createProceduralRoomSystem(device, options = {}) {
             }
           }
         }
+
+        const hasVerticalOpening = cellVerticalOpenings.get(key) ?? false;
+
+        for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
+          const baseY = layerIndex * roomHeight;
+          const ceilingY = baseY + roomHeight;
+          const openFloor = hasVerticalOpening && layerIndex > 0;
+          const openCeiling = hasVerticalOpening && layerIndex < verticalLayers - 1;
+
+          addHorizontalSection(
+            vertices,
+            baseY,
+            minX,
+            maxX,
+            minZ,
+            maxZ,
+            [0, 1, 0],
+            profile.floorColor,
+            bounds,
+            openFloor,
+            holeMinX,
+            holeMaxX,
+            holeMinZ,
+            holeMaxZ
+          );
+          addHorizontalSection(
+            vertices,
+            baseY,
+            minX,
+            maxX,
+            minZ,
+            maxZ,
+            [0, -1, 0],
+            profile.floorColor,
+            bounds,
+            openFloor,
+            holeMinX,
+            holeMaxX,
+            holeMinZ,
+            holeMaxZ
+          );
+
+          addHorizontalSection(
+            vertices,
+            ceilingY,
+            minX,
+            maxX,
+            minZ,
+            maxZ,
+            [0, -1, 0],
+            profile.ceilingColor,
+            bounds,
+            openCeiling,
+            holeMinX,
+            holeMaxX,
+            holeMinZ,
+            holeMaxZ
+          );
+          addHorizontalSection(
+            vertices,
+            ceilingY,
+            minX,
+            maxX,
+            minZ,
+            maxZ,
+            [0, 1, 0],
+            profile.ceilingColor,
+            bounds,
+            openCeiling,
+            holeMinX,
+            holeMaxX,
+            holeMinZ,
+            holeMaxZ
+          );
+        }
+
       }
     }
 
