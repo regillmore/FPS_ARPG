@@ -5,7 +5,7 @@ const DEFAULT_DOOR_WIDTH = 1.0;
 const DEFAULT_DOUBLE_DOOR_WIDTH = DEFAULT_DOOR_WIDTH * 2;
 const DEFAULT_WALL_THICKNESS = 0.35;
 const DEFAULT_GENERATION_RADIUS = 4;
-const DEFAULT_VERTICAL_LAYERS = 3;
+const DEFAULT_VERTICAL_LAYER_PADDING = 1;
 const DEFAULT_FLOOR_THICKNESS = 0.4;
 const DEFAULT_FLOOR_OPENING_MARGIN_RATIO = 0.22;
 const VERTEX_STRIDE = 9;
@@ -513,6 +513,10 @@ function positionToCell(value, roomSize, halfRoom) {
   return Math.floor((value + halfRoom) / roomSize);
 }
 
+function positionToLayer(value, levelHeight, floorThickness) {
+  return Math.floor((value + floorThickness) / levelHeight);
+}
+
 export function createProceduralRoomSystem(device, options = {}) {
   const roomSize = options.roomSize ?? DEFAULT_ROOM_SIZE;
   const roomHeight = options.roomHeight ?? DEFAULT_ROOM_HEIGHT;
@@ -528,7 +532,10 @@ export function createProceduralRoomSystem(device, options = {}) {
     Math.min(roomHeight * 0.5, options.floorThickness ?? DEFAULT_FLOOR_THICKNESS)
   );
   const generationRadius = Math.max(1, Math.floor(options.generationRadius ?? DEFAULT_GENERATION_RADIUS));
-  const verticalLayers = Math.max(1, Math.floor(options.verticalLayers ?? DEFAULT_VERTICAL_LAYERS));
+  const verticalLayerPadding = Math.max(
+    1,
+    Math.floor(options.verticalLayerPadding ?? DEFAULT_VERTICAL_LAYER_PADDING)
+  );
   const floorOpeningMarginRatio = Math.min(
     0.45,
     Math.max(0.05, options.floorOpeningMarginRatio ?? DEFAULT_FLOOR_OPENING_MARGIN_RATIO)
@@ -536,7 +543,9 @@ export function createProceduralRoomSystem(device, options = {}) {
   const floorOpeningMargin = roomSize * floorOpeningMarginRatio;
   const halfRoom = roomSize * 0.5;
   const levelHeight = roomHeight + floorThickness;
-  const totalStructureHeight = roomHeight + Math.max(0, verticalLayers - 1) * levelHeight;
+  let centerLayerIndex = Math.floor(options.initialLayer ?? 0);
+  let minActiveLayer = centerLayerIndex - verticalLayerPadding;
+  let maxActiveLayer = centerLayerIndex + verticalLayerPadding;
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
@@ -548,8 +557,8 @@ export function createProceduralRoomSystem(device, options = {}) {
   const bounds = {
     minX: -halfRoom,
     maxX: halfRoom,
-    minY: -floorThickness,
-    maxY: totalStructureHeight,
+    minY: minActiveLayer * levelHeight - floorThickness,
+    maxY: maxActiveLayer * levelHeight + roomHeight,
     minZ: -halfRoom,
     maxZ: halfRoom
   };
@@ -559,8 +568,8 @@ export function createProceduralRoomSystem(device, options = {}) {
   let centerCellX = 0;
   let centerCellZ = 0;
 
-  const layerSeeds = Array.from({ length: verticalLayers }, (_, index) => (worldSeed + index) >>> 0);
-  const layerCellProfiles = Array.from({ length: verticalLayers }, () => new Map());
+  const layerSeeds = new Map();
+  const layerCellProfiles = new Map();
   const colliders = [];
   const cellEdgeStates = new Map();
   const cellLayerEdgeStates = new Map();
@@ -572,12 +581,30 @@ export function createProceduralRoomSystem(device, options = {}) {
     return `${x},${z}`;
   }
 
+  function getLayerSeed(layerIndex) {
+    let seed = layerSeeds.get(layerIndex);
+    if (seed === undefined) {
+      seed = hashValue(layerIndex, worldSeed) >>> 0;
+      layerSeeds.set(layerIndex, seed);
+    }
+    return seed;
+  }
+
+  function getLayerProfiles(layerIndex) {
+    let profiles = layerCellProfiles.get(layerIndex);
+    if (!profiles) {
+      profiles = new Map();
+      layerCellProfiles.set(layerIndex, profiles);
+    }
+    return profiles;
+  }
+
   function getCellProfileForLayer(layerIndex, x, z) {
-    const profiles = layerCellProfiles[layerIndex];
+    const profiles = getLayerProfiles(layerIndex);
     const key = getCellKey(x, z);
     let profile = profiles.get(key);
     if (!profile) {
-      profile = createCellProfile(x, z, layerSeeds[layerIndex]);
+      profile = createCellProfile(x, z, getLayerSeed(layerIndex));
       profiles.set(key, profile);
     }
     return profile;
@@ -597,18 +624,13 @@ export function createProceduralRoomSystem(device, options = {}) {
     const key = getCellKey(x, z);
     let perLayer = cellLayerEdgeStates.get(key);
     if (!perLayer) {
-      perLayer = Array.from({ length: verticalLayers }, () => ({
-        north: null,
-        south: null,
-        east: null,
-        west: null
-      }));
+      perLayer = new Map();
       cellLayerEdgeStates.set(key, perLayer);
     }
-    let edges = perLayer[layerIndex];
+    let edges = perLayer.get(layerIndex);
     if (!edges) {
       edges = { north: null, south: null, east: null, west: null };
-      perLayer[layerIndex] = edges;
+      perLayer.set(layerIndex, edges);
     }
     return edges;
   }
@@ -616,7 +638,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   function getVerticalOpeningStates(key) {
     let openings = cellVerticalOpenings.get(key);
     if (!openings) {
-      openings = new Array(verticalLayers).fill(false);
+      openings = new Map();
       cellVerticalOpenings.set(key, openings);
     }
     return openings;
@@ -666,7 +688,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   function updateCellVerticalOpeningForLayer(x, z, layerIndex) {
     const key = getCellKey(x, z);
     const perLayer = cellLayerEdgeStates.get(key);
-    const edges = perLayer ? perLayer[layerIndex] : null;
+    const edges = perLayer ? perLayer.get(layerIndex) : null;
 
     let doorwayCount = 0;
     let openEdge = false;
@@ -688,7 +710,7 @@ export function createProceduralRoomSystem(device, options = {}) {
 
     const shouldOpen = doorwayCount === 1 && closedCount >= 3 && !openEdge;
     const openings = getVerticalOpeningStates(key);
-    openings[layerIndex] = shouldOpen;
+    openings.set(layerIndex, shouldOpen);
   }
 
   function recordEdge(ax, az, bx, bz, layerTypes) {
@@ -696,12 +718,30 @@ export function createProceduralRoomSystem(device, options = {}) {
       return;
     }
 
-    const effectiveLayerTypes = Array.isArray(layerTypes) ? layerTypes : [layerTypes];
+    const effectiveLayerTypes = new Map();
+    if (layerTypes instanceof Map) {
+      for (const [layerIndex, type] of layerTypes.entries()) {
+        effectiveLayerTypes.set(layerIndex, type);
+      }
+    } else if (Array.isArray(layerTypes)) {
+      for (let i = 0; i < layerTypes.length; i += 1) {
+        const type = layerTypes[i];
+        if (type !== undefined) {
+          effectiveLayerTypes.set(i, type);
+        }
+      }
+    } else if (typeof layerTypes === 'string') {
+      effectiveLayerTypes.set(centerLayerIndex, layerTypes);
+    }
     const edgeA = getCellEdges(ax, az);
     const edgeB = getCellEdges(bx, bz);
     const dx = bx - ax;
     const dz = bz - az;
-    const baseType = effectiveLayerTypes[0];
+    let baseType = effectiveLayerTypes.get(centerLayerIndex);
+    if (baseType === undefined) {
+      const first = effectiveLayerTypes.values().next();
+      baseType = first.done ? 'solid' : first.value;
+    }
 
     if (dx === 1 && dz === 0) {
       edgeA.east = baseType;
@@ -720,8 +760,8 @@ export function createProceduralRoomSystem(device, options = {}) {
     evaluateCellForBarrel(ax, az);
     evaluateCellForBarrel(bx, bz);
 
-    for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
-      const type = effectiveLayerTypes[layerIndex] ?? baseType;
+    for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
+      const type = effectiveLayerTypes.get(layerIndex) ?? baseType;
       const edgesA = getCellEdgesForLayer(layerIndex, ax, az);
       const edgesB = getCellEdgesForLayer(layerIndex, bx, bz);
 
@@ -779,9 +819,9 @@ export function createProceduralRoomSystem(device, options = {}) {
     for (let gx = cx - generationRadius; gx <= cx + generationRadius; gx += 1) {
       for (let gz = cz - generationRadius; gz <= cz + generationRadius; gz += 1) {
         const key = `${gx},${gz}`;
-        const profilePerLayer = new Array(verticalLayers);
-        for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
-          profilePerLayer[layerIndex] = getCellProfileForLayer(layerIndex, gx, gz);
+        const profilePerLayer = new Map();
+        for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
+          profilePerLayer.set(layerIndex, getCellProfileForLayer(layerIndex, gx, gz));
         }
 
         const centerX = gx * roomSize;
@@ -811,13 +851,13 @@ export function createProceduralRoomSystem(device, options = {}) {
           }
           processedEdges.add(edgeKey);
 
-          const edgeTypes = new Array(verticalLayers);
-          const neighborProfiles = new Array(verticalLayers);
-          for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
-            const profiles = layerCellProfiles[layerIndex];
-            const seed = layerSeeds[layerIndex];
-            edgeTypes[layerIndex] = determineEdgeType(gx, gz, nx, nz, profiles, seed);
-            neighborProfiles[layerIndex] = getCellProfileForLayer(layerIndex, nx, nz);
+          const edgeTypes = new Map();
+          const neighborProfiles = new Map();
+          for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
+            const profiles = getLayerProfiles(layerIndex);
+            const seed = getLayerSeed(layerIndex);
+            edgeTypes.set(layerIndex, determineEdgeType(gx, gz, nx, nz, profiles, seed));
+            neighborProfiles.set(layerIndex, getCellProfileForLayer(layerIndex, nx, nz));
           }
 
           recordEdge(gx, gz, nx, nz, edgeTypes);
@@ -826,17 +866,17 @@ export function createProceduralRoomSystem(device, options = {}) {
             const wallX = (gx + nx) * 0.5 * roomSize;
             const edgeMinZ = Math.min(gz, nz) * roomSize - halfRoom;
             const edgeMaxZ = Math.max(gz, nz) * roomSize + halfRoom;
-            for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
-              const type = edgeTypes[layerIndex];
+            for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
+              const type = edgeTypes.get(layerIndex);
               if (type === 'open') {
                 continue;
               }
-              const profile = profilePerLayer[layerIndex];
-              const neighborProfile = neighborProfiles[layerIndex];
+              const profile = profilePerLayer.get(layerIndex);
+              const neighborProfile = neighborProfiles.get(layerIndex);
               const wallColor = mixColors(profile.wallColor, neighborProfile.wallColor, 0.5);
               const accentColor = mixColors(profile.accentColor, neighborProfile.accentColor, 0.5);
               const isDoubleDoor = type === 'doorway'
-                ? randomFloatForEdge(gx, gz, nx, nz, 29, layerSeeds[layerIndex]) < 0.5
+                ? randomFloatForEdge(gx, gz, nx, nz, 29, getLayerSeed(layerIndex)) < 0.5
                 : false;
               const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
               const localDoorHeight = clampedDoorHeight;
@@ -876,17 +916,17 @@ export function createProceduralRoomSystem(device, options = {}) {
             const wallZ = (gz + nz) * 0.5 * roomSize;
             const edgeMinX = Math.min(gx, nx) * roomSize - halfRoom;
             const edgeMaxX = Math.max(gx, nx) * roomSize + halfRoom;
-            for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
-              const type = edgeTypes[layerIndex];
+            for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
+              const type = edgeTypes.get(layerIndex);
               if (type === 'open') {
                 continue;
               }
-              const profile = profilePerLayer[layerIndex];
-              const neighborProfile = neighborProfiles[layerIndex];
+              const profile = profilePerLayer.get(layerIndex);
+              const neighborProfile = neighborProfiles.get(layerIndex);
               const wallColor = mixColors(profile.wallColor, neighborProfile.wallColor, 0.5);
               const accentColor = mixColors(profile.accentColor, neighborProfile.accentColor, 0.5);
               const isDoubleDoor = type === 'doorway'
-                ? randomFloatForEdge(gx, gz, nx, nz, 29, layerSeeds[layerIndex]) < 0.5
+                ? randomFloatForEdge(gx, gz, nx, nz, 29, getLayerSeed(layerIndex)) < 0.5
                 : false;
               const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
               const localDoorHeight = clampedDoorHeight;
@@ -927,17 +967,19 @@ export function createProceduralRoomSystem(device, options = {}) {
 
         const verticalOpeningStates = cellVerticalOpenings.get(key);
 
-        for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
+        for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
           const baseY = layerIndex * levelHeight;
           const ceilingY = baseY + roomHeight;
           const openFloor =
-            layerIndex > 0 && verticalOpeningStates ? verticalOpeningStates[layerIndex - 1] : false;
-          const openCeiling =
-            layerIndex < verticalLayers - 1 && verticalOpeningStates
-              ? verticalOpeningStates[layerIndex]
+            layerIndex > minActiveLayer && verticalOpeningStates
+              ? verticalOpeningStates.get(layerIndex - 1) ?? false
               : false;
-          const isTopLayer = layerIndex === verticalLayers - 1;
-          const profile = profilePerLayer[layerIndex];
+          const openCeiling =
+            layerIndex < maxActiveLayer && verticalOpeningStates
+              ? verticalOpeningStates.get(layerIndex) ?? false
+              : false;
+          const isTopLayer = layerIndex === maxActiveLayer;
+          const profile = profilePerLayer.get(layerIndex);
 
           addFloorSlab(
             vertices,
@@ -996,17 +1038,20 @@ export function createProceduralRoomSystem(device, options = {}) {
       }
     }
 
+    const lowestLayerBottom = minActiveLayer * levelHeight - floorThickness;
+    const highestLayerTop = maxActiveLayer * levelHeight + roomHeight;
+
     if (!Number.isFinite(bounds.minX)) {
       bounds.minX = cx * roomSize - halfRoom;
       bounds.maxX = cx * roomSize + halfRoom;
-      bounds.minY = -floorThickness;
-      bounds.maxY = totalStructureHeight;
+      bounds.minY = lowestLayerBottom;
+      bounds.maxY = highestLayerTop;
       bounds.minZ = cz * roomSize - halfRoom;
       bounds.maxZ = cz * roomSize + halfRoom;
+    } else {
+      bounds.minY = Math.min(bounds.minY, lowestLayerBottom);
+      bounds.maxY = Math.max(bounds.maxY, highestLayerTop);
     }
-
-    bounds.minY = Math.min(bounds.minY, -floorThickness);
-    bounds.maxY = Math.max(bounds.maxY, totalStructureHeight);
 
     const vertexArray = new Float32Array(vertices);
     ensureBufferCapacity(vertexArray);
@@ -1014,23 +1059,31 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   function update(playerPosition) {
     const px = playerPosition?.[0] ?? 0;
+    const py = playerPosition?.[1] ?? 0;
     const pz = playerPosition?.[2] ?? 0;
     const cellX = positionToCell(px, roomSize, halfRoom);
     const cellZ = positionToCell(pz, roomSize, halfRoom);
+    const layerIndex = positionToLayer(py, levelHeight, floorThickness);
+    const desiredMinLayer = layerIndex - verticalLayerPadding;
+    const desiredMaxLayer = layerIndex + verticalLayerPadding;
 
-    if (vertexBuffer === null) {
-      centerCellX = cellX;
-      centerCellZ = cellZ;
-      buildGeometryForCenter(cellX, cellZ);
-      return true;
-    }
+    const needsRebuild =
+      vertexBuffer === null ||
+      cellX !== centerCellX ||
+      cellZ !== centerCellZ ||
+      layerIndex !== centerLayerIndex ||
+      desiredMinLayer !== minActiveLayer ||
+      desiredMaxLayer !== maxActiveLayer;
 
-    if (cellX === centerCellX && cellZ === centerCellZ) {
+    if (!needsRebuild) {
       return false;
     }
 
     centerCellX = cellX;
     centerCellZ = cellZ;
+    centerLayerIndex = layerIndex;
+    minActiveLayer = desiredMinLayer;
+    maxActiveLayer = desiredMaxLayer;
     buildGeometryForCenter(cellX, cellZ);
     return true;
   }
