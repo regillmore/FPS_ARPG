@@ -785,7 +785,8 @@ export function createProceduralRoomSystem(device, options = {}) {
       }
     }
 
-    const shouldOpen = doorwayCount === 1 && closedCount >= 3 && !openEdge;
+    const shouldOpen =
+      (doorwayCount === 1 && closedCount >= 3 && !openEdge) || closedCount === 4;
     const openings = getVerticalOpeningStates(key);
     openings.set(layerIndex, shouldOpen);
   }
