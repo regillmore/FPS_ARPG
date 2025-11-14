@@ -33,17 +33,19 @@ import {
 import { blendWithWhite, floatColorToCss } from './ui/colorUtils.js';
 
 const PLAYER_COLLISION_RADIUS = 0.25;
-const PLAYER_COLLISION_HALF_HEIGHT = 0.5;
+const PLAYER_COLLISION_HALF_HEIGHT = 1.0;
 const PLAYER_COLLISION_ITERATIONS = 6;
 
 function resolvePlayerCollisions(position, colliders) {
+  const result = { grounded: false, hitCeiling: false };
   if (!colliders || colliders.length === 0) {
-    return;
+    return result;
   }
 
   const radius = PLAYER_COLLISION_RADIUS;
   const halfHeight = PLAYER_COLLISION_HALF_HEIGHT;
   const maxIterations = PLAYER_COLLISION_ITERATIONS;
+  const nearFloorEpsilon = 1e-4;
 
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
     let adjusted = false;
@@ -103,6 +105,13 @@ function resolvePlayerCollisions(position, colliders) {
 
       if (treatAsFloorOrCeiling) {
         position[1] += resolveY;
+        if (resolveY > 0) {
+          result.grounded = true;
+        } else if (resolveY < 0) {
+          result.hitCeiling = true;
+        } else if (playerMinY >= collider.maxY - nearFloorEpsilon) {
+          result.grounded = true;
+        }
       } else {
         let smallestAxis = 'x';
         let smallestResolve = resolveX;
@@ -125,6 +134,11 @@ function resolvePlayerCollisions(position, colliders) {
           position[0] += smallestResolve;
         } else if (smallestAxis === 'y') {
           position[1] += smallestResolve;
+          if (smallestResolve > 0) {
+            result.grounded = true;
+          } else if (smallestResolve < 0) {
+            result.hitCeiling = true;
+          }
         } else {
           position[2] += smallestResolve;
         }
@@ -138,6 +152,8 @@ function resolvePlayerCollisions(position, colliders) {
       break;
     }
   }
+
+  return result;
 }
 
 export async function initializeGame({
@@ -543,7 +559,7 @@ export async function initializeGame({
         spawnProceduralBarrels();
       }
 
-      resolvePlayerCollisions(controller.position, roomColliders);
+      const collisionResult = resolvePlayerCollisions(controller.position, roomColliders);
 
       const horizontalPadding = Math.max(PLAYER_COLLISION_RADIUS, 0.25);
       const verticalPadding = Math.max(PLAYER_COLLISION_HALF_HEIGHT, 0.25);
@@ -551,14 +567,29 @@ export async function initializeGame({
         Math.max(controller.position[0], bounds.minX + horizontalPadding),
         bounds.maxX - horizontalPadding
       );
-      controller.position[1] = Math.min(
-        Math.max(controller.position[1], bounds.minY + verticalPadding),
+      const unclampedY = controller.position[1];
+      const clampedY = Math.min(
+        Math.max(unclampedY, bounds.minY + verticalPadding),
         bounds.maxY - verticalPadding
       );
+      let boundsGrounded = false;
+      let boundsHitCeiling = false;
+      if (clampedY !== unclampedY) {
+        boundsGrounded = clampedY > unclampedY;
+        boundsHitCeiling = clampedY < unclampedY;
+      }
+      controller.position[1] = clampedY;
       controller.position[2] = Math.min(
         Math.max(controller.position[2], bounds.minZ + horizontalPadding),
         bounds.maxZ - horizontalPadding
       );
+
+      if (typeof controller.applyCollisionResult === 'function') {
+        controller.applyCollisionResult({
+          grounded: collisionResult.grounded || boundsGrounded,
+          hitCeiling: collisionResult.hitCeiling || boundsHitCeiling
+        });
+      }
 
       resize();
 
