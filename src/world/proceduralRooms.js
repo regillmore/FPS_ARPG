@@ -5,7 +5,7 @@ const DEFAULT_DOOR_WIDTH = 1.0;
 const DEFAULT_DOUBLE_DOOR_WIDTH = DEFAULT_DOOR_WIDTH * 2;
 const DEFAULT_WALL_THICKNESS = 0.35;
 const DEFAULT_GENERATION_RADIUS = 4;
-const DEFAULT_VERTICAL_LAYER_PADDING = 1;
+const DEFAULT_VERTICAL_LAYER_PADDING = 2;
 const DEFAULT_FLOOR_THICKNESS = 0.4;
 const DEFAULT_FLOOR_OPENING_MARGIN_RATIO = 0.22;
 const VERTEX_STRIDE = 9;
@@ -972,11 +972,11 @@ export function createProceduralRoomSystem(device, options = {}) {
           const ceilingY = baseY + roomHeight;
           const openFloor =
             layerIndex > minActiveLayer && verticalOpeningStates
-              ? verticalOpeningStates.get(layerIndex - 1) ?? false
+              ? verticalOpeningStates.get(layerIndex) ?? false
               : false;
           const openCeiling =
             layerIndex < maxActiveLayer && verticalOpeningStates
-              ? verticalOpeningStates.get(layerIndex) ?? false
+              ? verticalOpeningStates.get(layerIndex + 1) ?? false
               : false;
           const isTopLayer = layerIndex === maxActiveLayer;
           const profile = profilePerLayer.get(layerIndex);
