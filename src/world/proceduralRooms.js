@@ -213,6 +213,51 @@ function addHorizontalSection(
   }
 }
 
+function addSlabColliders(
+  colliders,
+  minX,
+  maxX,
+  minZ,
+  maxZ,
+  minY,
+  maxY,
+  hasHole,
+  holeMinX,
+  holeMaxX,
+  holeMinZ,
+  holeMaxZ
+) {
+  if (!colliders) {
+    return;
+  }
+
+  if (maxX <= minX || maxZ <= minZ || maxY <= minY) {
+    return;
+  }
+
+  const holeValid = hasHole && holeMinX < holeMaxX && holeMinZ < holeMaxZ;
+  if (!holeValid) {
+    addCollider(colliders, minX, minY, minZ, maxX, maxY, maxZ);
+    return;
+  }
+
+  if (holeMinX > minX) {
+    addCollider(colliders, minX, minY, minZ, holeMinX, maxY, maxZ);
+  }
+
+  if (holeMaxX < maxX) {
+    addCollider(colliders, holeMaxX, minY, minZ, maxX, maxY, maxZ);
+  }
+
+  if (holeMinZ > minZ) {
+    addCollider(colliders, holeMinX, minY, minZ, holeMaxX, maxY, holeMinZ);
+  }
+
+  if (holeMaxZ < maxZ) {
+    addCollider(colliders, holeMinX, minY, holeMaxZ, holeMaxX, maxY, maxZ);
+  }
+}
+
 function addFloorSlab(
   vertices,
   topY,
@@ -228,13 +273,30 @@ function addFloorSlab(
   holeMinX,
   holeMaxX,
   holeMinZ,
-  holeMaxZ
+  holeMaxZ,
+  colliders
 ) {
   const effectiveThickness = Math.max(thickness, 0);
   const holeValid =
     hasHole && holeMinX < holeMaxX && holeMinZ < holeMaxZ;
 
   if (effectiveThickness <= 1e-4) {
+    const colliderMinY = topY - Math.max(0.05, effectiveThickness);
+    addSlabColliders(
+      colliders,
+      minX,
+      maxX,
+      minZ,
+      maxZ,
+      colliderMinY,
+      topY,
+      holeValid,
+      holeMinX,
+      holeMaxX,
+      holeMinZ,
+      holeMaxZ
+    );
+
     addHorizontalSection(
       vertices,
       topY,
@@ -322,6 +384,21 @@ function addFloorSlab(
   addQuad(vertices, [outer.nbr, outer.nbl, outer.ntl, outer.ntr], [0, 0, -1], sideColor, bounds);
   addQuad(vertices, [outer.nbl, outer.fbl, outer.ftl, outer.ntl], [-1, 0, 0], sideColor, bounds);
   addQuad(vertices, [outer.fbr, outer.nbr, outer.ntr, outer.ftr], [1, 0, 0], sideColor, bounds);
+
+  addSlabColliders(
+    colliders,
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    bottomY,
+    topY,
+    holeValid,
+    holeMinX,
+    holeMaxX,
+    holeMinZ,
+    holeMaxZ
+  );
 
   if (!holeValid) {
     return;
@@ -996,7 +1073,8 @@ export function createProceduralRoomSystem(device, options = {}) {
             holeMinX,
             holeMaxX,
             holeMinZ,
-            holeMaxZ
+            holeMaxZ,
+            colliders
           );
 
           if (isTopLayer) {
@@ -1026,6 +1104,22 @@ export function createProceduralRoomSystem(device, options = {}) {
               [0, 1, 0],
               profile.ceilingColor,
               bounds,
+              openCeiling,
+              holeMinX,
+              holeMaxX,
+              holeMinZ,
+              holeMaxZ
+            );
+
+            const ceilingThickness = Math.max(floorThickness, 0.05);
+            addSlabColliders(
+              colliders,
+              minX,
+              maxX,
+              minZ,
+              maxZ,
+              ceilingY,
+              ceilingY + ceilingThickness,
               openCeiling,
               holeMinX,
               holeMaxX,
