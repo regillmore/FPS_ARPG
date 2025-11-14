@@ -45,6 +45,7 @@ function resolvePlayerCollisions(position, colliders) {
   const radius = PLAYER_COLLISION_RADIUS;
   const halfHeight = PLAYER_COLLISION_HALF_HEIGHT;
   const maxIterations = PLAYER_COLLISION_ITERATIONS;
+  const nearFloorEpsilon = 1e-4;
 
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
     let adjusted = false;
@@ -108,6 +109,8 @@ function resolvePlayerCollisions(position, colliders) {
           result.grounded = true;
         } else if (resolveY < 0) {
           result.hitCeiling = true;
+        } else if (playerMinY >= collider.maxY - nearFloorEpsilon) {
+          result.grounded = true;
         }
       } else {
         let smallestAxis = 'x';

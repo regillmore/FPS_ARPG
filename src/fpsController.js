@@ -192,7 +192,6 @@ export class FirstPersonController {
     }
 
     this.position[1] += this.verticalVelocity * deltaTime;
-    this.isGrounded = false;
   }
 
   getViewTarget() {
@@ -235,7 +234,10 @@ export class FirstPersonController {
         this.verticalVelocity = 0;
       }
       this.isGrounded = true;
+      return;
     }
+
+    this.isGrounded = false;
     if (result.hitCeiling && this.verticalVelocity > 0) {
       this.verticalVelocity = 0;
     }
