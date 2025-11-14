@@ -1,7 +1,7 @@
 const DEFAULT_ROOM_SIZE = 10;
 const DEFAULT_ROOM_HEIGHT = 4;
-const DEFAULT_DOOR_HEIGHT = 2.13; // Approx. 7ft commercial doorway height
-const DEFAULT_DOOR_WIDTH = 0.91; // Approx. 3ft single commercial doorway width
+const DEFAULT_DOOR_HEIGHT = 2.5;
+const DEFAULT_DOOR_WIDTH = 1.0;
 const DEFAULT_DOUBLE_DOOR_WIDTH = DEFAULT_DOOR_WIDTH * 2;
 const DEFAULT_WALL_THICKNESS = 0.35;
 const DEFAULT_GENERATION_RADIUS = 4;
