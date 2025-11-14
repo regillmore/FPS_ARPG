@@ -559,7 +559,8 @@ export function createProceduralRoomSystem(device, options = {}) {
   let centerCellX = 0;
   let centerCellZ = 0;
 
-  const cellProfiles = new Map();
+  const layerSeeds = Array.from({ length: verticalLayers }, (_, index) => (worldSeed + index) >>> 0);
+  const layerCellProfiles = Array.from({ length: verticalLayers }, () => new Map());
   const colliders = [];
   const cellEdgeStates = new Map();
   const cellVerticalOpenings = new Map();
@@ -568,6 +569,17 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   function getCellKey(x, z) {
     return `${x},${z}`;
+  }
+
+  function getCellProfileForLayer(layerIndex, x, z) {
+    const profiles = layerCellProfiles[layerIndex];
+    const key = getCellKey(x, z);
+    let profile = profiles.get(key);
+    if (!profile) {
+      profile = createCellProfile(x, z, layerSeeds[layerIndex]);
+      profiles.set(key, profile);
+    }
+    return profile;
   }
 
   function getCellEdges(x, z) {
@@ -714,10 +726,9 @@ export function createProceduralRoomSystem(device, options = {}) {
     for (let gx = cx - generationRadius; gx <= cx + generationRadius; gx += 1) {
       for (let gz = cz - generationRadius; gz <= cz + generationRadius; gz += 1) {
         const key = `${gx},${gz}`;
-        let profile = cellProfiles.get(key);
-        if (!profile) {
-          profile = createCellProfile(gx, gz, worldSeed);
-          cellProfiles.set(key, profile);
+        const profilePerLayer = new Array(verticalLayers);
+        for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
+          profilePerLayer[layerIndex] = getCellProfileForLayer(layerIndex, gx, gz);
         }
 
         const centerX = gx * roomSize;
@@ -747,29 +758,35 @@ export function createProceduralRoomSystem(device, options = {}) {
           }
           processedEdges.add(edgeKey);
 
-          const type = determineEdgeType(gx, gz, nx, nz, cellProfiles, worldSeed);
-          recordEdge(gx, gz, nx, nz, type);
-          const neighborProfileKey = `${nx},${nz}`;
-          let neighborProfile = cellProfiles.get(neighborProfileKey);
-          if (!neighborProfile) {
-            neighborProfile = createCellProfile(nx, nz, worldSeed);
-            cellProfiles.set(neighborProfileKey, neighborProfile);
+          const edgeTypes = new Array(verticalLayers);
+          const neighborProfiles = new Array(verticalLayers);
+          for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
+            const profiles = layerCellProfiles[layerIndex];
+            const seed = layerSeeds[layerIndex];
+            edgeTypes[layerIndex] = determineEdgeType(gx, gz, nx, nz, profiles, seed);
+            neighborProfiles[layerIndex] = getCellProfileForLayer(layerIndex, nx, nz);
           }
 
-          const wallColor = mixColors(profile.wallColor, neighborProfile.wallColor, 0.5);
-          const accentColor = mixColors(profile.accentColor, neighborProfile.accentColor, 0.5);
+          recordEdge(gx, gz, nx, nz, edgeTypes[0]);
 
           if (nx !== gx) {
             const wallX = (gx + nx) * 0.5 * roomSize;
             const edgeMinZ = Math.min(gz, nz) * roomSize - halfRoom;
             const edgeMaxZ = Math.max(gz, nz) * roomSize + halfRoom;
-            const isDoubleDoor = type === 'doorway'
-              ? randomFloatForEdge(gx, gz, nx, nz, 29, worldSeed) < 0.5
-              : false;
-            const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
-            const localDoorHeight = clampedDoorHeight;
-
             for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
+              const type = edgeTypes[layerIndex];
+              if (type === 'open') {
+                continue;
+              }
+              const profile = profilePerLayer[layerIndex];
+              const neighborProfile = neighborProfiles[layerIndex];
+              const wallColor = mixColors(profile.wallColor, neighborProfile.wallColor, 0.5);
+              const accentColor = mixColors(profile.accentColor, neighborProfile.accentColor, 0.5);
+              const isDoubleDoor = type === 'doorway'
+                ? randomFloatForEdge(gx, gz, nx, nz, 29, layerSeeds[layerIndex]) < 0.5
+                : false;
+              const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
+              const localDoorHeight = clampedDoorHeight;
               const baseY = layerIndex * levelHeight;
               if (type === 'solid') {
                 buildSolidWallAlongX(
@@ -806,13 +823,20 @@ export function createProceduralRoomSystem(device, options = {}) {
             const wallZ = (gz + nz) * 0.5 * roomSize;
             const edgeMinX = Math.min(gx, nx) * roomSize - halfRoom;
             const edgeMaxX = Math.max(gx, nx) * roomSize + halfRoom;
-            const isDoubleDoor = type === 'doorway'
-              ? randomFloatForEdge(gx, gz, nx, nz, 29, worldSeed) < 0.5
-              : false;
-            const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
-            const localDoorHeight = clampedDoorHeight;
-
             for (let layerIndex = 0; layerIndex < verticalLayers; layerIndex += 1) {
+              const type = edgeTypes[layerIndex];
+              if (type === 'open') {
+                continue;
+              }
+              const profile = profilePerLayer[layerIndex];
+              const neighborProfile = neighborProfiles[layerIndex];
+              const wallColor = mixColors(profile.wallColor, neighborProfile.wallColor, 0.5);
+              const accentColor = mixColors(profile.accentColor, neighborProfile.accentColor, 0.5);
+              const isDoubleDoor = type === 'doorway'
+                ? randomFloatForEdge(gx, gz, nx, nz, 29, layerSeeds[layerIndex]) < 0.5
+                : false;
+              const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
+              const localDoorHeight = clampedDoorHeight;
               const baseY = layerIndex * levelHeight;
               if (type === 'solid') {
                 buildSolidWallAlongZ(
@@ -856,6 +880,7 @@ export function createProceduralRoomSystem(device, options = {}) {
           const openFloor = hasVerticalOpening && layerIndex > 0;
           const openCeiling = hasVerticalOpening && layerIndex < verticalLayers - 1;
           const isTopLayer = layerIndex === verticalLayers - 1;
+          const profile = profilePerLayer[layerIndex];
 
           addFloorSlab(
             vertices,
