@@ -177,17 +177,17 @@ function addHorizontalSection(
   function createCorners(x0, x1, z0, z1) {
     if (isUpward) {
       return [
+        [x0, y, z1],
+        [x1, y, z1],
+        [x1, y, z0],
+        [x0, y, z0]
+      ];
+    }
+    return [
         [x0, y, z0],
         [x1, y, z0],
         [x1, y, z1],
         [x0, y, z1]
-      ];
-    }
-    return [
-      [x0, y, z1],
-      [x1, y, z1],
-      [x1, y, z0],
-      [x0, y, z0]
     ];
   }
 
