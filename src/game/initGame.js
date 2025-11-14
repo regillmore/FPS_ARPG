@@ -78,14 +78,56 @@ function resolvePlayerCollisions(position, colliders) {
       const overlapX2 = collider.maxX - playerMinX;
       const resolveX = overlapX1 < overlapX2 ? -overlapX1 : overlapX2;
 
+      const overlapY1 = playerMaxY - collider.minY;
+      const overlapY2 = collider.maxY - playerMinY;
+      const resolveY = overlapY1 < overlapY2 ? -overlapY1 : overlapY2;
+
       const overlapZ1 = playerMaxZ - collider.minZ;
       const overlapZ2 = collider.maxZ - playerMinZ;
       const resolveZ = overlapZ1 < overlapZ2 ? -overlapZ1 : overlapZ2;
 
-      if (Math.abs(resolveX) < Math.abs(resolveZ)) {
-        position[0] += resolveX;
+      const colliderHeight = collider.maxY - collider.minY;
+      const playerCenterX = position[0];
+      const playerCenterY = position[1];
+      const playerCenterZ = position[2];
+      const withinHorizontalBounds =
+        playerCenterX >= collider.minX &&
+        playerCenterX <= collider.maxX &&
+        playerCenterZ >= collider.minZ &&
+        playerCenterZ <= collider.maxZ;
+
+      const treatAsFloorOrCeiling =
+        colliderHeight <= halfHeight * 2 + 0.1 &&
+        withinHorizontalBounds &&
+        (playerCenterY >= collider.maxY - 1e-3 || playerCenterY <= collider.minY + 1e-3);
+
+      if (treatAsFloorOrCeiling) {
+        position[1] += resolveY;
       } else {
-        position[2] += resolveZ;
+        let smallestAxis = 'x';
+        let smallestResolve = resolveX;
+        let smallestMagnitude = Math.abs(resolveX);
+
+        const absResolveY = Math.abs(resolveY);
+        if (absResolveY < smallestMagnitude) {
+          smallestAxis = 'y';
+          smallestResolve = resolveY;
+          smallestMagnitude = absResolveY;
+        }
+
+        const absResolveZ = Math.abs(resolveZ);
+        if (absResolveZ < smallestMagnitude || smallestAxis === 'x' && absResolveZ === smallestMagnitude) {
+          smallestAxis = 'z';
+          smallestResolve = resolveZ;
+        }
+
+        if (smallestAxis === 'x') {
+          position[0] += smallestResolve;
+        } else if (smallestAxis === 'y') {
+          position[1] += smallestResolve;
+        } else {
+          position[2] += smallestResolve;
+        }
       }
 
       adjusted = true;
