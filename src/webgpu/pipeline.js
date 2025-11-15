@@ -4,6 +4,7 @@ export function createBasicPipeline(device, format, depthFormat = 'depth24plus')
 struct Light {
   position : vec4<f32>,
   color : vec4<f32>,
+  direction : vec4<f32>,
 };
 
 struct Uniforms {
@@ -39,13 +40,19 @@ fn vs_main(
 }
 
 fn evaluateLight(light : Light, normal : vec3<f32>, worldPos : vec3<f32>) -> vec3<f32> {
-  var direction = light.position.xyz - worldPos;
-  let distSq = max(dot(direction, direction), 1e-4);
+  var toLight = light.position.xyz - worldPos;
+  let distSq = max(dot(toLight, toLight), 1e-4);
   let invDist = inverseSqrt(distSq);
-  direction = direction * invDist;
+  toLight = toLight * invDist;
   let attenuation = 1.0 / (1.0 + sqrt(distSq) * 0.35 + distSq * 0.1);
-  let nDotL = max(dot(normal, direction), 0.0);
-  return light.color.rgb * light.color.a * nDotL * attenuation;
+  var angular = 1.0;
+  if (light.direction.w > 0.0) {
+    let toSurface = -toLight;
+    let alignment = max(dot(light.direction.xyz, toSurface), 0.0);
+    angular = pow(alignment, light.direction.w);
+  }
+  let nDotL = max(dot(normal, toLight), 0.0);
+  return light.color.rgb * light.color.a * nDotL * attenuation * angular;
 }
 
 @fragment
