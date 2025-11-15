@@ -2,7 +2,7 @@ const DEFAULT_MAX_BULLET_HOLES = 128;
 const DEFAULT_BULLET_HOLE_SIZE = 0.24;
 const DEFAULT_BULLET_HOLE_LIFETIME = 10.0;
 const DEFAULT_BULLET_HOLE_COLOR = Object.freeze([0.08, 0.08, 0.08]);
-const FLOATS_PER_VERTEX = 9;
+const FLOATS_PER_VERTEX = 10;
 const VERTICES_PER_DECAL = 6;
 const FLOATS_PER_DECAL = FLOATS_PER_VERTEX * VERTICES_PER_DECAL;
 const SURFACE_BIAS = 0.0025;
@@ -78,6 +78,7 @@ function writeVertex(target, offset, position, normal, color) {
   target[offset++] = color[0];
   target[offset++] = color[1];
   target[offset++] = color[2];
+  target[offset++] = 0;
   return offset;
 }
 

@@ -3,6 +3,7 @@ import { mat4FromRotationTranslation } from '../math.js';
 const RIGHT_AXIS = new Float32Array([1, 0, 0]);
 const UP_AXIS = new Float32Array([0, 1, 0]);
 const FORWARD_AXIS = new Float32Array([0, 0, 1]);
+const FLOATS_PER_VERTEX = 10;
 
 const DEFAULT_RARITY_DEFINITIONS = Object.freeze({
   common: { label: 'Common', color: [0.78, 0.78, 0.82] },
@@ -98,18 +99,35 @@ function createBoxVertices(bounds, faceColors) {
 
   const vertices = [];
   for (const face of faces) {
-    const [a, b, c, d] = face.corners;
-    vertices.push(
-      a[0], a[1], a[2], face.normal[0], face.normal[1], face.normal[2], face.color[0], face.color[1], face.color[2],
-      c[0], c[1], c[2], face.normal[0], face.normal[1], face.normal[2], face.color[0], face.color[1], face.color[2],
-      b[0], b[1], b[2], face.normal[0], face.normal[1], face.normal[2], face.color[0], face.color[1], face.color[2],
-      a[0], a[1], a[2], face.normal[0], face.normal[1], face.normal[2], face.color[0], face.color[1], face.color[2],
-      d[0], d[1], d[2], face.normal[0], face.normal[1], face.normal[2], face.color[0], face.color[1], face.color[2],
-      c[0], c[1], c[2], face.normal[0], face.normal[1], face.normal[2], face.color[0], face.color[1], face.color[2]
-    );
+    pushFace(vertices, face.corners, face.normal, face.color);
   }
 
   return vertices;
+}
+
+function pushFace(target, corners, normal, color) {
+  const [a, b, c, d] = corners;
+  pushVertex(target, a, normal, color);
+  pushVertex(target, c, normal, color);
+  pushVertex(target, b, normal, color);
+  pushVertex(target, a, normal, color);
+  pushVertex(target, d, normal, color);
+  pushVertex(target, c, normal, color);
+}
+
+function pushVertex(target, position, normal, color) {
+  target.push(
+    position[0],
+    position[1],
+    position[2],
+    normal[0],
+    normal[1],
+    normal[2],
+    color[0],
+    color[1],
+    color[2],
+    0
+  );
 }
 
 function createPickupGeometry(device, accentColor) {
@@ -173,8 +191,9 @@ function createPickupGeometry(device, accentColor) {
 
   return {
     vertexBuffer,
-    vertexCount: vertexData.length / 9,
-    bounds: combinedBounds
+    vertexCount: vertexData.length / FLOATS_PER_VERTEX,
+    bounds: combinedBounds,
+    floatsPerVertex: FLOATS_PER_VERTEX
   };
 }
 
@@ -212,7 +231,8 @@ export function createWorldItemManager(device) {
   const getGeometryForColor = (color) => {
     const key = color.map((component) => component.toFixed(4)).join(',');
     let geometry = geometryCache.get(key);
-    if (!geometry) {
+    if (!geometry || geometry.floatsPerVertex !== FLOATS_PER_VERTEX) {
+      geometry?.vertexBuffer?.destroy?.();
       geometry = createPickupGeometry(device, color);
       geometryCache.set(key, geometry);
     }

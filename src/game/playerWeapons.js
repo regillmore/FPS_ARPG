@@ -7,6 +7,8 @@
  * for the shared prototype WebGPU pipeline.
  */
 
+const FLOATS_PER_VERTEX = 10;
+
 class WeaponDefinition {
   constructor({ id, displayName, description, stats, createGeometry, hudTheme }) {
     if (!id) {
@@ -76,7 +78,8 @@ function pushVertex(target, vertex, normal, color, bounds) {
     normal[2],
     color[0],
     color[1],
-    color[2]
+    color[2],
+    0
   );
 
   bounds.minX = Math.min(bounds.minX, x);
@@ -285,14 +288,17 @@ const peaShooterVertexCache = new Map();
 function getPeaShooterVertexResources(paletteOverrides) {
   const palette = normalizePeaShooterPalette(paletteOverrides);
   const key = paletteKey(palette);
-  if (!peaShooterVertexCache.has(key)) {
+  let cached = peaShooterVertexCache.get(key);
+  if (!cached || cached.floatsPerVertex !== FLOATS_PER_VERTEX) {
     const { vertexData, bounds } = buildPeaShooterVertices(palette);
-    peaShooterVertexCache.set(key, {
+    cached = {
       vertexData,
-      bounds: Object.freeze({ ...bounds })
-    });
+      bounds: Object.freeze({ ...bounds }),
+      floatsPerVertex: FLOATS_PER_VERTEX
+    };
+    peaShooterVertexCache.set(key, cached);
   }
-  return peaShooterVertexCache.get(key);
+  return cached;
 }
 
 export function createWeaponGeometry(device, vertexData, bounds, options = {}) {
@@ -309,7 +315,7 @@ export function createWeaponGeometry(device, vertexData, bounds, options = {}) {
 
   return {
     vertexBuffer,
-    vertexCount: vertexData.length / 9,
+    vertexCount: vertexData.length / FLOATS_PER_VERTEX,
     bounds: { ...bounds }
   };
 }

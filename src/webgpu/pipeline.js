@@ -21,13 +21,15 @@ struct VertexOutput {
   @location(0) worldPos : vec3<f32>,
   @location(1) normal : vec3<f32>,
   @location(2) color : vec3<f32>,
+  @location(3) glow : f32,
 };
 
 @vertex
 fn vs_main(
   @location(0) position : vec3<f32>,
   @location(1) normal : vec3<f32>,
-  @location(2) color : vec3<f32>
+  @location(2) color : vec3<f32>,
+  @location(3) glow : f32,
 ) -> VertexOutput {
   var output : VertexOutput;
   let worldPosition = uniforms.model * vec4<f32>(position, 1.0);
@@ -36,6 +38,7 @@ fn vs_main(
   output.worldPos = worldPosition.xyz;
   output.normal = normalize(worldNormal);
   output.color = color;
+  output.glow = glow;
   return output;
 }
 
@@ -59,7 +62,8 @@ fn evaluateLight(light : Light, normal : vec3<f32>, worldPos : vec3<f32>) -> vec
 fn fs_main(
   @location(0) worldPos : vec3<f32>,
   @location(1) normal : vec3<f32>,
-  @location(2) color : vec3<f32>
+  @location(2) color : vec3<f32>,
+  @location(3) glow : f32,
 ) -> @location(0) vec4<f32> {
   let lightCount = u32(uniforms.ambientAndCount.w + 0.5);
   var litColor = uniforms.ambientAndCount.rgb;
@@ -67,7 +71,8 @@ fn fs_main(
   for (var i = 0u; i < min(lightCount, 20u); i = i + 1u) {
     litColor = litColor + evaluateLight(uniforms.lights[i], n, worldPos);
   }
-  return vec4<f32>(color * litColor, 1.0);
+  let emissive = color * max(glow, 0.0);
+  return vec4<f32>(color * litColor + emissive, 1.0);
 }
     `
   });
@@ -79,11 +84,12 @@ fn fs_main(
       entryPoint: 'vs_main',
       buffers: [
         {
-          arrayStride: 36,
+          arrayStride: 40,
           attributes: [
             { shaderLocation: 0, offset: 0, format: 'float32x3' },
             { shaderLocation: 1, offset: 12, format: 'float32x3' },
-            { shaderLocation: 2, offset: 24, format: 'float32x3' }
+            { shaderLocation: 2, offset: 24, format: 'float32x3' },
+            { shaderLocation: 3, offset: 36, format: 'float32' }
           ]
         }
       ]
