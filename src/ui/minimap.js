@@ -61,8 +61,8 @@ function createTransform(snapshot, space) {
       const x = Number.isFinite(worldX) ? worldX : 0;
       const z = Number.isFinite(worldZ) ? worldZ : 0;
       return {
-        x: space.centerX + (x - px) * scale,
-        y: space.centerY + (z - pz) * scale
+        x: space.centerX - (x - px) * scale,
+        y: space.centerY - (z - pz) * scale
       };
     }
   };
@@ -218,13 +218,13 @@ function drawPlayer(ctx, playerYaw, dpr, centerX, centerY) {
   ctx.lineWidth = Math.max(1.4 * dpr, 1);
 
   ctx.beginPath();
-  ctx.moveTo(centerX + headingX * arrowLength, centerY + headingY * arrowLength);
+  ctx.moveTo(centerX - headingX * arrowLength, centerY + headingY * arrowLength);
   ctx.lineTo(
-    centerX - headingX * tailOffset + perpX * baseWidth * 0.5,
+    centerX + headingX * tailOffset - perpX * baseWidth * 0.5,
     centerY - headingY * tailOffset + perpY * baseWidth * 0.5
   );
   ctx.lineTo(
-    centerX - headingX * tailOffset - perpX * baseWidth * 0.5,
+    centerX + headingX * tailOffset + perpX * baseWidth * 0.5,
     centerY - headingY * tailOffset - perpY * baseWidth * 0.5
   );
   ctx.closePath();
