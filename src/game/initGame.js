@@ -550,10 +550,21 @@ export async function initializeGame({
       const px = position?.[0] ?? 0;
       const py = position?.[1] ?? 0;
       const pz = position?.[2] ?? 0;
+      const playerLayerIndex =
+        typeof roomSystem.getLayerIndexForHeight === 'function'
+          ? roomSystem.getLayerIndexForHeight(py)
+          : null;
+      const hasPlayerLayer = Number.isFinite(playerLayerIndex);
 
       const considerLight = (light) => {
         if (!light || !light.position || !light.color) {
           return;
+        }
+        if (hasPlayerLayer) {
+          const lightLayerIndex = light.layerIndex;
+          if (Number.isFinite(lightLayerIndex) && lightLayerIndex !== playerLayerIndex) {
+            return;
+          }
         }
         const lp = light.position;
         const dx = lp[0] - px;
