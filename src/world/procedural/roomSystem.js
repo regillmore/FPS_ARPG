@@ -644,10 +644,16 @@ export function createProceduralRoomSystem(device, options = {}) {
         if (!edges) {
           continue;
         }
+        const key = getCellKey(gx, gz);
+        const verticalOpeningStates = cellVerticalOpenings.get(key);
         cells.push({
           x: gx,
           z: gz,
-          edges
+          edges,
+          verticalOpening:
+            verticalOpeningStates && verticalOpeningStates instanceof Map
+              ? verticalOpeningStates.get(layerIndex) ?? false
+              : false
         });
       }
     }
