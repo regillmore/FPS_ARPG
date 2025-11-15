@@ -41,9 +41,18 @@ html, body {
   top: 1.5rem;
   right: 1.5rem;
   width: clamp(160px, 18vw, 220px);
-  aspect-ratio: 1 / 1;
   pointer-events: none;
   z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.hud-minimap__canvas-wrapper {
+  width: 100%;
+  aspect-ratio: 1 / 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -54,6 +63,15 @@ html, body {
   height: 100%;
   display: block;
   filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.55));
+}
+
+.hud-minimap__floor {
+  font-size: clamp(0.75rem, 1.3vw, 1rem);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.85);
 }
 
 .enemy-health-bars {
