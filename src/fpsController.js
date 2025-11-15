@@ -4,17 +4,21 @@ const KEY_BINDINGS = {
   KeyA: 'left',
   KeyD: 'right',
   Space: 'jump',
-  KeyE: 'use'
+  KeyE: 'use',
+  ShiftLeft: 'sprint',
+  ShiftRight: 'sprint'
 };
 
 export class FirstPersonController {
   #onMouseMove;
+  #lastStaminaSnapshot;
   constructor(canvas) {
     this.canvas = canvas;
     this.position = new Float32Array([0, 2.0, 0]);
     this.yaw = 0;
     this.pitch = 0;
-    this.moveSpeed = 4.5;
+    this.walkSpeed = 4.5;
+    this.sprintSpeed = 7.2;
     this.gravity = -9.81;
     this.jumpSpeed = 5.5;
     this.verticalVelocity = 0;
@@ -26,7 +30,8 @@ export class FirstPersonController {
       forward: false,
       backward: false,
       left: false,
-      right: false
+      right: false,
+      sprint: false
     };
     this.triggers = {
       primary: false,
@@ -35,7 +40,16 @@ export class FirstPersonController {
     this.triggerPresses = {
       use: false
     };
+    this.maxStamina = 100;
+    this.stamina = this.maxStamina;
+    this.staminaDrainRate = 32; // per second
+    this.staminaRegenRate = 25;
+    this.staminaRecoveryDelay = 0.65;
+    this.staminaRecoveryTimer = 0;
+    this.isSprinting = false;
+    this.#lastStaminaSnapshot = null;
     this.#bindEvents();
+    this.#emitStaminaChange(true);
   }
 
   #bindEvents() {
@@ -127,6 +141,7 @@ export class FirstPersonController {
     }
     this.jumpQueued = false;
     this.jumpButtonDown = false;
+    this.movement.sprint = false;
   }
 
   #resetTriggers() {
@@ -174,8 +189,31 @@ export class FirstPersonController {
       vz /= horizontalLength;
     }
 
-    this.position[0] += vx * this.moveSpeed * deltaTime;
-    this.position[2] += vz * this.moveSpeed * deltaTime;
+    const wantsSprint = this.movement.sprint && horizontalLength > 0 && this.isGrounded;
+    let sprinting = wantsSprint && this.stamina > 0.5;
+    if (sprinting) {
+      this.stamina = Math.max(0, this.stamina - this.staminaDrainRate * deltaTime);
+      this.staminaRecoveryTimer = this.staminaRecoveryDelay;
+      if (this.stamina <= 0.05) {
+        sprinting = false;
+      }
+    } else {
+      if (this.staminaRecoveryTimer > 0) {
+        this.staminaRecoveryTimer = Math.max(0, this.staminaRecoveryTimer - deltaTime);
+      }
+      if (this.staminaRecoveryTimer === 0 && this.stamina < this.maxStamina) {
+        this.stamina = Math.min(
+          this.maxStamina,
+          this.stamina + this.staminaRegenRate * deltaTime
+        );
+      }
+    }
+
+    this.isSprinting = sprinting;
+    const moveSpeed = sprinting ? this.sprintSpeed : this.walkSpeed;
+
+    this.position[0] += vx * moveSpeed * deltaTime;
+    this.position[2] += vz * moveSpeed * deltaTime;
 
     if (this.jumpQueued && this.isGrounded) {
       this.verticalVelocity = this.jumpSpeed;
@@ -192,6 +230,8 @@ export class FirstPersonController {
     }
 
     this.position[1] += this.verticalVelocity * deltaTime;
+
+    this.#emitStaminaChange();
   }
 
   getViewTarget() {
@@ -209,6 +249,18 @@ export class FirstPersonController {
       this.position[1] + dy,
       this.position[2] + dz
     ];
+  }
+
+  getStaminaState() {
+    const normalized = this.maxStamina > 0 ? this.stamina / this.maxStamina : 0;
+    return {
+      stamina: this.stamina,
+      maxStamina: this.maxStamina,
+      normalized,
+      isSprinting: this.isSprinting,
+      isRecovering: !this.isSprinting && this.stamina < this.maxStamina,
+      isDepleted: this.stamina <= 0.1
+    };
   }
 
   isPrimaryFireActive() {
@@ -241,5 +293,20 @@ export class FirstPersonController {
     if (result.hitCeiling && this.verticalVelocity > 0) {
       this.verticalVelocity = 0;
     }
+  }
+
+  #emitStaminaChange(force = false) {
+    if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
+      return;
+    }
+    const detail = this.getStaminaState();
+    const last = this.#lastStaminaSnapshot;
+    const delta = last ? Math.abs(last.value - detail.stamina) : Infinity;
+    const sprintChanged = last ? last.isSprinting !== detail.isSprinting : true;
+    if (!force && delta < 0.1 && !sprintChanged) {
+      return;
+    }
+    this.#lastStaminaSnapshot = { value: detail.stamina, isSprinting: detail.isSprinting };
+    window.dispatchEvent(new CustomEvent('player-stamina-change', { detail }));
   }
 }

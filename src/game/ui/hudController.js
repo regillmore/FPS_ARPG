@@ -3,6 +3,7 @@ import { createEnemyHealthBars } from '../../ui/enemyHealthBars.js';
 import { createFloatingDamageNumbers } from '../../ui/floatingDamageNumbers.js';
 import { createExperienceBar } from '../../ui/experienceBar.js';
 import { createMinimap } from '../../ui/minimap.js';
+import { createStaminaBar } from '../../ui/staminaBar.js';
 import { DEFAULT_RETICLE_PRIMARY_COLOR } from '../constants.js';
 import { blendWithWhite } from './colorUtils.js';
 
@@ -12,6 +13,7 @@ export function createHudController({ hudLayer, pauseControls, experienceTracker
   const floatingDamageNumbers = createFloatingDamageNumbers({ mount: hudLayer });
   const experienceBar = createExperienceBar({ mount: hudLayer });
   const minimap = createMinimap({ mount: hudLayer });
+  const staminaBar = createStaminaBar({ mount: hudLayer });
 
   let baseReticlePrimaryColor = DEFAULT_RETICLE_PRIMARY_COLOR;
   let baseReticleAccentColor = blendWithWhite(DEFAULT_RETICLE_PRIMARY_COLOR) ?? DEFAULT_RETICLE_PRIMARY_COLOR;
@@ -96,6 +98,17 @@ export function createHudController({ hudLayer, pauseControls, experienceTracker
   window.addEventListener('player-experience-change', (event) => {
     const state = event?.detail?.state ?? experienceTracker?.getState?.();
     applyExperienceState(state);
+  });
+
+  const applyStaminaState = (state) => {
+    if (!state) {
+      return;
+    }
+    staminaBar?.setState?.(state);
+  };
+
+  window.addEventListener('player-stamina-change', (event) => {
+    applyStaminaState(event?.detail ?? null);
   });
 
   return {
