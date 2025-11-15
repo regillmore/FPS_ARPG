@@ -18,6 +18,7 @@ import {
   addHorizontalSection,
   addSlabColliders
 } from './geometry.js';
+import { addCagedElectricWallLight } from './decorations.js';
 import {
   hashValue,
   randomFloatForEdge
@@ -522,6 +523,54 @@ export function createProceduralRoomSystem(device, options = {}) {
               : false;
           const isTopLayer = layerIndex === maxActiveLayer;
           const profile = profilePerLayer.get(layerIndex);
+
+          const edges = getCellEdgesForLayer(layerIndex, gx, gz);
+          if (edges) {
+            const entries = [
+              ['north', edges.north],
+              ['south', edges.south],
+              ['east', edges.east],
+              ['west', edges.west]
+            ];
+            let solidDirection = null;
+            let openCount = 0;
+            let hasDoorway = false;
+            let hasUnknown = false;
+
+            for (let i = 0; i < entries.length; i += 1) {
+              const [direction, state] = entries[i];
+              if (state === 'open') {
+                openCount += 1;
+              } else if (state === 'solid') {
+                if (solidDirection) {
+                  solidDirection = null;
+                  break;
+                }
+                solidDirection = direction;
+              } else if (state === 'doorway') {
+                hasDoorway = true;
+              } else {
+                hasUnknown = true;
+                break;
+              }
+            }
+
+            if (!hasUnknown && !hasDoorway && solidDirection && openCount === 3) {
+              addCagedElectricWallLight(
+                vertices,
+                bounds,
+                solidDirection,
+                centerX,
+                centerZ,
+                baseY,
+                roomSize,
+                roomHeight,
+                wallThickness,
+                profile.wallColor,
+                profile.accentColor
+              );
+            }
+          }
 
           addFloorSlab(
             vertices,
