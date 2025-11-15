@@ -10,7 +10,6 @@ import { createBulletHoleManager } from './bulletHoles.js';
 import { traceRayAABB } from './collisions.js';
 import { createWorldItemManager } from './worldItems.js';
 import {
-  STATIC_LIGHTS,
   AMBIENT_LIGHT,
   DEFAULT_PROJECTILE_SETTINGS,
   DEFAULT_WEAPON_OFFSET,
@@ -582,10 +581,6 @@ export async function initializeGame({
           target.push(light);
         }
       };
-
-      for (let i = 0; i < STATIC_LIGHTS.length; i += 1) {
-        considerLight(STATIC_LIGHTS[i]);
-      }
 
       const decorativeLights = roomSystem.getDecorativeLights?.();
       if (decorativeLights) {
