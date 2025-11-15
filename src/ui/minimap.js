@@ -62,7 +62,7 @@ function createTransform(snapshot, space) {
       const z = Number.isFinite(worldZ) ? worldZ : 0;
       return {
         x: space.centerX + (x - px) * scale,
-        y: space.centerY - (z - pz) * scale
+        y: space.centerY + (z - pz) * scale
       };
     }
   };
