@@ -997,6 +997,51 @@ export async function initializeGame({
       const viewportWidth = canvas.clientWidth ?? canvas.width;
       const viewportHeight = canvas.clientHeight ?? canvas.height;
 
+      let minimapState = {
+        snapshot: null,
+        enemies: [],
+        playerYaw: controller.yaw
+      };
+      const minimapSnapshot =
+        typeof roomSystem.getMinimapSnapshot === 'function'
+          ? roomSystem.getMinimapSnapshot(controller.position, { radius: 4 })
+          : null;
+
+      if (minimapSnapshot) {
+        const layerResolver =
+          typeof roomSystem.getLayerIndexForHeight === 'function'
+            ? roomSystem.getLayerIndexForHeight
+            : null;
+
+        if (layerResolver && Number.isFinite(minimapSnapshot.layerIndex)) {
+          const minimapEnemies = [];
+
+          for (const enemy of enemies) {
+            const position = enemy?.position;
+            if (!position) {
+              continue;
+            }
+
+            const enemyLayer = layerResolver(position[1]);
+            if (enemyLayer !== minimapSnapshot.layerIndex) {
+              continue;
+            }
+
+            minimapEnemies.push({
+              x: position[0],
+              y: position[1],
+              z: position[2]
+            });
+          }
+
+          minimapState = {
+            snapshot: minimapSnapshot,
+            enemies: minimapEnemies,
+            playerYaw: controller.yaw
+          };
+        }
+      }
+
       hudController?.updateWorldSpaceUI?.({
         enemies,
         viewProjectionMatrix: viewProj,
@@ -1005,7 +1050,8 @@ export async function initializeGame({
         deltaTime,
         paused: Boolean(isPaused),
         cameraPosition: eye,
-        occlusionColliders: roomColliders
+        occlusionColliders: roomColliders,
+        minimap: minimapState
       });
 
       writeUniformData(worldUniformData, viewProj, IDENTITY_MATRIX);
