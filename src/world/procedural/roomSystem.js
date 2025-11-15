@@ -129,6 +129,24 @@ export function createProceduralRoomSystem(device, options = {}) {
     return profile;
   }
 
+  function getExistingCellEdgesForLayer(layerIndex, x, z) {
+    const key = getCellKey(x, z);
+    const perLayer = cellLayerEdgeStates.get(key);
+    if (!perLayer) {
+      return null;
+    }
+    const edges = perLayer.get(layerIndex);
+    if (!edges) {
+      return null;
+    }
+    return {
+      north: edges.north ?? null,
+      south: edges.south ?? null,
+      east: edges.east ?? null,
+      west: edges.west ?? null
+    };
+  }
+
   function getCellEdgesForLayer(layerIndex, x, z) {
     const key = getCellKey(x, z);
     let perLayer = cellLayerEdgeStates.get(key);
@@ -597,6 +615,54 @@ export function createProceduralRoomSystem(device, options = {}) {
     ensureBufferCapacity(vertexArray);
   }
 
+  function getLayerIndexForHeight(height) {
+    const value = Number.isFinite(height) ? height : 0;
+    return positionToLayer(value, levelHeight, floorThickness);
+  }
+
+  function getMinimapSnapshot(playerPosition, options = {}) {
+    if (!playerPosition) {
+      return null;
+    }
+
+    const px = Number.isFinite(playerPosition[0]) ? playerPosition[0] : 0;
+    const py = Number.isFinite(playerPosition[1]) ? playerPosition[1] : 0;
+    const pz = Number.isFinite(playerPosition[2]) ? playerPosition[2] : 0;
+
+    const resolvedRadius = Number.isFinite(options.radius)
+      ? Math.floor(options.radius)
+      : 3;
+    const clampedRadius = Math.max(1, Math.min(resolvedRadius, generationRadius));
+    const layerIndex = getLayerIndexForHeight(py);
+    const cellX = positionToCell(px, roomSize, halfRoom);
+    const cellZ = positionToCell(pz, roomSize, halfRoom);
+
+    const cells = [];
+    for (let gx = cellX - clampedRadius; gx <= cellX + clampedRadius; gx += 1) {
+      for (let gz = cellZ - clampedRadius; gz <= cellZ + clampedRadius; gz += 1) {
+        const edges = getExistingCellEdgesForLayer(layerIndex, gx, gz);
+        if (!edges) {
+          continue;
+        }
+        cells.push({
+          x: gx,
+          z: gz,
+          edges
+        });
+      }
+    }
+
+    return {
+      layerIndex,
+      cell: { x: cellX, z: cellZ },
+      radius: clampedRadius,
+      cellSize: roomSize,
+      halfCellSize: halfRoom,
+      playerPosition: [px, py, pz],
+      cells
+    };
+  }
+
   function update(playerPosition) {
     const px = playerPosition?.[0] ?? 0;
     const py = playerPosition?.[1] ?? 0;
@@ -638,6 +704,8 @@ export function createProceduralRoomSystem(device, options = {}) {
     getColliders: () => colliders,
     getGeometry: () => ({ vertexBuffer, vertexCount, bounds }),
     getSeed: () => worldSeed,
+    getLayerIndexForHeight,
+    getMinimapSnapshot,
     consumeBarrelSpawnPoints: () => {
       if (pendingBarrelSpawns.length === 0) {
         return [];

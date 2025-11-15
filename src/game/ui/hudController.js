@@ -2,6 +2,7 @@ import { createHudReticle } from '../../ui/hudReticle.js';
 import { createEnemyHealthBars } from '../../ui/enemyHealthBars.js';
 import { createFloatingDamageNumbers } from '../../ui/floatingDamageNumbers.js';
 import { createExperienceBar } from '../../ui/experienceBar.js';
+import { createMinimap } from '../../ui/minimap.js';
 import { DEFAULT_RETICLE_PRIMARY_COLOR } from '../constants.js';
 import { blendWithWhite } from './colorUtils.js';
 
@@ -10,6 +11,7 @@ export function createHudController({ hudLayer, pauseControls, experienceTracker
   const enemyHealthBars = createEnemyHealthBars({ mount: hudLayer });
   const floatingDamageNumbers = createFloatingDamageNumbers({ mount: hudLayer });
   const experienceBar = createExperienceBar({ mount: hudLayer });
+  const minimap = createMinimap({ mount: hudLayer });
 
   let baseReticlePrimaryColor = DEFAULT_RETICLE_PRIMARY_COLOR;
   let baseReticleAccentColor = blendWithWhite(DEFAULT_RETICLE_PRIMARY_COLOR) ?? DEFAULT_RETICLE_PRIMARY_COLOR;
@@ -112,7 +114,8 @@ export function createHudController({ hudLayer, pauseControls, experienceTracker
       deltaTime = 0,
       paused = false,
       cameraPosition,
-      occlusionColliders
+      occlusionColliders,
+      minimap: minimapState
     }) {
       enemyHealthBars?.update?.({
         enemies,
@@ -129,6 +132,16 @@ export function createHudController({ hudLayer, pauseControls, experienceTracker
         viewportWidth,
         viewportHeight
       });
+
+      if (minimap) {
+        minimap.update(
+          minimapState ?? {
+            snapshot: null,
+            enemies: [],
+            playerYaw: 0
+          }
+        );
+      }
     }
   };
 }
