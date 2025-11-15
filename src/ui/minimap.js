@@ -14,6 +14,21 @@ const PLAYER_FILL = 'rgba(200, 235, 255, 0.95)';
 const PLAYER_STROKE = 'rgba(12, 18, 28, 0.85)';
 const DOOR_GAP_RATIO = 0.34;
 const MIN_CLIP_MARGIN = 10;
+const DEFAULT_FLOOR_LABEL = 'G';
+
+function formatFloorLabel(layerIndex) {
+  if (!Number.isFinite(layerIndex)) {
+    return DEFAULT_FLOOR_LABEL;
+  }
+  const normalized = Math.trunc(layerIndex);
+  if (normalized === 0) {
+    return 'G';
+  }
+  if (normalized < 0) {
+    return `B${Math.abs(normalized)}`;
+  }
+  return String(normalized);
+}
 
 function ensureCanvasSize(canvas, root) {
   if (!canvas || !root) {
@@ -320,11 +335,20 @@ export function createMinimap(options = {}) {
   root.className = 'hud-minimap';
   root.setAttribute('aria-hidden', 'true');
 
+  const canvasWrapper = document.createElement('div');
+  canvasWrapper.className = 'hud-minimap__canvas-wrapper';
+
   const canvas = document.createElement('canvas');
   canvas.className = 'hud-minimap__canvas';
   canvas.width = 1;
   canvas.height = 1;
-  root.appendChild(canvas);
+  canvasWrapper.appendChild(canvas);
+  root.appendChild(canvasWrapper);
+
+  const floorLabel = document.createElement('div');
+  floorLabel.className = 'hud-minimap__floor';
+  floorLabel.textContent = DEFAULT_FLOOR_LABEL;
+  root.appendChild(floorLabel);
 
   if (mount) {
     mount.appendChild(root);
@@ -338,11 +362,15 @@ export function createMinimap(options = {}) {
       if (!ctx || !root.isConnected) {
         return;
       }
-      const canvasSize = ensureCanvasSize(canvas, root);
+      const canvasSize = ensureCanvasSize(canvas, canvasWrapper);
       if (!canvasSize) {
         return;
       }
       drawMinimap(ctx, canvasSize, data ?? {});
+      const label = formatFloorLabel(data?.snapshot?.layerIndex);
+      if (floorLabel.textContent !== label) {
+        floorLabel.textContent = label;
+      }
     },
     destroy() {
       root.remove();

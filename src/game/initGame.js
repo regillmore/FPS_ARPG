@@ -215,7 +215,10 @@ export async function initializeGame({
 
     const pipeline = createBasicPipeline(device, format, depthFormat);
     const uniformBindGroupLayout = pipeline.getBindGroupLayout(0);
-    const roomSystem = createProceduralRoomSystem(device, { generationRadius: 5 });
+    const roomSystem = createProceduralRoomSystem(device, {
+      generationRadius: 5,
+      initialLayer: 0
+    });
     const roomColliders = roomSystem.getColliders();
     const playerCollisionScratch = [];
     let roomVertexBuffer = roomSystem.getVertexBuffer();
