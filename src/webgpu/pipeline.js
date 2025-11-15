@@ -10,7 +10,7 @@ struct Uniforms {
   viewProj : mat4x4<f32>,
   model : mat4x4<f32>,
   ambientAndCount : vec4<f32>,
-  lights : array<Light, 2>,
+  lights : array<Light, 50>,
 };
 
 @binding(0) @group(0) var<uniform> uniforms : Uniforms;
@@ -57,7 +57,7 @@ fn fs_main(
   let lightCount = u32(uniforms.ambientAndCount.w + 0.5);
   var litColor = uniforms.ambientAndCount.rgb;
   let n = normalize(normal);
-  for (var i = 0u; i < min(lightCount, 2u); i = i + 1u) {
+  for (var i = 0u; i < min(lightCount, 50u); i = i + 1u) {
     litColor = litColor + evaluateLight(uniforms.lights[i], n, worldPos);
   }
   return vec4<f32>(color * litColor, 1.0);

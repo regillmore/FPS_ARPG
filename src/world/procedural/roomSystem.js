@@ -92,6 +92,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   const cellVerticalOpenings = new Map();
   const discoveredBarrelRooms = new Set();
   const pendingBarrelSpawns = [];
+  const decorativeLights = [];
 
   function getCellKey(x, z) {
     return `${x},${z}`;
@@ -351,6 +352,7 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   function buildGeometryForCenter(cx, cz) {
     const vertices = [];
+    decorativeLights.length = 0;
     pendingBarrelSpawns.length = 0;
     resetBounds();
     colliders.length = 0;
@@ -567,7 +569,8 @@ export function createProceduralRoomSystem(device, options = {}) {
                 roomHeight,
                 wallThickness,
                 profile.wallColor,
-                profile.accentColor
+                profile.accentColor,
+                decorativeLights
               );
             }
           }
@@ -761,6 +764,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     getSeed: () => worldSeed,
     getLayerIndexForHeight,
     getMinimapSnapshot,
+    getDecorativeLights: () => decorativeLights,
     consumeBarrelSpawnPoints: () => {
       if (pendingBarrelSpawns.length === 0) {
         return [];
