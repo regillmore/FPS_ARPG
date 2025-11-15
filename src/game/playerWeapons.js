@@ -288,14 +288,17 @@ const peaShooterVertexCache = new Map();
 function getPeaShooterVertexResources(paletteOverrides) {
   const palette = normalizePeaShooterPalette(paletteOverrides);
   const key = paletteKey(palette);
-  if (!peaShooterVertexCache.has(key)) {
+  let cached = peaShooterVertexCache.get(key);
+  if (!cached || cached.floatsPerVertex !== FLOATS_PER_VERTEX) {
     const { vertexData, bounds } = buildPeaShooterVertices(palette);
-    peaShooterVertexCache.set(key, {
+    cached = {
       vertexData,
-      bounds: Object.freeze({ ...bounds })
-    });
+      bounds: Object.freeze({ ...bounds }),
+      floatsPerVertex: FLOATS_PER_VERTEX
+    };
+    peaShooterVertexCache.set(key, cached);
   }
-  return peaShooterVertexCache.get(key);
+  return cached;
 }
 
 export function createWeaponGeometry(device, vertexData, bounds, options = {}) {

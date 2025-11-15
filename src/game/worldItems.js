@@ -192,7 +192,8 @@ function createPickupGeometry(device, accentColor) {
   return {
     vertexBuffer,
     vertexCount: vertexData.length / FLOATS_PER_VERTEX,
-    bounds: combinedBounds
+    bounds: combinedBounds,
+    floatsPerVertex: FLOATS_PER_VERTEX
   };
 }
 
@@ -230,7 +231,8 @@ export function createWorldItemManager(device) {
   const getGeometryForColor = (color) => {
     const key = color.map((component) => component.toFixed(4)).join(',');
     let geometry = geometryCache.get(key);
-    if (!geometry) {
+    if (!geometry || geometry.floatsPerVertex !== FLOATS_PER_VERTEX) {
+      geometry?.vertexBuffer?.destroy?.();
       geometry = createPickupGeometry(device, color);
       geometryCache.set(key, geometry);
     }
