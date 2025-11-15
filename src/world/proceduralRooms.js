@@ -648,7 +648,6 @@ export function createProceduralRoomSystem(device, options = {}) {
   const layerSeeds = new Map();
   const layerCellProfiles = new Map();
   const colliders = [];
-  const cellEdgeStates = new Map();
   const cellLayerEdgeStates = new Map();
   const cellVerticalOpenings = new Map();
   const discoveredBarrelRooms = new Set();
@@ -656,6 +655,10 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   function getCellKey(x, z) {
     return `${x},${z}`;
+  }
+
+  function getBarrelRoomKey(layerIndex, x, z) {
+    return `${layerIndex}:${getCellKey(x, z)}`;
   }
 
   function getLayerSeed(layerIndex) {
@@ -687,16 +690,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     return profile;
   }
 
-  function getCellEdges(x, z) {
-    const key = getCellKey(x, z);
-    let edges = cellEdgeStates.get(key);
-    if (!edges) {
-      edges = { north: null, south: null, east: null, west: null };
-      cellEdgeStates.set(key, edges);
-    }
-    return edges;
-  }
-
   function getCellEdgesForLayer(layerIndex, x, z) {
     const key = getCellKey(x, z);
     let perLayer = cellLayerEdgeStates.get(key);
@@ -721,45 +714,73 @@ export function createProceduralRoomSystem(device, options = {}) {
     return openings;
   }
 
-  function evaluateCellForBarrel(x, z) {
-    const key = getCellKey(x, z);
-    if (discoveredBarrelRooms.has(key)) {
+  function evaluateCellForBarrel(x, z, layerIndex) {
+    const roomKey = getBarrelRoomKey(layerIndex, x, z);
+    if (discoveredBarrelRooms.has(roomKey)) {
       return;
     }
 
-    const edges = cellEdgeStates.get(key);
+    const edges = getCellEdgesForLayer(layerIndex, x, z);
     if (!edges) {
       return;
     }
 
-    const doorNorth = edges.north === 'doorway';
-    const doorSouth = edges.south === 'doorway';
-    const doorEast = edges.east === 'doorway';
-    const doorWest = edges.west === 'doorway';
-    const doorwayCount = (doorNorth ? 1 : 0) + (doorSouth ? 1 : 0) + (doorEast ? 1 : 0) + (doorWest ? 1 : 0);
+    const directions = ['north', 'south', 'east', 'west'];
+    const openDirections = [];
+    const closedDirections = [];
 
-    if (doorwayCount !== 2) {
+    for (let i = 0; i < directions.length; i += 1) {
+      const direction = directions[i];
+      const state = edges[direction];
+
+      if (state === 'open') {
+        openDirections.push(direction);
+      } else if (state === 'solid' || state === 'doorway') {
+        closedDirections.push(direction);
+      } else {
+        return;
+      }
+    }
+
+    if (openDirections.length !== 2 || closedDirections.length !== 2) {
       return;
     }
 
-    const hasNorthSouth = doorNorth && doorSouth;
-    const hasEastWest = doorEast && doorWest;
+    const centerX = x * roomSize;
+    const centerZ = z * roomSize;
+    const baseY = layerIndex * levelHeight;
+    const rawOffset = Math.max(roomSize * 0.2, halfRoom * 0.45);
+    const clearance = Math.max(0.6, wallThickness * 1.2);
+    const maxOffset = Math.min(rawOffset, halfRoom - clearance);
+    if (!(maxOffset > 0.25)) {
+      return;
+    }
+    const offsets = [];
 
-    if (!hasNorthSouth && !hasEastWest) {
+    for (let i = 0; i < closedDirections.length; i += 1) {
+      const direction = closedDirections[i];
+      if (direction === 'north') {
+        offsets.push([0, -maxOffset]);
+      } else if (direction === 'south') {
+        offsets.push([0, maxOffset]);
+      } else if (direction === 'east') {
+        offsets.push([maxOffset, 0]);
+      } else if (direction === 'west') {
+        offsets.push([-maxOffset, 0]);
+      }
+    }
+
+    if (offsets.length !== 2) {
       return;
     }
 
-    const perpendicularSolid = hasNorthSouth
-      ? edges.east === 'solid' && edges.west === 'solid'
-      : edges.north === 'solid' && edges.south === 'solid';
+    discoveredBarrelRooms.add(roomKey);
 
-    if (!perpendicularSolid) {
-      return;
+    for (let i = 0; i < offsets.length; i += 1) {
+      const [offsetX, offsetZ] = offsets[i];
+      const position = [centerX + offsetX, baseY, centerZ + offsetZ];
+      pendingBarrelSpawns.push({ key: roomKey, position });
     }
-
-    const position = [x * roomSize, 0, z * roomSize];
-    pendingBarrelSpawns.push({ key, position });
-    discoveredBarrelRooms.add(key);
   }
 
   function updateCellVerticalOpeningForLayer(x, z, layerIndex) {
@@ -811,8 +832,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     } else if (typeof layerTypes === 'string') {
       effectiveLayerTypes.set(centerLayerIndex, layerTypes);
     }
-    const edgeA = getCellEdges(ax, az);
-    const edgeB = getCellEdges(bx, bz);
     const dx = bx - ax;
     const dz = bz - az;
     let baseType = effectiveLayerTypes.get(centerLayerIndex);
@@ -820,23 +839,6 @@ export function createProceduralRoomSystem(device, options = {}) {
       const first = effectiveLayerTypes.values().next();
       baseType = first.done ? 'solid' : first.value;
     }
-
-    if (dx === 1 && dz === 0) {
-      edgeA.east = baseType;
-      edgeB.west = baseType;
-    } else if (dx === -1 && dz === 0) {
-      edgeA.west = baseType;
-      edgeB.east = baseType;
-    } else if (dx === 0 && dz === 1) {
-      edgeA.south = baseType;
-      edgeB.north = baseType;
-    } else if (dx === 0 && dz === -1) {
-      edgeA.north = baseType;
-      edgeB.south = baseType;
-    }
-
-    evaluateCellForBarrel(ax, az);
-    evaluateCellForBarrel(bx, bz);
 
     for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
       const type = effectiveLayerTypes.get(layerIndex) ?? baseType;
@@ -859,6 +861,9 @@ export function createProceduralRoomSystem(device, options = {}) {
 
       updateCellVerticalOpeningForLayer(ax, az, layerIndex);
       updateCellVerticalOpeningForLayer(bx, bz, layerIndex);
+
+      evaluateCellForBarrel(ax, az, layerIndex);
+      evaluateCellForBarrel(bx, bz, layerIndex);
     }
   }
 
