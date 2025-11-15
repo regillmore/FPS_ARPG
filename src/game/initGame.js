@@ -10,7 +10,7 @@ import { createBulletHoleManager } from './bulletHoles.js';
 import { traceRayAABB } from './collisions.js';
 import { createWorldItemManager } from './worldItems.js';
 import {
-  ACTIVE_LIGHTS,
+  STATIC_LIGHTS,
   AMBIENT_LIGHT,
   DEFAULT_PROJECTILE_SETTINGS,
   DEFAULT_WEAPON_OFFSET,
@@ -502,7 +502,8 @@ export async function initializeGame({
     const weaponModel = new Float32Array(16);
     const worldUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
     const weaponUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
-    const activeLightCount = Math.min(ACTIVE_LIGHTS.length, MAX_LIGHTS);
+    const lightSelectionScratch = [];
+    const activeLightsScratch = [];
 
     const ensureRenderableUniformResources = (entity) => {
       if (!entity || entity.uniformBuffer) {
@@ -543,16 +544,70 @@ export async function initializeGame({
       };
     };
 
-    const writeUniformData = (target, viewProjection, modelMatrix) => {
+    const gatherActiveLights = (position, target) => {
+      lightSelectionScratch.length = 0;
+      target.length = 0;
+
+      const px = position?.[0] ?? 0;
+      const py = position?.[1] ?? 0;
+      const pz = position?.[2] ?? 0;
+
+      const considerLight = (light) => {
+        if (!light || !light.position || !light.color) {
+          return;
+        }
+        const lp = light.position;
+        const dx = lp[0] - px;
+        const dy = lp[1] - py;
+        const dz = lp[2] - pz;
+        const distanceSq = dx * dx + dy * dy + dz * dz;
+
+        let insertIndex = target.length;
+        for (let i = 0; i < target.length; i += 1) {
+          if (distanceSq < lightSelectionScratch[i]) {
+            insertIndex = i;
+            break;
+          }
+        }
+
+        if (insertIndex < MAX_LIGHTS) {
+          lightSelectionScratch.splice(insertIndex, 0, distanceSq);
+          target.splice(insertIndex, 0, light);
+          if (target.length > MAX_LIGHTS) {
+            target.length = MAX_LIGHTS;
+            lightSelectionScratch.length = MAX_LIGHTS;
+          }
+        } else if (target.length < MAX_LIGHTS) {
+          lightSelectionScratch.push(distanceSq);
+          target.push(light);
+        }
+      };
+
+      for (let i = 0; i < STATIC_LIGHTS.length; i += 1) {
+        considerLight(STATIC_LIGHTS[i]);
+      }
+
+      const decorativeLights = roomSystem.getDecorativeLights?.();
+      if (decorativeLights) {
+        for (let i = 0; i < decorativeLights.length; i += 1) {
+          considerLight(decorativeLights[i]);
+        }
+      }
+
+      return target;
+    };
+
+    const writeUniformData = (target, viewProjection, modelMatrix, lights) => {
       target.set(viewProjection, 0);
       target.set(modelMatrix, 16);
       target[32] = AMBIENT_LIGHT[0];
       target[33] = AMBIENT_LIGHT[1];
       target[34] = AMBIENT_LIGHT[2];
-      target[35] = activeLightCount;
+      const lightCount = Math.min(Array.isArray(lights) ? lights.length : 0, MAX_LIGHTS);
+      target[35] = lightCount;
       for (let i = 0; i < MAX_LIGHTS; i += 1) {
         const base = 36 + i * 8;
-        const light = ACTIVE_LIGHTS[i];
+        const light = i < lightCount ? lights[i] : null;
         if (light) {
           target[base + 0] = light.position[0];
           target[base + 1] = light.position[1];
@@ -1054,7 +1109,9 @@ export async function initializeGame({
         minimap: minimapState
       });
 
-      writeUniformData(worldUniformData, viewProj, IDENTITY_MATRIX);
+      const activeLights = gatherActiveLights(controller.position, activeLightsScratch);
+
+      writeUniformData(worldUniformData, viewProj, IDENTITY_MATRIX, activeLights);
       device.queue.writeBuffer(worldUniformBuffer, 0, worldUniformData);
 
       bulletHoleManager.syncGPU();
@@ -1095,7 +1152,12 @@ export async function initializeGame({
           if (!item.uniformBuffer || !item.uniformBindGroup || !item.uniformData) {
             continue;
           }
-          writeUniformData(item.uniformData, viewProj, item.modelMatrix ?? IDENTITY_MATRIX);
+          writeUniformData(
+            item.uniformData,
+            viewProj,
+            item.modelMatrix ?? IDENTITY_MATRIX,
+            activeLights
+          );
           device.queue.writeBuffer(item.uniformBuffer, 0, item.uniformData);
           pass.setBindGroup(0, item.uniformBindGroup);
           pass.setVertexBuffer(0, item.vertexBuffer);
@@ -1114,7 +1176,12 @@ export async function initializeGame({
           if (!enemy.uniformBuffer || !enemy.uniformBindGroup || !enemy.uniformData) {
             continue;
           }
-          writeUniformData(enemy.uniformData, viewProj, enemy.modelMatrix ?? IDENTITY_MATRIX);
+          writeUniformData(
+            enemy.uniformData,
+            viewProj,
+            enemy.modelMatrix ?? IDENTITY_MATRIX,
+            activeLights
+          );
           device.queue.writeBuffer(enemy.uniformBuffer, 0, enemy.uniformData);
           pass.setBindGroup(0, enemy.uniformBindGroup);
           pass.setVertexBuffer(0, enemy.vertexBuffer);
@@ -1137,7 +1204,7 @@ export async function initializeGame({
       }
 
       if (weaponTransformReady && weaponGeometry) {
-        writeUniformData(weaponUniformData, viewProj, weaponModel);
+        writeUniformData(weaponUniformData, viewProj, weaponModel, activeLights);
         device.queue.writeBuffer(weaponUniformBuffer, 0, weaponUniformData);
         pass.setBindGroup(0, weaponUniformBindGroup);
         pass.setVertexBuffer(0, weaponGeometry.vertexBuffer);

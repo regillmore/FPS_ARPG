@@ -20,7 +20,7 @@ export const DEFAULT_PROJECTILE_SETTINGS = Object.freeze({
 export const MAX_AIM_DISTANCE = 100;
 export const DEFAULT_RETICLE_PRIMARY_COLOR = [1, 1, 1];
 export const RETICLE_WHITE_BLEND = 0.45;
-export const MAX_LIGHTS = 2;
+export const MAX_LIGHTS = 4;
 export const AMBIENT_LIGHT = new Float32Array([0.25, 0.25, 0.25]);
 export const ITEM_INTERACTION_DISTANCE = 2.25;
 export const ITEM_INTERACTION_DISTANCE_SQ = ITEM_INTERACTION_DISTANCE * ITEM_INTERACTION_DISTANCE;
@@ -34,7 +34,7 @@ export const PICKUP_PROMPT_FAILURE_DURATION = 2000;
 export const PICKUP_PROMPT_BLOCKED_COLOR = 'rgb(255, 188, 140)';
 export const PICKUP_PROMPT_FAILURE_COLOR = 'rgb(255, 128, 128)';
 
-export const ACTIVE_LIGHTS = [
+export const STATIC_LIGHTS = [
   {
     position: new Float32Array([-2.25, 3.25, -1.75, 1.0]),
     color: new Float32Array([1.0, 0.82, 0.65, 3.2])
@@ -45,7 +45,7 @@ export const ACTIVE_LIGHTS = [
   }
 ];
 
-export const UNIFORM_FLOAT_COUNT = 52;
+export const UNIFORM_FLOAT_COUNT = 36 + MAX_LIGHTS * 8;
 export const UNIFORM_BYTE_LENGTH = UNIFORM_FLOAT_COUNT * 4;
 export const IDENTITY_MATRIX = new Float32Array([
   1, 0, 0, 0,
