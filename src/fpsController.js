@@ -11,7 +11,7 @@ export class FirstPersonController {
   #onMouseMove;
   constructor(canvas) {
     this.canvas = canvas;
-    this.position = new Float32Array([0, 1.6, 0]);
+    this.position = new Float32Array([0, 2.0, 0]);
     this.yaw = 0;
     this.pitch = 0;
     this.moveSpeed = 4.5;
