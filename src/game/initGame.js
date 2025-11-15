@@ -1001,7 +1001,7 @@ export async function initializeGame({
         colorAttachments: [
           {
             view: textureView,
-            clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+            clearValue: { r: 0.05, g: 0.06, b: 0.08, a: 1.0 },
             loadOp: 'clear',
             storeOp: 'store'
           }
