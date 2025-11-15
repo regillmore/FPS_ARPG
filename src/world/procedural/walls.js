@@ -60,6 +60,14 @@ export function buildDoorwayAlongX(
   const halfThickness = thickness * 0.5;
   const minX = wallX - halfThickness;
   const maxX = wallX + halfThickness;
+  const wallTopY = baseY + height;
+  const doorwayTopY = Math.min(baseY + doorHeight, wallTopY);
+  const availableAboveDoor = Math.max(0, wallTopY - doorwayTopY);
+  const frameDepth = Math.min(Math.max(doorWidth * 0.05, 0.05), halfOpening * 0.5);
+  const headerThickness = Math.min(Math.max(doorHeight * 0.06, 0.05), availableAboveDoor);
+  const headerTopY = doorwayTopY + headerThickness;
+  const hasHeader = headerThickness > 1e-5 && headerTopY > doorwayTopY + 1e-5;
+  const upperSectionMinY = hasHeader ? headerTopY : doorwayTopY;
 
   if (openingMin > minZ) {
     addBox(vertices, minX, baseY, minZ, maxX, baseY + height, openingMin, wallColor, bounds);
@@ -71,20 +79,62 @@ export function buildDoorwayAlongX(
     addCollider(colliders, minX, baseY, openingMax, maxX, baseY + height, maxZ);
   }
 
-  if (doorHeight < height - 1e-5) {
-    const doorwayMinY = baseY + doorHeight;
+  if (frameDepth > 1e-5) {
     addBox(
       vertices,
       minX,
-      doorwayMinY,
+      baseY,
       openingMin,
       maxX,
-      baseY + height,
+      doorwayTopY,
+      openingMin + frameDepth,
+      accentColor,
+      bounds
+    );
+    addBox(
+      vertices,
+      minX,
+      baseY,
+      openingMax - frameDepth,
+      maxX,
+      doorwayTopY,
       openingMax,
       accentColor,
       bounds
     );
-    addCollider(colliders, minX, doorwayMinY, openingMin, maxX, baseY + height, openingMax);
+  }
+
+  if (doorHeight < height - 1e-5) {
+    if (hasHeader) {
+      const cappedHeaderTopY = Math.min(headerTopY, wallTopY);
+      addBox(
+        vertices,
+        minX,
+        doorwayTopY,
+        openingMin,
+        maxX,
+        cappedHeaderTopY,
+        openingMax,
+        accentColor,
+        bounds
+      );
+    }
+
+    if (upperSectionMinY < wallTopY - 1e-5) {
+      addBox(
+        vertices,
+        minX,
+        upperSectionMinY,
+        openingMin,
+        maxX,
+        wallTopY,
+        openingMax,
+        accentColor,
+        bounds
+      );
+    }
+
+    addCollider(colliders, minX, doorwayTopY, openingMin, maxX, wallTopY, openingMax);
   }
 }
 
@@ -110,6 +160,14 @@ export function buildDoorwayAlongZ(
   const halfThickness = thickness * 0.5;
   const minZ = wallZ - halfThickness;
   const maxZ = wallZ + halfThickness;
+  const wallTopY = baseY + height;
+  const doorwayTopY = Math.min(baseY + doorHeight, wallTopY);
+  const availableAboveDoor = Math.max(0, wallTopY - doorwayTopY);
+  const frameDepth = Math.min(Math.max(doorWidth * 0.05, 0.05), halfOpening * 0.5);
+  const headerThickness = Math.min(Math.max(doorHeight * 0.06, 0.05), availableAboveDoor);
+  const headerTopY = doorwayTopY + headerThickness;
+  const hasHeader = headerThickness > 1e-5 && headerTopY > doorwayTopY + 1e-5;
+  const upperSectionMinY = hasHeader ? headerTopY : doorwayTopY;
 
   if (openingMin > minX) {
     addBox(vertices, minX, baseY, minZ, openingMin, baseY + height, maxZ, wallColor, bounds);
@@ -121,19 +179,61 @@ export function buildDoorwayAlongZ(
     addCollider(colliders, openingMax, baseY, minZ, maxX, baseY + height, maxZ);
   }
 
-  if (doorHeight < height - 1e-5) {
-    const doorwayMinY = baseY + doorHeight;
+  if (frameDepth > 1e-5) {
     addBox(
       vertices,
       openingMin,
-      doorwayMinY,
+      baseY,
       minZ,
-      openingMax,
-      baseY + height,
+      openingMin + frameDepth,
+      doorwayTopY,
       maxZ,
       accentColor,
       bounds
     );
-    addCollider(colliders, openingMin, doorwayMinY, minZ, openingMax, baseY + height, maxZ);
+    addBox(
+      vertices,
+      openingMax - frameDepth,
+      baseY,
+      minZ,
+      openingMax,
+      doorwayTopY,
+      maxZ,
+      accentColor,
+      bounds
+    );
+  }
+
+  if (doorHeight < height - 1e-5) {
+    if (hasHeader) {
+      const cappedHeaderTopY = Math.min(headerTopY, wallTopY);
+      addBox(
+        vertices,
+        openingMin,
+        doorwayTopY,
+        minZ,
+        openingMax,
+        cappedHeaderTopY,
+        maxZ,
+        accentColor,
+        bounds
+      );
+    }
+
+    if (upperSectionMinY < wallTopY - 1e-5) {
+      addBox(
+        vertices,
+        openingMin,
+        upperSectionMinY,
+        minZ,
+        openingMax,
+        wallTopY,
+        maxZ,
+        accentColor,
+        bounds
+      );
+    }
+
+    addCollider(colliders, openingMin, doorwayTopY, minZ, openingMax, wallTopY, maxZ);
   }
 }
