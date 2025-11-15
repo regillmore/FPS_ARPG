@@ -100,10 +100,10 @@ export function addCagedElectricWallLight(
   const maxHeight = baseY + roomHeight - 0.35;
   const mountY = Math.min(maxHeight, Math.max(minHeight, baseY + roomHeight * 0.62));
 
-  const fixtureWidth = Math.min(roomSize * 0.38, 0.58);
-  const fixtureHeight = Math.min(roomHeight * 0.5, 0.74);
+  const fixtureWidth = Math.min(roomSize * 0.38, 1.0);
+  const fixtureHeight = Math.min(roomHeight * 0.5, 0.34);
   const basePlateDepth = Math.min(0.05, Math.max(0.025, wallThickness * 0.5));
-  const fixtureDepth = Math.max(basePlateDepth + 0.06, Math.min(0.22, wallThickness * 1.8 + 0.08));
+  const fixtureDepth = Math.max(basePlateDepth + 0.06, Math.min(0.12, wallThickness * 1.8 + 0.08));
 
   const halfWidth = fixtureWidth * 0.5;
   const halfHeight = fixtureHeight * 0.5;
@@ -131,12 +131,12 @@ export function addCagedElectricWallLight(
   );
 
   // Light core.
-  const coreWidth = fixtureWidth * 0.45;
+  const coreWidth = fixtureWidth * 0.75;
   const coreHeight = fixtureHeight * 0.38;
   const coreHalfWidth = coreWidth * 0.5;
   const coreHalfHeight = coreHeight * 0.5;
-  const coreMinZ = basePlateDepth + 0.012;
-  const coreMaxZ = coreMinZ + Math.min(fixtureDepth * 0.55, 0.12);
+  const coreMinZ = basePlateDepth + 0.005;
+  const coreMaxZ = coreMinZ + Math.min(fixtureDepth * 0.55, 0.005);
 
   addLocalBox(
     vertices,
