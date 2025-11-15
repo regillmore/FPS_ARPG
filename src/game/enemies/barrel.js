@@ -1,6 +1,6 @@
 import { mat4FromRotationTranslation } from '../../math.js';
 
-const FLOATS_PER_VERTEX = 9;
+const FLOATS_PER_VERTEX = 10;
 const SEGMENT_COUNT = 16;
 const BODY_RADIUS = 0.4;
 const BODY_HEIGHT = 1.05;
@@ -39,7 +39,8 @@ function pushVertex(target, position, normal, color) {
     normal[2],
     color[0],
     color[1],
-    color[2]
+    color[2],
+    0
   );
 }
 

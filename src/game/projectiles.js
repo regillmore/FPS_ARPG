@@ -1,7 +1,7 @@
 import { sweepAABB } from './collisions.js';
 
 const DEFAULT_MAX_PROJECTILES = 256;
-const FLOATS_PER_VERTEX = 9;
+const FLOATS_PER_VERTEX = 10;
 const VERTICES_PER_PROJECTILE = 36;
 const FLOATS_PER_PROJECTILE = VERTICES_PER_PROJECTILE * FLOATS_PER_VERTEX;
 const DEFAULT_PROJECTILE_SIZE = 0.075;
@@ -73,6 +73,7 @@ function writeVertex(target, offset, position, normal, color) {
   target[offset++] = color[0];
   target[offset++] = color[1];
   target[offset++] = color[2];
+  target[offset++] = 0;
   return offset;
 }
 

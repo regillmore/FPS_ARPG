@@ -7,6 +7,8 @@
  * for the shared prototype WebGPU pipeline.
  */
 
+const FLOATS_PER_VERTEX = 10;
+
 class WeaponDefinition {
   constructor({ id, displayName, description, stats, createGeometry, hudTheme }) {
     if (!id) {
@@ -76,7 +78,8 @@ function pushVertex(target, vertex, normal, color, bounds) {
     normal[2],
     color[0],
     color[1],
-    color[2]
+    color[2],
+    0
   );
 
   bounds.minX = Math.min(bounds.minX, x);
@@ -309,7 +312,7 @@ export function createWeaponGeometry(device, vertexData, bounds, options = {}) {
 
   return {
     vertexBuffer,
-    vertexCount: vertexData.length / 9,
+    vertexCount: vertexData.length / FLOATS_PER_VERTEX,
     bounds: { ...bounds }
   };
 }

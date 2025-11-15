@@ -1,6 +1,6 @@
 import { mat4FromRotationTranslation } from '../../math.js';
 
-const FLOATS_PER_VERTEX = 9;
+const FLOATS_PER_VERTEX = 10;
 const UNIT_X = new Float32Array([1, 0, 0]);
 const UNIT_Y = new Float32Array([0, 1, 0]);
 const UNIT_Z = new Float32Array([0, 0, 1]);
@@ -35,7 +35,8 @@ function pushVertex(target, position, normal, color) {
     normal[2],
     color[0],
     color[1],
-    color[2]
+    color[2],
+    0
   );
 }
 
