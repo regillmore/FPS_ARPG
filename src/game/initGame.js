@@ -218,6 +218,7 @@ export async function initializeGame({
     const uniformBindGroupLayout = pipeline.getBindGroupLayout(0);
     const roomSystem = createProceduralRoomSystem(device, { generationRadius: 5 });
     const roomColliders = roomSystem.getColliders();
+    const playerCollisionScratch = [];
     let roomVertexBuffer = roomSystem.getVertexBuffer();
     let roomVertexCount = roomSystem.getVertexCount();
     const bounds = roomSystem.getBounds();
@@ -599,7 +600,27 @@ export async function initializeGame({
         spawnProceduralBarrels();
       }
 
-      const collisionResult = resolvePlayerCollisions(controller.position, roomColliders);
+      playerCollisionScratch.length = 0;
+      if (roomColliders) {
+        for (let i = 0; i < roomColliders.length; i += 1) {
+          const collider = roomColliders[i];
+          if (collider) {
+            playerCollisionScratch.push(collider);
+          }
+        }
+      }
+
+      const dynamicHitBoxes = enemyManager.getHitBoxes();
+      if (dynamicHitBoxes) {
+        for (let i = 0; i < dynamicHitBoxes.length; i += 1) {
+          const bounds = dynamicHitBoxes[i]?.bounds ?? null;
+          if (bounds) {
+            playerCollisionScratch.push(bounds);
+          }
+        }
+      }
+
+      const collisionResult = resolvePlayerCollisions(controller.position, playerCollisionScratch);
 
       const horizontalPadding = Math.max(PLAYER_COLLISION_RADIUS, 0.25);
       const verticalPadding = Math.max(PLAYER_COLLISION_HALF_HEIGHT, 0.25);
