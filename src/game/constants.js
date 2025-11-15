@@ -34,7 +34,7 @@ export const PICKUP_PROMPT_FAILURE_DURATION = 2000;
 export const PICKUP_PROMPT_BLOCKED_COLOR = 'rgb(255, 188, 140)';
 export const PICKUP_PROMPT_FAILURE_COLOR = 'rgb(255, 128, 128)';
 
-export const UNIFORM_FLOAT_COUNT = 36 + MAX_LIGHTS * 8;
+export const UNIFORM_FLOAT_COUNT = 36 + MAX_LIGHTS * 12;
 export const UNIFORM_BYTE_LENGTH = UNIFORM_FLOAT_COUNT * 4;
 export const IDENTITY_MATRIX = new Float32Array([
   1, 0, 0, 0,

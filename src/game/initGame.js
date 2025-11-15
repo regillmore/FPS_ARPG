@@ -550,10 +550,21 @@ export async function initializeGame({
       const px = position?.[0] ?? 0;
       const py = position?.[1] ?? 0;
       const pz = position?.[2] ?? 0;
+      const playerLayerIndex =
+        typeof roomSystem.getLayerIndexForHeight === 'function'
+          ? roomSystem.getLayerIndexForHeight(py)
+          : null;
+      const hasPlayerLayer = Number.isFinite(playerLayerIndex);
 
       const considerLight = (light) => {
         if (!light || !light.position || !light.color) {
           return;
+        }
+        if (hasPlayerLayer) {
+          const lightLayerIndex = light.layerIndex;
+          if (Number.isFinite(lightLayerIndex) && lightLayerIndex !== playerLayerIndex) {
+            return;
+          }
         }
         const lp = light.position;
         const dx = lp[0] - px;
@@ -601,7 +612,7 @@ export async function initializeGame({
       const lightCount = Math.min(Array.isArray(lights) ? lights.length : 0, MAX_LIGHTS);
       target[35] = lightCount;
       for (let i = 0; i < MAX_LIGHTS; i += 1) {
-        const base = 36 + i * 8;
+        const base = 36 + i * 12;
         const light = i < lightCount ? lights[i] : null;
         if (light) {
           target[base + 0] = light.position[0];
@@ -612,8 +623,13 @@ export async function initializeGame({
           target[base + 5] = light.color[1];
           target[base + 6] = light.color[2];
           target[base + 7] = light.color[3] ?? 1.0;
+          const direction = light.direction;
+          target[base + 8] = direction ? direction[0] : 0;
+          target[base + 9] = direction ? direction[1] : 0;
+          target[base + 10] = direction ? direction[2] : 0;
+          target[base + 11] = direction ? direction[3] ?? 0 : 0;
         } else {
-          target.fill(0, base, base + 8);
+          target.fill(0, base, base + 12);
         }
       }
     };

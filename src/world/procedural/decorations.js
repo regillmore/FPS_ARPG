@@ -63,6 +63,7 @@ export function addCagedElectricWallLight(
   centerX,
   centerZ,
   baseY,
+  layerIndex,
   roomSize,
   roomHeight,
   wallThickness,
@@ -79,19 +80,26 @@ export function addCagedElectricWallLight(
 
   let mountX = centerX;
   let mountZ = centerZ;
+  let forwardX = 0;
+  let forwardY = 0;
+  let forwardZ = 0;
 
   switch (direction) {
     case 'north':
       mountZ = centerZ - halfRoom + wallThickness * 0.5 + epsilon;
+      forwardZ = 1;
       break;
     case 'south':
       mountZ = centerZ + halfRoom - wallThickness * 0.5 - epsilon;
+      forwardZ = -1;
       break;
     case 'west':
       mountX = centerX - halfRoom + wallThickness * 0.5 + epsilon;
+      forwardX = 1;
       break;
     case 'east':
       mountX = centerX + halfRoom - wallThickness * 0.5 - epsilon;
+      forwardX = -1;
       break;
     default:
       return;
@@ -304,7 +312,14 @@ export function addCagedElectricWallLight(
 
     lights.push({
       position: new Float32Array([lightX, mountY, lightZ, 1.0]),
-      color: new Float32Array([glowColor[0], glowColor[1], glowColor[2], 2.4])
+      color: new Float32Array([glowColor[0], glowColor[1], glowColor[2], 2.4]),
+      direction: new Float32Array([
+        forwardX,
+        forwardY,
+        forwardZ,
+        1.5
+      ]),
+      layerIndex
     });
   }
 }
