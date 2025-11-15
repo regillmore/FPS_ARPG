@@ -121,7 +121,14 @@ export function addCagedElectricWallLight(
   const steelColor = mixColors(accentColor, [0.18, 0.2, 0.22], 0.4);
   const warmLight = mixColors(accentColor, [1, 0.95, 0.82], 0.75);
   const highlight = mixColors(warmLight, [1, 1, 1], 0.35);
-  const glowColor = mixColors(warmLight, highlight, 0.6);
+  const lightColor = mixColors(warmLight, highlight, 0.6);
+
+  function createGlowColor(color, intensity) {
+    return [color[0], color[1], color[2], intensity];
+  }
+
+  const glowingCoreColor = createGlowColor(warmLight, 2.8);
+  const glowingHighlightColor = createGlowColor(highlight, 1.6);
 
   // Base plate mounted to the wall.
   addLocalBox(
@@ -161,7 +168,7 @@ export function addCagedElectricWallLight(
     coreHalfHeight,
     coreMinZ,
     coreMaxZ,
-    warmLight
+    glowingCoreColor
   );
 
   // Bright highlight towards the front.
@@ -181,7 +188,7 @@ export function addCagedElectricWallLight(
       coreHalfHeight * 0.9,
       highlightInset,
       highlightInset + highlightDepth,
-      highlight
+      glowingHighlightColor
     );
   }
 
@@ -312,7 +319,7 @@ export function addCagedElectricWallLight(
 
     lights.push({
       position: new Float32Array([lightX, mountY, lightZ, 1.0]),
-      color: new Float32Array([glowColor[0], glowColor[1], glowColor[2], 2.4]),
+      color: new Float32Array([lightColor[0], lightColor[1], lightColor[2], 2.4]),
       direction: new Float32Array([
         forwardX,
         forwardY,

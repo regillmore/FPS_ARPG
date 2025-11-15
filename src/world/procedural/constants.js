@@ -8,7 +8,7 @@ export const DEFAULT_GENERATION_RADIUS = 4;
 export const DEFAULT_VERTICAL_LAYER_PADDING = 2;
 export const DEFAULT_FLOOR_THICKNESS = 0.4;
 export const DEFAULT_FLOOR_OPENING_MARGIN_RATIO = 0.22;
-export const VERTEX_STRIDE = 9;
+export const VERTEX_STRIDE = 10;
 
 export const BASE_FLOOR_COLOR = [0.36, 0.36, 0.42];
 export const BASE_CEILING_COLOR = [0.3, 0.3, 0.34];

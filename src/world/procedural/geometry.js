@@ -12,6 +12,7 @@ export function extendBounds(bounds, point) {
 
 export function pushVertex(vertices, point, normal, color, bounds) {
   extendBounds(bounds, point);
+  const glow = Array.isArray(color) && color.length > 3 ? color[3] : 0;
   vertices.push(
     point[0],
     point[1],
@@ -21,7 +22,8 @@ export function pushVertex(vertices, point, normal, color, bounds) {
     normal[2],
     color[0],
     color[1],
-    color[2]
+    color[2],
+    glow
   );
 }
 
