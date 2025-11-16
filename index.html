@@ -330,6 +330,28 @@
               </label>
               <p class="diagnostics-card__note">Ambient lighting remains active even when light sources are muted.</p>
             </article>
+            <article class="diagnostics-card">
+              <header class="diagnostics-card__header">
+                <p class="diagnostics-card__eyebrow">Encounter Simulation</p>
+                <strong class="diagnostics-card__status" data-diagnostic-role="enemy-status">
+                  Enemy AI and rendering are active.
+                </strong>
+              </header>
+              <p>
+                Temporarily freeze enemy logic, collision volumes, and rendering to profile player systems or level scripts
+                without combat pressure.
+              </p>
+              <label class="diagnostics-toggle">
+                <input type="checkbox" data-diagnostic-control="disable-enemies" />
+                <span class="diagnostics-toggle__control">
+                  <span class="diagnostics-toggle__track" aria-hidden="true">
+                    <span class="diagnostics-toggle__thumb"></span>
+                  </span>
+                  <span class="diagnostics-toggle__label">Disable enemies</span>
+                </span>
+              </label>
+              <p class="diagnostics-card__note">Pickups and scripted encounters remain available while enemies are muted.</p>
+            </article>
           </div>
         </section>
         <section class="pause-menu__panel" role="tabpanel" id="panel-achievements" aria-labelledby="tab-achievements" data-tab="achievements" hidden>

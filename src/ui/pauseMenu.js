@@ -65,12 +65,15 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   };
 
   const diagnosticsState = {
-    disableLights: false
+    disableLights: false,
+    disableEnemies: false
   };
 
   const diagnosticsElements = {
     disableLightsToggle: pauseMenu.querySelector('[data-diagnostic-control="disable-lights"]'),
-    lightingStatus: pauseMenu.querySelector('[data-diagnostic-role="lighting-status"]')
+    disableEnemiesToggle: pauseMenu.querySelector('[data-diagnostic-control="disable-enemies"]'),
+    lightingStatus: pauseMenu.querySelector('[data-diagnostic-role="lighting-status"]'),
+    enemyStatus: pauseMenu.querySelector('[data-diagnostic-role="enemy-status"]')
   };
 
   for (const slot of itemSlots) {
@@ -178,10 +181,18 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     if (diagnosticsElements.disableLightsToggle) {
       diagnosticsElements.disableLightsToggle.checked = Boolean(diagnosticsState.disableLights);
     }
+    if (diagnosticsElements.disableEnemiesToggle) {
+      diagnosticsElements.disableEnemiesToggle.checked = Boolean(diagnosticsState.disableEnemies);
+    }
     if (diagnosticsElements.lightingStatus) {
       diagnosticsElements.lightingStatus.textContent = diagnosticsState.disableLights
         ? 'Dynamic light sources are disabled.'
         : 'Dynamic light sources are enabled.';
+    }
+    if (diagnosticsElements.enemyStatus) {
+      diagnosticsElements.enemyStatus.textContent = diagnosticsState.disableEnemies
+        ? 'Enemy AI, collision, and rendering are muted.'
+        : 'Enemy AI and rendering are active.';
     }
   }
 
@@ -1033,6 +1044,12 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
 
   diagnosticsElements.disableLightsToggle?.addEventListener('change', (event) => {
     diagnosticsState.disableLights = Boolean(event.currentTarget?.checked);
+    updateDiagnosticsUi();
+    emitDiagnosticsChange();
+  });
+
+  diagnosticsElements.disableEnemiesToggle?.addEventListener('change', (event) => {
+    diagnosticsState.disableEnemies = Boolean(event.currentTarget?.checked);
     updateDiagnosticsUi();
     emitDiagnosticsChange();
   });
