@@ -94,6 +94,36 @@ export function createProceduralRoomSystem(device, options = {}) {
   const pendingBarrelSpawns = [];
   const decorativeLights = [];
 
+  function normalizeSpawnPosition(position) {
+    if (!position || typeof position !== 'object') {
+      return null;
+    }
+    const source = Array.isArray(position) || ArrayBuffer.isView(position) ? position : null;
+    if (!source) {
+      return null;
+    }
+    const px = Number(source[0]);
+    const py = Number(source[1]);
+    const pz = Number(source[2]);
+    if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
+      return null;
+    }
+    return [px, py, pz];
+  }
+
+  function scheduleBarrelSpawnPoint(spawn) {
+    if (!spawn) {
+      return false;
+    }
+    const normalizedPosition = normalizeSpawnPosition(spawn.position ?? spawn);
+    if (!normalizedPosition) {
+      return false;
+    }
+    const key = typeof spawn.key === 'string' ? spawn.key : spawn.key ? String(spawn.key) : '';
+    pendingBarrelSpawns.push({ key, position: normalizedPosition });
+    return true;
+  }
+
   function getCellKey(x, z) {
     return `${x},${z}`;
   }
@@ -238,7 +268,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     for (let i = 0; i < offsets.length; i += 1) {
       const [offsetX, offsetZ] = offsets[i];
       const position = [centerX + offsetX, baseY, centerZ + offsetZ];
-      pendingBarrelSpawns.push({ key: roomKey, position });
+      scheduleBarrelSpawnPoint({ key: roomKey, position });
     }
   }
 
@@ -353,7 +383,6 @@ export function createProceduralRoomSystem(device, options = {}) {
   function buildGeometryForCenter(cx, cz) {
     const vertices = [];
     decorativeLights.length = 0;
-    pendingBarrelSpawns.length = 0;
     resetBounds();
     colliders.length = 0;
 
@@ -824,6 +853,7 @@ export function createProceduralRoomSystem(device, options = {}) {
       }
       return pendingBarrelSpawns.splice(0, pendingBarrelSpawns.length);
     },
+    scheduleBarrelSpawnPoint,
     dispose: () => {
       if (vertexBuffer) {
         vertexBuffer.destroy();
