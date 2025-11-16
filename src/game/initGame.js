@@ -507,6 +507,15 @@ export async function initializeGame({
     const weaponUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
     const lightSelectionScratch = [];
     const activeLightsScratch = [];
+    const initialDiagnostics =
+      typeof pauseControls?.getDiagnosticsState === 'function'
+        ? pauseControls.getDiagnosticsState()
+        : null;
+    let disableDynamicLights = Boolean(initialDiagnostics?.disableLights);
+
+    window.addEventListener('game-diagnostics-change', (event) => {
+      disableDynamicLights = Boolean(event?.detail?.disableLights);
+    });
 
     const ensureRenderableUniformResources = (entity) => {
       if (!entity || entity.uniformBuffer) {
@@ -550,6 +559,10 @@ export async function initializeGame({
     const gatherActiveLights = (position, target) => {
       lightSelectionScratch.length = 0;
       target.length = 0;
+
+      if (disableDynamicLights) {
+        return target;
+      }
 
       const px = position?.[0] ?? 0;
       const py = position?.[1] ?? 0;

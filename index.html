@@ -23,6 +23,7 @@
         <button class="pause-menu__tab is-active" role="tab" id="tab-stats" aria-selected="true" aria-controls="panel-stats" data-tab="stats">Player Stats</button>
         <button class="pause-menu__tab" role="tab" id="tab-inventory" aria-selected="false" aria-controls="panel-inventory" data-tab="inventory" tabindex="-1">Inventory</button>
         <button class="pause-menu__tab" role="tab" id="tab-bestiary" aria-selected="false" aria-controls="panel-bestiary" data-tab="bestiary" tabindex="-1">Bestiary</button>
+        <button class="pause-menu__tab" role="tab" id="tab-diagnostics" aria-selected="false" aria-controls="panel-diagnostics" data-tab="diagnostics" tabindex="-1">Diagnostics</button>
         <button class="pause-menu__tab" role="tab" id="tab-achievements" aria-selected="false" aria-controls="panel-achievements" data-tab="achievements" tabindex="-1">Achievements</button>
       </div>
       <div class="pause-menu__content">
@@ -293,6 +294,41 @@
               </header>
               <p class="bestiary-detail__summary" data-bestiary-role="detail-summary" hidden></p>
               <dl class="bestiary-detail__traits" data-bestiary-role="detail-traits" hidden></dl>
+            </article>
+          </div>
+        </section>
+        <section
+          class="pause-menu__panel"
+          role="tabpanel"
+          id="panel-diagnostics"
+          aria-labelledby="tab-diagnostics"
+          data-tab="diagnostics"
+          hidden
+        >
+          <h3>Game Diagnostics</h3>
+          <p>Inspect live rendering data and temporarily toggle expensive systems while the game is paused.</p>
+          <div class="diagnostics-grid">
+            <article class="diagnostics-card">
+              <header class="diagnostics-card__header">
+                <p class="diagnostics-card__eyebrow">Lighting Pipeline</p>
+                <strong class="diagnostics-card__status" data-diagnostic-role="lighting-status">
+                  Dynamic light sources are enabled.
+                </strong>
+              </header>
+              <p>
+                Switch the clustered light buffer on or off to isolate shading bugs, geometry artefacts, or performance issues
+                introduced by emissive props.
+              </p>
+              <label class="diagnostics-toggle">
+                <input type="checkbox" data-diagnostic-control="disable-lights" />
+                <span class="diagnostics-toggle__control">
+                  <span class="diagnostics-toggle__track" aria-hidden="true">
+                    <span class="diagnostics-toggle__thumb"></span>
+                  </span>
+                  <span class="diagnostics-toggle__label">Disable dynamic light sources</span>
+                </span>
+              </label>
+              <p class="diagnostics-card__note">Ambient lighting remains active even when light sources are muted.</p>
             </article>
           </div>
         </section>

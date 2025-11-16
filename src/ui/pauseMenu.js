@@ -64,6 +64,15 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     activeId: ''
   };
 
+  const diagnosticsState = {
+    disableLights: false
+  };
+
+  const diagnosticsElements = {
+    disableLightsToggle: pauseMenu.querySelector('[data-diagnostic-control="disable-lights"]'),
+    lightingStatus: pauseMenu.querySelector('[data-diagnostic-role="lighting-status"]')
+  };
+
   for (const slot of itemSlots) {
     if (!slot.dataset.itemAbbr) {
       continue;
@@ -151,6 +160,28 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     } else {
       element.textContent = '';
       element.hidden = true;
+    }
+  }
+
+  function emitDiagnosticsChange() {
+    if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
+      return;
+    }
+    window.dispatchEvent(
+      new CustomEvent('game-diagnostics-change', {
+        detail: { ...diagnosticsState }
+      })
+    );
+  }
+
+  function updateDiagnosticsUi() {
+    if (diagnosticsElements.disableLightsToggle) {
+      diagnosticsElements.disableLightsToggle.checked = Boolean(diagnosticsState.disableLights);
+    }
+    if (diagnosticsElements.lightingStatus) {
+      diagnosticsElements.lightingStatus.textContent = diagnosticsState.disableLights
+        ? 'Dynamic light sources are disabled.'
+        : 'Dynamic light sources are enabled.';
     }
   }
 
@@ -998,6 +1029,13 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
 
   updatePlayerStats();
   updateExperienceCard(experienceState);
+  updateDiagnosticsUi();
+
+  diagnosticsElements.disableLightsToggle?.addEventListener('change', (event) => {
+    diagnosticsState.disableLights = Boolean(event.currentTarget?.checked);
+    updateDiagnosticsUi();
+    emitDiagnosticsChange();
+  });
 
   function setPaused(next) {
     if (paused === next) {
@@ -1081,6 +1119,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     setExperience(state) {
       setExperienceState(state);
     },
-    isPaused: () => paused
+    isPaused: () => paused,
+    getDiagnosticsState: () => ({ ...diagnosticsState })
   };
 }

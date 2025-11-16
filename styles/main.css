@@ -400,6 +400,113 @@ canvas {
   color: rgba(200, 210, 240, 0.7);
 }
 
+.diagnostics-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .diagnostics-grid {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+}
+
+.diagnostics-card {
+  padding: 1rem;
+  border-radius: 0.9rem;
+  background: rgba(6, 10, 18, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 0.6rem;
+  color: #e6ebff;
+}
+
+.diagnostics-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.diagnostics-card__eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.diagnostics-card__status {
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  color: rgba(150, 196, 255, 0.95);
+}
+
+.diagnostics-card__note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.diagnostics-toggle {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  cursor: pointer;
+  color: #f5f8ff;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.diagnostics-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.diagnostics-toggle__control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.diagnostics-toggle__track {
+  width: 48px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  transition: background 140ms ease;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.diagnostics-toggle__thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+  transform: translateX(0);
+  transition: transform 140ms ease;
+}
+
+.diagnostics-toggle input:checked + .diagnostics-toggle__control .diagnostics-toggle__track {
+  background: rgba(138, 180, 255, 0.65);
+  box-shadow: inset 0 0 0 1px rgba(138, 180, 255, 0.45);
+}
+
+.diagnostics-toggle input:checked + .diagnostics-toggle__control .diagnostics-toggle__thumb {
+  transform: translateX(20px);
+}
+
+.diagnostics-toggle__label {
+  font-size: 0.9rem;
+}
+
 .achievement-list {
   display: grid;
   gap: 0.75rem;
