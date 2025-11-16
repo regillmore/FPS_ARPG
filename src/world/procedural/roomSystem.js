@@ -16,7 +16,9 @@ import { createCellProfile, createEdgeKey, determineEdgeType } from './profile.j
 import {
   addFloorSlab,
   addHorizontalSection,
-  addSlabColliders
+  addSlabColliders,
+  addBox,
+  addCollider
 } from './geometry.js';
 import { addCagedElectricWallLight } from './decorations.js';
 import {
@@ -30,6 +32,13 @@ import {
   buildSolidWallAlongX,
   buildSolidWallAlongZ
 } from './walls.js';
+
+const directionOffsets = {
+  north: [0, -1],
+  south: [0, 1],
+  east: [1, 0],
+  west: [-1, 0]
+};
 
 export function createProceduralRoomSystem(device, options = {}) {
   const roomSize = options.roomSize ?? DEFAULT_ROOM_SIZE;
@@ -175,7 +184,8 @@ export function createProceduralRoomSystem(device, options = {}) {
       north: edges.north ?? null,
       south: edges.south ?? null,
       east: edges.east ?? null,
-      west: edges.west ?? null
+      west: edges.west ?? null,
+      roomType: edges.roomType ?? null
     };
   }
 
@@ -188,7 +198,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
     let edges = perLayer.get(layerIndex);
     if (!edges) {
-      edges = { north: null, south: null, east: null, west: null };
+      edges = { north: null, south: null, east: null, west: null, roomType: null };
       perLayer.set(layerIndex, edges);
     }
     return edges;
@@ -380,6 +390,105 @@ export function createProceduralRoomSystem(device, options = {}) {
     vertexCount = vertexArray.length / VERTEX_STRIDE;
   }
 
+  function addHallwayBridge(
+    vertices,
+    orientation,
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    baseY,
+    roomHeight,
+    corridorWidth,
+    wallThickness,
+    floorColor,
+    wallColor,
+    accentColor,
+    bounds,
+    colliders
+  ) {
+    const length = orientation === 'x' ? maxX - minX : maxZ - minZ;
+    const availableWidth = orientation === 'x' ? maxZ - minZ : maxX - minX;
+    if (length <= 0 || availableWidth <= 0) {
+      return;
+    }
+
+    const clampedWidth = Math.min(Math.max(corridorWidth, 0.5), availableWidth * 0.9);
+    const sideSpace = Math.max(availableWidth - clampedWidth, 0);
+    const sideThickness = Math.min(Math.max(sideSpace * 0.5, 0), wallThickness * 0.85);
+    const halfWidth = clampedWidth * 0.5;
+    const centerX = (minX + maxX) * 0.5;
+    const centerZ = (minZ + maxZ) * 0.5;
+    const floorMinY = baseY;
+    const floorMaxY = floorMinY + Math.min(0.12, roomHeight * 0.05);
+    const wallTopY = Math.min(baseY + roomHeight * 0.66, baseY + roomHeight - 0.2);
+    const capMinY = wallTopY;
+    const capMaxY = Math.min(capMinY + Math.min(roomHeight * 0.1, 0.3), baseY + roomHeight);
+    const walkwayColor = mixColors(floorColor, accentColor, 0.4);
+    const sideColor = mixColors(wallColor, accentColor, 0.3);
+    const capColor = mixColors(wallColor, accentColor, 0.55);
+
+    if (orientation === 'x') {
+      const corridorMinZ = Math.max(minZ, centerZ - halfWidth);
+      const corridorMaxZ = Math.min(maxZ, centerZ + halfWidth);
+      addBox(vertices, minX, floorMinY, corridorMinZ, maxX, floorMaxY, corridorMaxZ, walkwayColor, bounds);
+
+      if (sideThickness > 1e-3) {
+        const leftThickness = Math.min(sideThickness, Math.max(0, corridorMinZ - minZ));
+        if (leftThickness > 1e-3) {
+          const leftMinZ = Math.max(minZ, corridorMinZ - leftThickness);
+          const leftMaxZ = Math.max(leftMinZ, corridorMinZ);
+          addBox(vertices, minX, baseY, leftMinZ, maxX, wallTopY, leftMaxZ, sideColor, bounds);
+          addCollider(colliders, minX, baseY, leftMinZ, maxX, wallTopY, leftMaxZ);
+        }
+
+        const rightThickness = Math.min(sideThickness, Math.max(0, maxZ - corridorMaxZ));
+        if (rightThickness > 1e-3) {
+          const rightMinZ = Math.min(corridorMaxZ, maxZ - rightThickness);
+          const rightMaxZ = Math.min(maxZ, corridorMaxZ + rightThickness);
+          addBox(vertices, minX, baseY, rightMinZ, maxX, wallTopY, rightMaxZ, sideColor, bounds);
+          addCollider(colliders, minX, baseY, rightMinZ, maxX, wallTopY, rightMaxZ);
+        }
+      }
+
+      const capInsetZ = 0; //Math.min(clampedWidth * 0.25, Math.max(clampedWidth * 0.15, 0.1));
+      const capMinZ = Math.min(corridorMaxZ, corridorMinZ + capInsetZ);
+      const capMaxZ = Math.max(capMinZ, corridorMaxZ - capInsetZ);
+      if (capMaxZ - capMinZ > 1e-3) {
+        addBox(vertices, minX, capMinY, capMinZ, maxX, capMaxY, capMaxZ, capColor, bounds);
+      }
+    } else {
+      const corridorMinX = Math.max(minX, centerX - halfWidth);
+      const corridorMaxX = Math.min(maxX, centerX + halfWidth);
+      addBox(vertices, corridorMinX, floorMinY, minZ, corridorMaxX, floorMaxY, maxZ, walkwayColor, bounds);
+
+      if (sideThickness > 1e-3) {
+        const leftThickness = Math.min(sideThickness, Math.max(0, corridorMinX - minX));
+        if (leftThickness > 1e-3) {
+          const leftMinX = Math.max(minX, corridorMinX - leftThickness);
+          const leftMaxX = Math.max(leftMinX, corridorMinX);
+          addBox(vertices, leftMinX, baseY, minZ, leftMaxX, wallTopY, maxZ, sideColor, bounds);
+          addCollider(colliders, leftMinX, baseY, minZ, leftMaxX, wallTopY, maxZ);
+        }
+
+        const rightThickness = Math.min(sideThickness, Math.max(0, maxX - corridorMaxX));
+        if (rightThickness > 1e-3) {
+          const rightMinX = Math.min(corridorMaxX, maxX - rightThickness);
+          const rightMaxX = Math.min(maxX, corridorMaxX + rightThickness);
+          addBox(vertices, rightMinX, baseY, minZ, rightMaxX, wallTopY, maxZ, sideColor, bounds);
+          addCollider(colliders, rightMinX, baseY, minZ, rightMaxX, wallTopY, maxZ);
+        }
+      }
+
+      const capInsetX = 0; //Math.min(clampedWidth * 0.25, Math.max(clampedWidth * 0.15, 0.1));
+      const capMinX = Math.min(corridorMaxX, corridorMinX + capInsetX);
+      const capMaxX = Math.max(capMinX, corridorMaxX - capInsetX);
+      if (capMaxX - capMinX > 1e-3) {
+        addBox(vertices, capMinX, capMinY, minZ, capMaxX, capMaxY, maxZ, capColor, bounds);
+      }
+    }
+  }
+
   function buildGeometryForCenter(cx, cz) {
     const vertices = [];
     decorativeLights.length = 0;
@@ -552,10 +661,12 @@ export function createProceduralRoomSystem(device, options = {}) {
             layerIndex < maxActiveLayer && verticalOpeningStates
               ? verticalOpeningStates.get(layerIndex + 1) ?? false
               : false;
+          const hasVerticalOpeningFromAbove = Boolean(openCeiling);
           const isTopLayer = layerIndex === maxActiveLayer;
           const profile = profilePerLayer.get(layerIndex);
 
           const edges = getCellEdgesForLayer(layerIndex, gx, gz);
+          let hallwayOrientation = null;
           if (edges) {
             const entries = [
               ['north', edges.north],
@@ -603,6 +714,74 @@ export function createProceduralRoomSystem(device, options = {}) {
                 decorativeLights
               );
             }
+          }
+
+          if (edges) {
+            const seedForLayer = getLayerSeed(layerIndex);
+            const hasOpenEdge =
+              edges.north === 'open' ||
+              edges.south === 'open' ||
+              edges.east === 'open' ||
+              edges.west === 'open';
+
+            function hasDoubleDoor(direction) {
+              if (edges[direction] !== 'doorway') {
+                return false;
+              }
+              const offset = directionOffsets[direction];
+              if (!offset) {
+                return false;
+              }
+              const nx = gx + offset[0];
+              const nz = gz + offset[1];
+              return randomFloatForEdge(gx, gz, nx, nz, 29, seedForLayer) < 0.5;
+            }
+
+            if (!hasOpenEdge) {
+              const doubleNorth = hasDoubleDoor('north');
+              const doubleSouth = hasDoubleDoor('south');
+              const doubleEast = hasDoubleDoor('east');
+              const doubleWest = hasDoubleDoor('west');
+
+              if (
+                doubleNorth &&
+                doubleSouth &&
+                edges.east === 'solid' &&
+                edges.west === 'solid'
+              ) {
+                hallwayOrientation = 'z';
+              } else if (
+                doubleEast &&
+                doubleWest &&
+                edges.north === 'solid' &&
+                edges.south === 'solid'
+              ) {
+                hallwayOrientation = 'x';
+              }
+            }
+          }
+
+          if (hallwayOrientation && !hasVerticalOpeningFromAbove) {
+            addHallwayBridge(
+              vertices,
+              hallwayOrientation,
+              minX,
+              maxX,
+              minZ,
+              maxZ,
+              baseY,
+              roomHeight,
+              doubleDoorWidth * 1.1,
+              wallThickness,
+              profile.floorColor,
+              profile.wallColor,
+              profile.accentColor,
+              bounds,
+              colliders
+            );
+            edges.roomType = 'hallwayBridge';
+          } else if (edges.roomType === 'hallwayBridge') {
+            edges.roomType = null;
           }
 
           addFloorSlab(
@@ -735,7 +914,8 @@ export function createProceduralRoomSystem(device, options = {}) {
           verticalOpening:
             verticalOpeningStates && verticalOpeningStates instanceof Map
               ? verticalOpeningStates.get(layerIndex) ?? false
-              : false
+              : false,
+          roomType: edges.roomType ?? null
         });
       }
     }
