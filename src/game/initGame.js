@@ -227,6 +227,21 @@ function extendBoundsWith(target, source) {
   }
 }
 
+function resolvePortalPoint(value, fallback) {
+  const source =
+    (Array.isArray(value) || ArrayBuffer.isView(value)) && value.length >= 3
+      ? value
+      : fallback;
+  const px = Number(source?.[0]);
+  const py = Number(source?.[1]);
+  const pz = Number(source?.[2]);
+  return new Float32Array([
+    Number.isFinite(px) ? px : fallback[0],
+    Number.isFinite(py) ? py : fallback[1],
+    Number.isFinite(pz) ? pz : fallback[2]
+  ]);
+}
+
 function normalizePortalVector(value, fallback) {
   const source =
     (Array.isArray(value) || ArrayBuffer.isView(value)) && value.length >= 3
@@ -275,7 +290,7 @@ function createPortalTravelSystem(portalDefinitions, controller) {
     if (!definition || !definition.id) {
       continue;
     }
-    const center = normalizePortalVector(definition.center, [0, 0, 0]);
+    const center = resolvePortalPoint(definition.center, [0, 0, 0]);
     const normal = normalizePortalVector(definition.normal ?? [0, 0, 1], [0, 0, 1]);
     const up = normalizePortalVector(definition.up ?? WORLD_UP, WORLD_UP);
     let right = definition.right
