@@ -31,7 +31,7 @@ import {
 } from './constants.js';
 import { blendWithWhite, floatColorToCss } from './ui/colorUtils.js';
 
-const PLAYER_COLLISION_RADIUS = 0.25;
+const PLAYER_COLLISION_RADIUS = 0.4;
 const PLAYER_COLLISION_HALF_HEIGHT = 1.0;
 const PLAYER_COLLISION_ITERATIONS = 6;
 

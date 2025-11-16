@@ -1,7 +1,7 @@
 export const DEFAULT_ROOM_SIZE = 10;
 export const DEFAULT_ROOM_HEIGHT = 4;
 export const DEFAULT_DOOR_HEIGHT = 2.5;
-export const DEFAULT_DOOR_WIDTH = 1.0;
+export const DEFAULT_DOOR_WIDTH = 1.2;
 export const DEFAULT_DOUBLE_DOOR_WIDTH = DEFAULT_DOOR_WIDTH * 2;
 export const DEFAULT_WALL_THICKNESS = 0.35;
 export const DEFAULT_GENERATION_RADIUS = 4;
