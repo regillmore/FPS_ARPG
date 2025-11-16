@@ -1,5 +1,6 @@
 import { createTargetDummy } from './targetDummy.js';
 import { createBarrel } from './barrel.js';
+import { createSecurityCamera } from './securityCamera.js';
 
 export function createEnemyManager(device, managerOptions = {}) {
   if (!device) {
@@ -95,6 +96,59 @@ export function createEnemyManager(device, managerOptions = {}) {
     return addEnemy(barrel);
   }
 
+  function spawnSecurityCamera(options) {
+    const { onDeath: userOnDeath, onDamaged: userOnDamaged, experienceReward, ...rest } = options ?? {};
+    let camera = null;
+    const rewardXp = Number.isFinite(experienceReward) ? Number(experienceReward) : 45;
+
+    const enemyOptions = {
+      ...rest,
+      onDeath(details) {
+        if (typeof userOnDeath === 'function') {
+          try {
+            userOnDeath(details);
+          } catch (error) {
+            console.error('Error while handling security camera death callback:', error);
+          }
+        }
+        removeEnemy(camera);
+        if (onEnemyDeath) {
+          try {
+            onEnemyDeath({
+              enemy: camera,
+              experienceReward: rewardXp,
+              context: details?.context ?? null
+            });
+          } catch (error) {
+            console.error('Error while handling global enemy death callback:', error);
+          }
+        }
+      },
+      onDamaged(details) {
+        if (typeof userOnDamaged === 'function') {
+          try {
+            userOnDamaged(details);
+          } catch (error) {
+            console.error('Error while handling security camera damage callback:', error);
+          }
+        }
+        if (onEnemyDamaged) {
+          try {
+            onEnemyDamaged(details);
+          } catch (error) {
+            console.error('Error while handling global enemy damage callback:', error);
+          }
+        }
+      }
+    };
+
+    camera = createSecurityCamera(device, enemyOptions);
+    if (camera) {
+      camera.experienceReward = rewardXp;
+    }
+    return addEnemy(camera);
+  }
+
   function update(deltaTime) {
     for (let i = enemies.length - 1; i >= 0; i -= 1) {
       const enemy = enemies[i];
@@ -180,6 +234,7 @@ export function createEnemyManager(device, managerOptions = {}) {
   return {
     spawnTargetDummy,
     spawnBarrel,
+    spawnSecurityCamera,
     update,
     getEnemies,
     getHitBoxes,

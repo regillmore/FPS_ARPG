@@ -248,11 +248,11 @@ export async function initializeGame({
     };
 
     const requeueProceduralEnemy = (enemy) => {
-      if (!enemy || typeof roomSystem.scheduleBarrelSpawnPoint !== 'function') {
+      if (!enemy) {
         return;
       }
       const spawnContext = enemy.spawnContext ?? null;
-      if (!spawnContext || spawnContext.type !== 'procedural-barrel') {
+      if (!spawnContext) {
         return;
       }
 
@@ -287,10 +287,25 @@ export async function initializeGame({
         return;
       }
 
-      roomSystem.scheduleBarrelSpawnPoint({
-        key: spawnContext.roomKey ?? '',
-        position
-      });
+      if (
+        spawnContext.type === 'procedural-barrel' &&
+        typeof roomSystem.scheduleBarrelSpawnPoint === 'function'
+      ) {
+        roomSystem.scheduleBarrelSpawnPoint({
+          key: spawnContext.roomKey ?? '',
+          position
+        });
+      } else if (
+        spawnContext.type === 'procedural-camera' &&
+        typeof roomSystem.scheduleCameraSpawnPoint === 'function'
+      ) {
+        roomSystem.scheduleCameraSpawnPoint({
+          key: spawnContext.roomKey ?? '',
+          position,
+          forward: spawnContext.forward ?? enemy.forward ?? [0, 0, -1],
+          up: spawnContext.up ?? enemy.up ?? [0, 1, 0]
+        });
+      }
     };
 
     const enemyManager = createEnemyManager(device, {
@@ -377,6 +392,7 @@ export async function initializeGame({
     enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
 
     let barrelBestiaryUnlocked = false;
+    let securityCameraBestiaryUnlocked = false;
 
     const spawnProceduralBarrels = () => {
       const spawns = roomSystem.consumeBarrelSpawnPoints();
@@ -424,7 +440,65 @@ export async function initializeGame({
       }
     };
 
+    const spawnProceduralCameras = () => {
+      if (typeof roomSystem.consumeCameraSpawnPoints !== 'function') {
+        return;
+      }
+
+      const spawns = roomSystem.consumeCameraSpawnPoints();
+      if (!spawns || spawns.length === 0) {
+        return;
+      }
+
+      for (const spawn of spawns) {
+        const position = clonePositionArray(spawn?.position);
+        if (!position) {
+          continue;
+        }
+
+        const shouldSpawnHere =
+          typeof roomSystem.isPositionWithinGenerationRadius === 'function'
+            ? roomSystem.isPositionWithinGenerationRadius(position)
+            : true;
+
+        if (!shouldSpawnHere) {
+          roomSystem.scheduleCameraSpawnPoint?.(spawn);
+          continue;
+        }
+
+        const forward = clonePositionArray(spawn?.forward) ?? [0, 0, -1];
+        const up = clonePositionArray(spawn?.up) ?? [0, 1, 0];
+
+        const camera = enemyManager.spawnSecurityCamera({
+          position,
+          forward,
+          up,
+          onDeath() {
+            if (!securityCameraBestiaryUnlocked) {
+              securityCameraBestiaryUnlocked = true;
+              window.dispatchEvent(
+                new CustomEvent('bestiary-unlock', {
+                  detail: { enemyType: 'security-camera' }
+                })
+              );
+            }
+          }
+        });
+
+        if (camera) {
+          camera.spawnContext = {
+            type: 'procedural-camera',
+            roomKey: spawn?.key ?? '',
+            position: clonePositionArray(position),
+            forward: clonePositionArray(forward),
+            up: clonePositionArray(up)
+          };
+        }
+      }
+    };
+
     spawnProceduralBarrels();
+    spawnProceduralCameras();
 
     worldItemManager.spawnPickup({
       id: 'pickup-field-medkit',
@@ -857,6 +931,7 @@ export async function initializeGame({
         roomVertexBuffer = roomSystem.getVertexBuffer();
         roomVertexCount = roomSystem.getVertexCount();
         spawnProceduralBarrels();
+        spawnProceduralCameras();
       }
 
       playerCollisionScratch.length = 0;
