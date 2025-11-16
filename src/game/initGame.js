@@ -240,6 +240,45 @@ export async function initializeGame({
             context: details?.context ?? null
           });
         }
+      },
+      shouldRetainEnemy: (enemy) => {
+        if (!enemy || typeof roomSystem.isPositionWithinGenerationRadius !== 'function') {
+          return true;
+        }
+
+        let position = enemy.position ?? null;
+        if (!position && enemy.bounds) {
+          const minX = Number(enemy.bounds.minX);
+          const maxX = Number(enemy.bounds.maxX);
+          const minY = Number(enemy.bounds.minY);
+          const maxY = Number(enemy.bounds.maxY);
+          const minZ = Number(enemy.bounds.minZ);
+          const maxZ = Number(enemy.bounds.maxZ);
+
+          if (
+            Number.isFinite(minX) &&
+            Number.isFinite(maxX) &&
+            Number.isFinite(minY) &&
+            Number.isFinite(maxY) &&
+            Number.isFinite(minZ) &&
+            Number.isFinite(maxZ)
+          ) {
+            position = [
+              (minX + maxX) * 0.5,
+              (minY + maxY) * 0.5,
+              (minZ + maxZ) * 0.5
+            ];
+          }
+        }
+
+        if (!position) {
+          return true;
+        }
+
+        return roomSystem.isPositionWithinGenerationRadius(position, {
+          horizontalPadding: 1,
+          verticalPadding: 0
+        });
       }
     });
 
