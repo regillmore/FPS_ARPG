@@ -245,7 +245,8 @@ export async function initializeGame({
 
     const projectileManager = createProjectileManager(device, {
       bounds,
-      getDynamicColliders: () => enemyManager.getHitBoxes(),
+      getDynamicColliders: () =>
+        disableEnemies ? [] : enemyManager.getHitBoxes(),
       getStaticColliders: () => roomColliders,
       onImpact: (impact) => {
         const size = Number.isFinite(impact.projectileSize)
