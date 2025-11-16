@@ -80,7 +80,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   };
 
   const optionsState = {
-    framerateCap: 60
+    framerateCap: 80
   };
 
   const optionsElements = {
