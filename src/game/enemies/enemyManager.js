@@ -12,6 +12,8 @@ export function createEnemyManager(device, managerOptions = {}) {
     typeof managerOptions.onEnemyDamaged === 'function' ? managerOptions.onEnemyDamaged : null;
   const onEnemyDeath =
     typeof managerOptions.onEnemyDeath === 'function' ? managerOptions.onEnemyDeath : null;
+  const shouldRetainEnemy =
+    typeof managerOptions.shouldRetainEnemy === 'function' ? managerOptions.shouldRetainEnemy : null;
 
   function addEnemy(enemy) {
     if (!enemy) {
@@ -94,8 +96,31 @@ export function createEnemyManager(device, managerOptions = {}) {
   }
 
   function update(deltaTime) {
-    for (const enemy of enemies) {
+    for (let i = enemies.length - 1; i >= 0; i -= 1) {
+      const enemy = enemies[i];
+      if (!enemy) {
+        enemies.splice(i, 1);
+        continue;
+      }
+
       enemy.update?.(deltaTime);
+
+      if (!shouldRetainEnemy) {
+        continue;
+      }
+
+      let retainEnemy = true;
+      try {
+        retainEnemy = shouldRetainEnemy(enemy) !== false;
+      } catch (error) {
+        console.error('Error while evaluating enemy retention callback:', error);
+        retainEnemy = true;
+      }
+
+      if (!retainEnemy) {
+        const [removed] = enemies.splice(i, 1);
+        removed?.destroy?.();
+      }
     }
   }
 

@@ -94,6 +94,36 @@ export function createProceduralRoomSystem(device, options = {}) {
   const pendingBarrelSpawns = [];
   const decorativeLights = [];
 
+  function normalizeSpawnPosition(position) {
+    if (!position || typeof position !== 'object') {
+      return null;
+    }
+    const source = Array.isArray(position) || ArrayBuffer.isView(position) ? position : null;
+    if (!source) {
+      return null;
+    }
+    const px = Number(source[0]);
+    const py = Number(source[1]);
+    const pz = Number(source[2]);
+    if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
+      return null;
+    }
+    return [px, py, pz];
+  }
+
+  function scheduleBarrelSpawnPoint(spawn) {
+    if (!spawn) {
+      return false;
+    }
+    const normalizedPosition = normalizeSpawnPosition(spawn.position ?? spawn);
+    if (!normalizedPosition) {
+      return false;
+    }
+    const key = typeof spawn.key === 'string' ? spawn.key : spawn.key ? String(spawn.key) : '';
+    pendingBarrelSpawns.push({ key, position: normalizedPosition });
+    return true;
+  }
+
   function getCellKey(x, z) {
     return `${x},${z}`;
   }
@@ -238,7 +268,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     for (let i = 0; i < offsets.length; i += 1) {
       const [offsetX, offsetZ] = offsets[i];
       const position = [centerX + offsetX, baseY, centerZ + offsetZ];
-      pendingBarrelSpawns.push({ key: roomKey, position });
+      scheduleBarrelSpawnPoint({ key: roomKey, position });
     }
   }
 
@@ -353,7 +383,6 @@ export function createProceduralRoomSystem(device, options = {}) {
   function buildGeometryForCenter(cx, cz) {
     const vertices = [];
     decorativeLights.length = 0;
-    pendingBarrelSpawns.length = 0;
     resetBounds();
     colliders.length = 0;
 
@@ -722,6 +751,51 @@ export function createProceduralRoomSystem(device, options = {}) {
     };
   }
 
+  function isPositionWithinGenerationRadius(position, options = {}) {
+    if (!position) {
+      return false;
+    }
+
+    const px = Number(position[0]);
+    const py = Number(position[1]);
+    const pz = Number(position[2]);
+
+    if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
+      return false;
+    }
+
+    const horizontalPaddingValue = Number(options.horizontalPadding);
+    const verticalPaddingValue = Number(options.verticalPadding);
+    const horizontalPadding = Number.isFinite(horizontalPaddingValue)
+      ? Math.max(0, Math.floor(horizontalPaddingValue))
+      : 0;
+    const verticalPadding = Number.isFinite(verticalPaddingValue)
+      ? Math.max(0, Math.floor(verticalPaddingValue))
+      : 0;
+
+    const effectiveRadius = generationRadius + horizontalPadding;
+    const cellX = positionToCell(px, roomSize, halfRoom);
+    const cellZ = positionToCell(pz, roomSize, halfRoom);
+    const layerIndex = positionToLayer(py, levelHeight, floorThickness);
+
+    if (Math.abs(cellX - centerCellX) > effectiveRadius) {
+      return false;
+    }
+
+    if (Math.abs(cellZ - centerCellZ) > effectiveRadius) {
+      return false;
+    }
+
+    const effectiveMinLayer = minActiveLayer - verticalPadding;
+    const effectiveMaxLayer = maxActiveLayer + verticalPadding;
+
+    if (layerIndex < effectiveMinLayer || layerIndex > effectiveMaxLayer) {
+      return false;
+    }
+
+    return true;
+  }
+
   function update(playerPosition) {
     const px = playerPosition?.[0] ?? 0;
     const py = playerPosition?.[1] ?? 0;
@@ -766,12 +840,20 @@ export function createProceduralRoomSystem(device, options = {}) {
     getLayerIndexForHeight,
     getMinimapSnapshot,
     getDecorativeLights: () => decorativeLights,
+    getGenerationRadius: () => generationRadius,
+    getActiveCenter: () => ({
+      cellX: centerCellX,
+      cellZ: centerCellZ,
+      layerIndex: centerLayerIndex
+    }),
+    isPositionWithinGenerationRadius,
     consumeBarrelSpawnPoints: () => {
       if (pendingBarrelSpawns.length === 0) {
         return [];
       }
       return pendingBarrelSpawns.splice(0, pendingBarrelSpawns.length);
     },
+    scheduleBarrelSpawnPoint,
     dispose: () => {
       if (vertexBuffer) {
         vertexBuffer.destroy();
