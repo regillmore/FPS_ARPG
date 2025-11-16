@@ -512,9 +512,11 @@ export async function initializeGame({
         ? pauseControls.getDiagnosticsState()
         : null;
     let disableDynamicLights = Boolean(initialDiagnostics?.disableLights);
+    let disableEnemies = Boolean(initialDiagnostics?.disableEnemies);
 
     window.addEventListener('game-diagnostics-change', (event) => {
       disableDynamicLights = Boolean(event?.detail?.disableLights);
+      disableEnemies = Boolean(event?.detail?.disableEnemies);
     });
 
     const ensureRenderableUniformResources = (entity) => {
@@ -694,7 +696,7 @@ export async function initializeGame({
         }
       }
 
-      const dynamicHitBoxes = enemyManager.getHitBoxes();
+      const dynamicHitBoxes = disableEnemies ? null : enemyManager.getHitBoxes();
       if (dynamicHitBoxes) {
         for (let i = 0; i < dynamicHitBoxes.length; i += 1) {
           const bounds = dynamicHitBoxes[i]?.bounds ?? null;
@@ -861,7 +863,9 @@ export async function initializeGame({
       if (!isPaused) {
         bulletHoleManager.update(deltaTime);
         projectileManager.update(deltaTime);
-        enemyManager.update(deltaTime);
+        if (!disableEnemies) {
+          enemyManager.update(deltaTime);
+        }
         if (primaryFireCooldown > 0) {
           primaryFireCooldown = Math.max(primaryFireCooldown - deltaTime, 0);
         }
@@ -917,7 +921,7 @@ export async function initializeGame({
             }
           };
 
-          const dynamicAimColliders = enemyManager.getHitBoxes?.();
+          const dynamicAimColliders = disableEnemies ? null : enemyManager.getHitBoxes?.();
           if (Array.isArray(dynamicAimColliders)) {
             for (let i = 0; i < dynamicAimColliders.length; i += 1) {
               const colliderBounds = dynamicAimColliders[i]?.bounds;
@@ -1077,7 +1081,7 @@ export async function initializeGame({
         }
       }
 
-      const enemies = enemyManager.getEnemies();
+      const enemies = disableEnemies ? [] : enemyManager.getEnemies();
       const viewportWidth = canvas.clientWidth ?? canvas.width;
       const viewportHeight = canvas.clientHeight ?? canvas.height;
 
