@@ -4,6 +4,7 @@ import { createHudController } from './game/ui/hudController.js';
 import { createOverlayController } from './game/ui/overlayController.js';
 import { createInventoryManager } from './game/inventory/inventoryManager.js';
 import { initializeGame } from './game/initGame.js';
+import { createFramerateDisplay } from './ui/framerateDisplay.js';
 
 async function main() {
   const canvas = document.getElementById('gfx');
@@ -11,6 +12,7 @@ async function main() {
   const pauseMenu = document.getElementById('pause-menu');
   const itemPopover = document.getElementById('item-detail-popover');
   const hudLayer = document.getElementById('hud');
+  const framerateDisplay = createFramerateDisplay();
 
   if (!canvas) {
     throw new Error('Failed to find the rendering canvas.');
@@ -34,7 +36,8 @@ async function main() {
     hudController,
     overlayController,
     experienceTracker,
-    inventoryManager
+    inventoryManager,
+    framerateDisplay
   });
 }
 

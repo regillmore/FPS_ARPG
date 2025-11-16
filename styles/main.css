@@ -27,6 +27,23 @@ html, body {
   line-height: 1.4;
 }
 
+.framerate-display {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  background: var(--overlay-bg);
+  padding: 0.4rem 0.65rem;
+  border-radius: 0.45rem;
+  font-size: clamp(0.75rem, 1vw, 0.95rem);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+  user-select: none;
+  z-index: 10;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
 #hud {
   position: fixed;
   inset: 0;
