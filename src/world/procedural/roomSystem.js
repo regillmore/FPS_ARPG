@@ -184,7 +184,8 @@ export function createProceduralRoomSystem(device, options = {}) {
       north: edges.north ?? null,
       south: edges.south ?? null,
       east: edges.east ?? null,
-      west: edges.west ?? null
+      west: edges.west ?? null,
+      roomType: edges.roomType ?? null
     };
   }
 
@@ -197,7 +198,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
     let edges = perLayer.get(layerIndex);
     if (!edges) {
-      edges = { north: null, south: null, east: null, west: null };
+      edges = { north: null, south: null, east: null, west: null, roomType: null };
       perLayer.set(layerIndex, edges);
     }
     return edges;
@@ -660,6 +661,7 @@ export function createProceduralRoomSystem(device, options = {}) {
             layerIndex < maxActiveLayer && verticalOpeningStates
               ? verticalOpeningStates.get(layerIndex + 1) ?? false
               : false;
+          const hasVerticalOpeningFromAbove = Boolean(openCeiling);
           const isTopLayer = layerIndex === maxActiveLayer;
           const profile = profilePerLayer.get(layerIndex);
 
@@ -759,7 +761,7 @@ export function createProceduralRoomSystem(device, options = {}) {
             }
           }
 
-          if (hallwayOrientation) {
+          if (hallwayOrientation && !hasVerticalOpeningFromAbove) {
             addHallwayBridge(
               vertices,
               hallwayOrientation,
@@ -777,6 +779,9 @@ export function createProceduralRoomSystem(device, options = {}) {
               bounds,
               colliders
             );
+            edges.roomType = 'hallwayBridge';
+          } else if (edges.roomType === 'hallwayBridge') {
+            edges.roomType = null;
           }
 
           addFloorSlab(
@@ -909,7 +914,8 @@ export function createProceduralRoomSystem(device, options = {}) {
           verticalOpening:
             verticalOpeningStates && verticalOpeningStates instanceof Map
               ? verticalOpeningStates.get(layerIndex) ?? false
-              : false
+              : false,
+          roomType: edges.roomType ?? null
         });
       }
     }

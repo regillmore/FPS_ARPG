@@ -3,6 +3,7 @@ const BASE_RING_STROKE = 'rgba(80, 110, 150, 0.4)';
 const HIGHLIGHT_RING_STROKE = 'rgba(130, 170, 220, 0.38)';
 const FLOOR_FILL = 'rgba(110, 150, 200, 0.08)';
 const PLAYER_CELL_FILL = 'rgba(160, 210, 255, 0.16)';
+const HALLWAY_BRIDGE_FILL = 'rgba(255, 190, 120, 0.25)';
 const GRID_STROKE = 'rgba(140, 175, 225, 0.18)';
 const WALL_COLOR = 'rgba(220, 230, 255, 0.9)';
 const DOOR_COLOR = 'rgba(135, 205, 255, 0.92)';
@@ -103,6 +104,7 @@ function drawCells(ctx, snapshot, transform, dpr) {
       continue;
     }
     const hasVerticalOpening = Boolean(cell?.verticalOpening);
+    const isHallwayBridge = cell?.roomType === 'hallwayBridge';
     const minX = cx * transform.cellSize - transform.halfCell;
     const maxX = cx * transform.cellSize + transform.halfCell;
     const minZ = cz * transform.cellSize - transform.halfCell;
@@ -119,7 +121,14 @@ function drawCells(ctx, snapshot, transform, dpr) {
     ctx.lineTo(bottomLeft.x, bottomLeft.y);
     ctx.closePath();
     const isPlayerCell = cx === playerCellX && cz === playerCellZ;
-    ctx.fillStyle = isPlayerCell ? PLAYER_CELL_FILL : FLOOR_FILL;
+    let fillStyle = FLOOR_FILL;
+    if (isHallwayBridge) {
+      fillStyle = HALLWAY_BRIDGE_FILL;
+    }
+    if (isPlayerCell) {
+      fillStyle = PLAYER_CELL_FILL;
+    }
+    ctx.fillStyle = fillStyle;
     ctx.fill();
     ctx.lineWidth = Math.max(1 * dpr, 0.8);
     ctx.strokeStyle = GRID_STROKE;
