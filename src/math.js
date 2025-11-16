@@ -144,3 +144,39 @@ export function mat4FromRotationTranslation(out, right, up, forward, translation
   out[15] = 1;
   return out;
 }
+
+export function mat4InvertRigidBody(out, matrix) {
+  const r00 = matrix[0];
+  const r01 = matrix[4];
+  const r02 = matrix[8];
+  const r10 = matrix[1];
+  const r11 = matrix[5];
+  const r12 = matrix[9];
+  const r20 = matrix[2];
+  const r21 = matrix[6];
+  const r22 = matrix[10];
+  const tx = matrix[12];
+  const ty = matrix[13];
+  const tz = matrix[14];
+
+  out[0] = r00;
+  out[1] = r01;
+  out[2] = r02;
+  out[3] = 0;
+
+  out[4] = r10;
+  out[5] = r11;
+  out[6] = r12;
+  out[7] = 0;
+
+  out[8] = r20;
+  out[9] = r21;
+  out[10] = r22;
+  out[11] = 0;
+
+  out[12] = -(r00 * tx + r01 * ty + r02 * tz);
+  out[13] = -(r10 * tx + r11 * ty + r12 * tz);
+  out[14] = -(r20 * tx + r21 * ty + r22 * tz);
+  out[15] = 1;
+  return out;
+}

@@ -9,6 +9,7 @@ import { createProjectileManager } from './projectiles.js';
 import { createBulletHoleManager } from './bulletHoles.js';
 import { traceRayAABB } from './collisions.js';
 import { createWorldItemManager } from './worldItems.js';
+import { createPortalSystem } from './portals/portalSystem.js';
 import {
   AMBIENT_LIGHT,
   DEFAULT_PROJECTILE_SETTINGS,
@@ -230,6 +231,7 @@ export async function initializeGame({
     let roomVertexCount = roomSystem.getVertexCount();
     const bounds = roomSystem.getBounds();
     const bulletHoleManager = createBulletHoleManager(device);
+    const portalSystem = createPortalSystem(device, { colorFormat: format, depthFormat });
     const clonePositionArray = (source) => {
       if (!source) {
         return null;
@@ -444,6 +446,23 @@ export async function initializeGame({
       }
     });
 
+    portalSystem.addPortalPair(
+      {
+        position: [1.75, 1.5, -1.0],
+        normal: [-1, 0, 0],
+        up: [0, 1, 0],
+        width: 1.6,
+        height: 2.8
+      },
+      {
+        position: [-2.25, 1.5, 3.75],
+        normal: [0, 0, 1],
+        up: [0, 1, 0],
+        width: 1.6,
+        height: 2.8
+      }
+    );
+
     const {
       primaryWeaponSlot,
       grantInventoryItem,
@@ -483,6 +502,8 @@ export async function initializeGame({
 
     const controller = new FirstPersonController(canvas);
     pauseControls?.setController?.(controller);
+    const playerPreviousPosition = new Float32Array(3);
+    playerPreviousPosition.set(controller.position);
 
     const handleInventoryDrop = (detail) => {
       if (!detail || !controller) {
@@ -638,6 +659,7 @@ export async function initializeGame({
     const weaponUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
     const lightSelectionScratch = [];
     const activeLightsScratch = [];
+    const portalLightsScratch = [];
     const initialDiagnostics =
       typeof pauseControls?.getDiagnosticsState === 'function'
         ? pauseControls.getDiagnosticsState()
@@ -789,6 +811,9 @@ export async function initializeGame({
       }
     };
 
+    const cameraForward = new Float32Array(3);
+    const cameraRight = new Float32Array(3);
+    const cameraUp = new Float32Array(3);
     const weaponForward = new Float32Array(3);
     const weaponRight = new Float32Array(3);
     const weaponUp = new Float32Array(3);
@@ -797,6 +822,100 @@ export async function initializeGame({
     const cameraAimPoint = new Float32Array(3);
     const projectileDirection = new Float32Array(3);
     const viewDirection = new Float32Array(3);
+
+    const drawScene = ({
+      passEncoder,
+      viewProjection,
+      activeLights,
+      drawWeapon,
+      drawPortals
+    }) => {
+      if (!passEncoder || !viewProjection) {
+        return;
+      }
+      const lights = Array.isArray(activeLights) ? activeLights : [];
+      writeUniformData(worldUniformData, viewProjection, IDENTITY_MATRIX, lights);
+      device.queue.writeBuffer(worldUniformBuffer, 0, worldUniformData);
+      passEncoder.setPipeline(pipeline);
+      passEncoder.setBindGroup(0, worldUniformBindGroup);
+      passEncoder.setVertexBuffer(0, roomVertexBuffer);
+      passEncoder.draw(roomVertexCount, 1, 0, 0);
+
+      if (Array.isArray(worldItems) && worldItems.length > 0) {
+        for (const item of worldItems) {
+          if (!item || !item.vertexBuffer || !item.vertexCount) {
+            continue;
+          }
+          ensureRenderableUniformResources(item);
+          if (!item.uniformBuffer || !item.uniformBindGroup || !item.uniformData) {
+            continue;
+          }
+          writeUniformData(
+            item.uniformData,
+            viewProjection,
+            item.modelMatrix ?? IDENTITY_MATRIX,
+            lights
+          );
+          device.queue.writeBuffer(item.uniformBuffer, 0, item.uniformData);
+          passEncoder.setBindGroup(0, item.uniformBindGroup);
+          passEncoder.setVertexBuffer(0, item.vertexBuffer);
+          passEncoder.draw(item.vertexCount, 1, 0, 0);
+        }
+        passEncoder.setBindGroup(0, worldUniformBindGroup);
+        passEncoder.setVertexBuffer(0, roomVertexBuffer);
+      }
+
+      if (enemies.length > 0) {
+        for (const enemy of enemies) {
+          if (!enemy || !enemy.vertexBuffer || !enemy.vertexCount) {
+            continue;
+          }
+          ensureRenderableUniformResources(enemy);
+          if (!enemy.uniformBuffer || !enemy.uniformBindGroup || !enemy.uniformData) {
+            continue;
+          }
+          writeUniformData(
+            enemy.uniformData,
+            viewProjection,
+            enemy.modelMatrix ?? IDENTITY_MATRIX,
+            lights
+          );
+          device.queue.writeBuffer(enemy.uniformBuffer, 0, enemy.uniformData);
+          passEncoder.setBindGroup(0, enemy.uniformBindGroup);
+          passEncoder.setVertexBuffer(0, enemy.vertexBuffer);
+          passEncoder.draw(enemy.vertexCount, 1, 0, 0);
+        }
+        passEncoder.setBindGroup(0, worldUniformBindGroup);
+        passEncoder.setVertexBuffer(0, roomVertexBuffer);
+      }
+
+      const bulletHoleVertexCount = bulletHoleManager.getVertexCount();
+      if (bulletHoleVertexCount > 0) {
+        passEncoder.setVertexBuffer(0, bulletHoleManager.getVertexBuffer());
+        passEncoder.draw(bulletHoleVertexCount, 1, 0, 0);
+      }
+
+      const projectileVertexCount = projectileManager.getVertexCount();
+      if (projectileVertexCount > 0) {
+        passEncoder.setVertexBuffer(0, projectileManager.getVertexBuffer());
+        passEncoder.draw(projectileVertexCount, 1, 0, 0);
+      }
+
+      if (drawPortals && portalSystem.hasPortals()) {
+        portalSystem.drawPortals(passEncoder, viewProjection);
+        passEncoder.setPipeline(pipeline);
+        passEncoder.setBindGroup(0, worldUniformBindGroup);
+      }
+
+      if (drawWeapon && weaponGeometry) {
+        writeUniformData(weaponUniformData, viewProjection, weaponModel, lights);
+        device.queue.writeBuffer(weaponUniformBuffer, 0, weaponUniformData);
+        passEncoder.setBindGroup(0, weaponUniformBindGroup);
+        passEncoder.setVertexBuffer(0, weaponGeometry.vertexBuffer);
+        passEncoder.draw(weaponGeometry.vertexCount, 1, 0, 0);
+        passEncoder.setBindGroup(0, worldUniformBindGroup);
+      }
+    };
 
     let lastTime = performance.now();
 
@@ -811,6 +930,7 @@ export async function initializeGame({
 
       hudController?.setReticleVisible?.(!isPaused && Boolean(equippedWeaponDefinition));
 
+      playerPreviousPosition.set(controller.position);
       if (!isPaused) {
         controller.update(deltaTime);
       }
@@ -874,6 +994,10 @@ export async function initializeGame({
         });
       }
 
+      if (portalSystem.updatePlayerTeleportation(controller, playerPreviousPosition)) {
+        playerPreviousPosition.set(controller.position);
+      }
+
       resize();
 
       const aspect = canvas.width / canvas.height;
@@ -886,20 +1010,50 @@ export async function initializeGame({
       mat4LookAt(view, eye, center, WORLD_UP);
       mat4Multiply(viewProj, projection, view);
 
+      const cosPitch = Math.cos(controller.pitch);
+      const sinPitch = Math.sin(controller.pitch);
+      const cosYaw = Math.cos(controller.yaw);
+      const sinYaw = Math.sin(controller.yaw);
+
+      cameraForward[0] = sinYaw * cosPitch;
+      cameraForward[1] = sinPitch;
+      cameraForward[2] = cosYaw * cosPitch;
+
+      cameraRight[0] = WORLD_UP[1] * cameraForward[2] - WORLD_UP[2] * cameraForward[1];
+      cameraRight[1] = WORLD_UP[2] * cameraForward[0] - WORLD_UP[0] * cameraForward[2];
+      cameraRight[2] = WORLD_UP[0] * cameraForward[1] - WORLD_UP[1] * cameraForward[0];
+
+      let rightLength = Math.hypot(cameraRight[0], cameraRight[1], cameraRight[2]);
+      if (rightLength < 1e-5) {
+        cameraRight[0] = 1;
+        cameraRight[1] = 0;
+        cameraRight[2] = 0;
+      } else {
+        cameraRight[0] /= rightLength;
+        cameraRight[1] /= rightLength;
+        cameraRight[2] /= rightLength;
+      }
+
+      cameraUp[0] = cameraForward[1] * cameraRight[2] - cameraForward[2] * cameraRight[1];
+      cameraUp[1] = cameraForward[2] * cameraRight[0] - cameraForward[0] * cameraRight[2];
+      cameraUp[2] = cameraForward[0] * cameraRight[1] - cameraForward[1] * cameraRight[0];
+
+      let upLength = Math.hypot(cameraUp[0], cameraUp[1], cameraUp[2]);
+      if (upLength < 1e-5) {
+        cameraUp[0] = WORLD_UP[0];
+        cameraUp[1] = WORLD_UP[1];
+        cameraUp[2] = WORLD_UP[2];
+      } else {
+        cameraUp[0] /= upLength;
+        cameraUp[1] /= upLength;
+        cameraUp[2] /= upLength;
+      }
+
       let weaponTransformReady = false;
       if (equippedWeaponDefinition) {
-        const cosPitch = Math.cos(controller.pitch);
-        const sinPitch = Math.sin(controller.pitch);
-        const cosYaw = Math.cos(controller.yaw);
-        const sinYaw = Math.sin(controller.yaw);
-
-        weaponForward[0] = sinYaw * cosPitch;
-        weaponForward[1] = sinPitch;
-        weaponForward[2] = cosYaw * cosPitch;
-
-        weaponRight[0] = WORLD_UP[1] * weaponForward[2] - WORLD_UP[2] * weaponForward[1];
-        weaponRight[1] = WORLD_UP[2] * weaponForward[0] - WORLD_UP[0] * weaponForward[2];
-        weaponRight[2] = WORLD_UP[0] * weaponForward[1] - WORLD_UP[1] * weaponForward[0];
+        weaponForward.set(cameraForward);
+        weaponRight.set(cameraRight);
+        weaponUp.set(cameraUp);
 
         let length = Math.hypot(weaponRight[0], weaponRight[1], weaponRight[2]);
         if (length < 1e-5) {
@@ -1280,13 +1434,29 @@ export async function initializeGame({
 
       const activeLights = gatherActiveLights(controller.position, activeLightsScratch);
 
-      writeUniformData(worldUniformData, viewProj, IDENTITY_MATRIX, activeLights);
-      device.queue.writeBuffer(worldUniformBuffer, 0, worldUniformData);
-
       bulletHoleManager.syncGPU();
       projectileManager.syncGPU();
 
       const encoder = device.createCommandEncoder();
+
+      portalSystem.renderPortalViews({
+        encoder,
+        projectionMatrix: projection,
+        cameraPosition: eye,
+        cameraForward,
+        cameraUp,
+        renderScene: ({ passEncoder, viewProjection, cameraPosition: portalCameraPosition }) => {
+          const portalLights = gatherActiveLights(portalCameraPosition, portalLightsScratch);
+          drawScene({
+            passEncoder,
+            viewProjection,
+            activeLights: portalLights,
+            drawWeapon: false,
+            drawPortals: false
+          });
+        }
+      });
+
       const textureView = context.getCurrentTexture().createView();
       const depthTextureView = getDepthTextureView();
 
@@ -1307,79 +1477,14 @@ export async function initializeGame({
         }
       });
 
-      pass.setPipeline(pipeline);
-      pass.setBindGroup(0, worldUniformBindGroup);
-      pass.setVertexBuffer(0, roomVertexBuffer);
-      pass.draw(roomVertexCount, 1, 0, 0);
+      drawScene({
+        passEncoder: pass,
+        viewProjection: viewProj,
+        activeLights,
+        drawWeapon: weaponTransformReady && Boolean(weaponGeometry),
+        drawPortals: true
+      });
 
-      if (Array.isArray(worldItems) && worldItems.length > 0) {
-        for (const item of worldItems) {
-          if (!item || !item.vertexBuffer || !item.vertexCount) {
-            continue;
-          }
-          ensureRenderableUniformResources(item);
-          if (!item.uniformBuffer || !item.uniformBindGroup || !item.uniformData) {
-            continue;
-          }
-          writeUniformData(
-            item.uniformData,
-            viewProj,
-            item.modelMatrix ?? IDENTITY_MATRIX,
-            activeLights
-          );
-          device.queue.writeBuffer(item.uniformBuffer, 0, item.uniformData);
-          pass.setBindGroup(0, item.uniformBindGroup);
-          pass.setVertexBuffer(0, item.vertexBuffer);
-          pass.draw(item.vertexCount, 1, 0, 0);
-        }
-        pass.setBindGroup(0, worldUniformBindGroup);
-        pass.setVertexBuffer(0, roomVertexBuffer);
-      }
-
-      if (enemies.length > 0) {
-        for (const enemy of enemies) {
-          if (!enemy || !enemy.vertexBuffer || !enemy.vertexCount) {
-            continue;
-          }
-          ensureRenderableUniformResources(enemy);
-          if (!enemy.uniformBuffer || !enemy.uniformBindGroup || !enemy.uniformData) {
-            continue;
-          }
-          writeUniformData(
-            enemy.uniformData,
-            viewProj,
-            enemy.modelMatrix ?? IDENTITY_MATRIX,
-            activeLights
-          );
-          device.queue.writeBuffer(enemy.uniformBuffer, 0, enemy.uniformData);
-          pass.setBindGroup(0, enemy.uniformBindGroup);
-          pass.setVertexBuffer(0, enemy.vertexBuffer);
-          pass.draw(enemy.vertexCount, 1, 0, 0);
-        }
-        pass.setBindGroup(0, worldUniformBindGroup);
-        pass.setVertexBuffer(0, roomVertexBuffer);
-      }
-
-      const bulletHoleVertexCount = bulletHoleManager.getVertexCount();
-      if (bulletHoleVertexCount > 0) {
-        pass.setVertexBuffer(0, bulletHoleManager.getVertexBuffer());
-        pass.draw(bulletHoleVertexCount, 1, 0, 0);
-      }
-
-      const projectileVertexCount = projectileManager.getVertexCount();
-      if (projectileVertexCount > 0) {
-        pass.setVertexBuffer(0, projectileManager.getVertexBuffer());
-        pass.draw(projectileVertexCount, 1, 0, 0);
-      }
-
-      if (weaponTransformReady && weaponGeometry) {
-        writeUniformData(weaponUniformData, viewProj, weaponModel, activeLights);
-        device.queue.writeBuffer(weaponUniformBuffer, 0, weaponUniformData);
-        pass.setBindGroup(0, weaponUniformBindGroup);
-        pass.setVertexBuffer(0, weaponGeometry.vertexBuffer);
-        pass.draw(weaponGeometry.vertexCount, 1, 0, 0);
-        pass.setBindGroup(0, worldUniformBindGroup);
-      }
       pass.end();
 
       device.queue.submit([encoder.finish()]);
