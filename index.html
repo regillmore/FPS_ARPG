@@ -24,6 +24,7 @@
         <button class="pause-menu__tab" role="tab" id="tab-inventory" aria-selected="false" aria-controls="panel-inventory" data-tab="inventory" tabindex="-1">Inventory</button>
         <button class="pause-menu__tab" role="tab" id="tab-bestiary" aria-selected="false" aria-controls="panel-bestiary" data-tab="bestiary" tabindex="-1">Bestiary</button>
         <button class="pause-menu__tab" role="tab" id="tab-diagnostics" aria-selected="false" aria-controls="panel-diagnostics" data-tab="diagnostics" tabindex="-1">Diagnostics</button>
+        <button class="pause-menu__tab" role="tab" id="tab-options" aria-selected="false" aria-controls="panel-options" data-tab="options" tabindex="-1">Options</button>
         <button class="pause-menu__tab" role="tab" id="tab-achievements" aria-selected="false" aria-controls="panel-achievements" data-tab="achievements" tabindex="-1">Achievements</button>
       </div>
       <div class="pause-menu__content">
@@ -372,6 +373,53 @@
                 </span>
               </label>
               <p class="diagnostics-card__note">The overlay updates continuously when enabled.</p>
+            </article>
+          </div>
+        </section>
+        <section
+          class="pause-menu__panel"
+          role="tabpanel"
+          id="panel-options"
+          aria-labelledby="tab-options"
+          data-tab="options"
+          hidden
+        >
+          <h3>Gameplay Options</h3>
+          <p>Adjust real-time systems without leaving the field. These options only affect your current session.</p>
+          <div class="options-grid">
+            <article class="diagnostics-card">
+              <header class="diagnostics-card__header">
+                <p class="diagnostics-card__eyebrow">Framerate Target</p>
+                <strong class="diagnostics-card__status" data-options-role="framerate-cap-status">
+                  Frame pacing locked to 60 FPS.
+                </strong>
+              </header>
+              <p>
+                Cap the renderer to align with your display refresh rate or to keep laptop thermals in check. Selecting
+                "Unlimited" leaves the simulation uncapped.
+              </p>
+              <fieldset class="options-fieldset">
+                <legend>Framerate cap</legend>
+                <div class="option-pill-group">
+                  <label class="option-pill">
+                    <input type="radio" name="framerate-cap" value="30" data-option-control="framerate-cap" />
+                    <span class="option-pill__label">30 FPS</span>
+                  </label>
+                  <label class="option-pill">
+                    <input type="radio" name="framerate-cap" value="60" data-option-control="framerate-cap" checked />
+                    <span class="option-pill__label">60 FPS</span>
+                  </label>
+                  <label class="option-pill">
+                    <input type="radio" name="framerate-cap" value="120" data-option-control="framerate-cap" />
+                    <span class="option-pill__label">120 FPS</span>
+                  </label>
+                  <label class="option-pill">
+                    <input type="radio" name="framerate-cap" value="0" data-option-control="framerate-cap" />
+                    <span class="option-pill__label">Unlimited</span>
+                  </label>
+                </div>
+              </fieldset>
+              <p class="diagnostics-card__note">Caps are approximate and depend on browser support for timing APIs.</p>
             </article>
           </div>
         </section>

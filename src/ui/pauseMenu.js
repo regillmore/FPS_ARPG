@@ -79,6 +79,15 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     framerateStatus: pauseMenu.querySelector('[data-diagnostic-role="framerate-status"]')
   };
 
+  const optionsState = {
+    framerateCap: 60
+  };
+
+  const optionsElements = {
+    framerateStatus: pauseMenu.querySelector('[data-options-role="framerate-cap-status"]'),
+    framerateOptions: Array.from(pauseMenu.querySelectorAll('[data-option-control="framerate-cap"]'))
+  };
+
   for (const slot of itemSlots) {
     if (!slot.dataset.itemAbbr) {
       continue;
@@ -205,6 +214,56 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         ? 'The framerate overlay is visible.'
         : 'The framerate overlay is hidden.';
     }
+  }
+
+  function emitOptionsChange() {
+    if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
+      return;
+    }
+    window.dispatchEvent(
+      new CustomEvent('game-options-change', {
+        detail: { ...optionsState }
+      })
+    );
+  }
+
+  function normalizeFramerateCap(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+      return 0;
+    }
+    return Math.round(numericValue);
+  }
+
+  function formatFramerateStatusText(value) {
+    const normalized = normalizeFramerateCap(value);
+    if (normalized > 0) {
+      return `Frame pacing locked to ${normalized} FPS.`;
+    }
+    return 'Framerate runs uncapped.';
+  }
+
+  function updateOptionsUi() {
+    if (optionsElements.framerateStatus) {
+      optionsElements.framerateStatus.textContent = formatFramerateStatusText(optionsState.framerateCap);
+    }
+    if (optionsElements.framerateOptions) {
+      for (const input of optionsElements.framerateOptions) {
+        const optionValue = normalizeFramerateCap(input?.value);
+        input.checked = optionValue === normalizeFramerateCap(optionsState.framerateCap);
+      }
+    }
+  }
+
+  function setFramerateCap(nextValue) {
+    const normalized = normalizeFramerateCap(nextValue);
+    if (optionsState.framerateCap === normalized) {
+      updateOptionsUi();
+      return;
+    }
+    optionsState.framerateCap = normalized;
+    updateOptionsUi();
+    emitOptionsChange();
   }
 
   function updateVitalityStat(statId, stat) {
@@ -1052,6 +1111,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   updatePlayerStats();
   updateExperienceCard(experienceState);
   updateDiagnosticsUi();
+  updateOptionsUi();
 
   diagnosticsElements.disableLightsToggle?.addEventListener('change', (event) => {
     diagnosticsState.disableLights = Boolean(event.currentTarget?.checked);
@@ -1070,6 +1130,15 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     updateDiagnosticsUi();
     emitDiagnosticsChange();
   });
+
+  for (const input of optionsElements.framerateOptions) {
+    input.addEventListener('change', (event) => {
+      if (!event.currentTarget?.checked) {
+        return;
+      }
+      setFramerateCap(event.currentTarget.value);
+    });
+  }
 
   function setPaused(next) {
     if (paused === next) {
@@ -1154,6 +1223,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       setExperienceState(state);
     },
     isPaused: () => paused,
-    getDiagnosticsState: () => ({ ...diagnosticsState })
+    getDiagnosticsState: () => ({ ...diagnosticsState }),
+    getOptionsState: () => ({ ...optionsState })
   };
 }

@@ -642,17 +642,38 @@ export async function initializeGame({
       typeof pauseControls?.getDiagnosticsState === 'function'
         ? pauseControls.getDiagnosticsState()
         : null;
+    const initialOptions =
+      typeof pauseControls?.getOptionsState === 'function'
+        ? pauseControls.getOptionsState()
+        : null;
     let disableDynamicLights = Boolean(initialDiagnostics?.disableLights);
     let disableEnemies = Boolean(initialDiagnostics?.disableEnemies);
     let showFramerate = Boolean(initialDiagnostics?.showFramerate);
+    const resolveFramerateCap = (value) => {
+      const numericValue = Number(value);
+      if (!Number.isFinite(numericValue) || numericValue <= 0) {
+        return 0;
+      }
+      return Math.max(1, Math.round(numericValue));
+    };
+    let frameIntervalTargetMs = 0;
+    const applyFramerateTarget = (value) => {
+      const normalized = resolveFramerateCap(value);
+      frameIntervalTargetMs = normalized > 0 ? 1000 / normalized : 0;
+    };
 
     framerateDisplay?.setVisible?.(showFramerate);
+    applyFramerateTarget(initialOptions?.framerateCap);
 
     window.addEventListener('game-diagnostics-change', (event) => {
       disableDynamicLights = Boolean(event?.detail?.disableLights);
       disableEnemies = Boolean(event?.detail?.disableEnemies);
       showFramerate = Boolean(event?.detail?.showFramerate);
       framerateDisplay?.setVisible?.(showFramerate);
+    });
+
+    window.addEventListener('game-options-change', (event) => {
+      applyFramerateTarget(event?.detail?.framerateCap);
     });
 
     const ensureRenderableUniformResources = (entity) => {
@@ -801,7 +822,12 @@ export async function initializeGame({
     let lastTime = performance.now();
 
     function frame(now) {
-      const deltaTime = Math.min((now - lastTime) / 1000, 0.2);
+      const elapsed = now - lastTime;
+      if (frameIntervalTargetMs > 0 && elapsed + 0.25 < frameIntervalTargetMs) {
+        requestAnimationFrame(frame);
+        return;
+      }
+      const deltaTime = Math.min(elapsed / 1000, 0.2);
       lastTime = now;
       framerateDisplay?.update?.(deltaTime);
 
