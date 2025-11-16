@@ -1,7 +1,11 @@
 const DEFAULT_SMOOTHING = 0.9;
 const FALLBACK_BG = 'rgba(5, 7, 10, 0.82)';
 
-export function createFramerateDisplay({ parent = document.body, smoothing = DEFAULT_SMOOTHING } = {}) {
+export function createFramerateDisplay({
+  parent = document.body,
+  smoothing = DEFAULT_SMOOTHING,
+  visible = false
+} = {}) {
   const container = document.createElement('div');
   container.className = 'framerate-display';
   container.setAttribute('role', 'status');
@@ -14,6 +18,9 @@ export function createFramerateDisplay({ parent = document.body, smoothing = DEF
   if (parent) {
     parent.appendChild(container);
   }
+
+  let isVisible = Boolean(visible);
+  container.hidden = !isVisible;
 
   let smoothedFps = null;
   const clampedSmoothing = Math.min(Math.max(Number.isFinite(smoothing) ? smoothing : DEFAULT_SMOOTHING, 0), 0.99);
@@ -37,9 +44,19 @@ export function createFramerateDisplay({ parent = document.body, smoothing = DEF
     }
   };
 
+  const setVisible = (nextVisible) => {
+    const nextState = Boolean(nextVisible);
+    if (isVisible === nextState) {
+      return;
+    }
+    isVisible = nextState;
+    container.hidden = !isVisible;
+  };
+
   return {
     element: container,
     update,
-    destroy
+    destroy,
+    setVisible
   };
 }

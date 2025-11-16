@@ -352,6 +352,27 @@
               </label>
               <p class="diagnostics-card__note">Pickups and scripted encounters remain available while enemies are muted.</p>
             </article>
+            <article class="diagnostics-card">
+              <header class="diagnostics-card__header">
+                <p class="diagnostics-card__eyebrow">Performance HUD</p>
+                <strong class="diagnostics-card__status" data-diagnostic-role="framerate-status">
+                  The framerate overlay is hidden.
+                </strong>
+              </header>
+              <p>
+                Toggle the heads-up performance readout to verify renderer timing without leaving the Diagnostics tab.
+              </p>
+              <label class="diagnostics-toggle">
+                <input type="checkbox" data-diagnostic-control="show-framerate" />
+                <span class="diagnostics-toggle__control">
+                  <span class="diagnostics-toggle__track" aria-hidden="true">
+                    <span class="diagnostics-toggle__thumb"></span>
+                  </span>
+                  <span class="diagnostics-toggle__label">Show framerate overlay</span>
+                </span>
+              </label>
+              <p class="diagnostics-card__note">The overlay updates continuously when enabled.</p>
+            </article>
           </div>
         </section>
         <section class="pause-menu__panel" role="tabpanel" id="panel-achievements" aria-labelledby="tab-achievements" data-tab="achievements" hidden>

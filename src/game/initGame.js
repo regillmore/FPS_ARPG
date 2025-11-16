@@ -640,10 +640,15 @@ export async function initializeGame({
         : null;
     let disableDynamicLights = Boolean(initialDiagnostics?.disableLights);
     let disableEnemies = Boolean(initialDiagnostics?.disableEnemies);
+    let showFramerate = Boolean(initialDiagnostics?.showFramerate);
+
+    framerateDisplay?.setVisible?.(showFramerate);
 
     window.addEventListener('game-diagnostics-change', (event) => {
       disableDynamicLights = Boolean(event?.detail?.disableLights);
       disableEnemies = Boolean(event?.detail?.disableEnemies);
+      showFramerate = Boolean(event?.detail?.showFramerate);
+      framerateDisplay?.setVisible?.(showFramerate);
     });
 
     const ensureRenderableUniformResources = (entity) => {

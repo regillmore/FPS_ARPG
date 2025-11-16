@@ -66,14 +66,17 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
 
   const diagnosticsState = {
     disableLights: false,
-    disableEnemies: false
+    disableEnemies: false,
+    showFramerate: false
   };
 
   const diagnosticsElements = {
     disableLightsToggle: pauseMenu.querySelector('[data-diagnostic-control="disable-lights"]'),
     disableEnemiesToggle: pauseMenu.querySelector('[data-diagnostic-control="disable-enemies"]'),
+    showFramerateToggle: pauseMenu.querySelector('[data-diagnostic-control="show-framerate"]'),
     lightingStatus: pauseMenu.querySelector('[data-diagnostic-role="lighting-status"]'),
-    enemyStatus: pauseMenu.querySelector('[data-diagnostic-role="enemy-status"]')
+    enemyStatus: pauseMenu.querySelector('[data-diagnostic-role="enemy-status"]'),
+    framerateStatus: pauseMenu.querySelector('[data-diagnostic-role="framerate-status"]')
   };
 
   for (const slot of itemSlots) {
@@ -184,6 +187,9 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     if (diagnosticsElements.disableEnemiesToggle) {
       diagnosticsElements.disableEnemiesToggle.checked = Boolean(diagnosticsState.disableEnemies);
     }
+    if (diagnosticsElements.showFramerateToggle) {
+      diagnosticsElements.showFramerateToggle.checked = Boolean(diagnosticsState.showFramerate);
+    }
     if (diagnosticsElements.lightingStatus) {
       diagnosticsElements.lightingStatus.textContent = diagnosticsState.disableLights
         ? 'Dynamic light sources are disabled.'
@@ -193,6 +199,11 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       diagnosticsElements.enemyStatus.textContent = diagnosticsState.disableEnemies
         ? 'Enemy AI, collision, and rendering are muted.'
         : 'Enemy AI and rendering are active.';
+    }
+    if (diagnosticsElements.framerateStatus) {
+      diagnosticsElements.framerateStatus.textContent = diagnosticsState.showFramerate
+        ? 'The framerate overlay is visible.'
+        : 'The framerate overlay is hidden.';
     }
   }
 
@@ -1050,6 +1061,12 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
 
   diagnosticsElements.disableEnemiesToggle?.addEventListener('change', (event) => {
     diagnosticsState.disableEnemies = Boolean(event.currentTarget?.checked);
+    updateDiagnosticsUi();
+    emitDiagnosticsChange();
+  });
+
+  diagnosticsElements.showFramerateToggle?.addEventListener('change', (event) => {
+    diagnosticsState.showFramerate = Boolean(event.currentTarget?.checked);
     updateDiagnosticsUi();
     emitDiagnosticsChange();
   });
