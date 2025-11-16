@@ -18,12 +18,14 @@ import {
   addHorizontalSection,
   addSlabColliders,
   addBox,
-  addCollider
+  addCollider,
+  addQuad
 } from './geometry.js';
 import { addCagedElectricWallLight } from './decorations.js';
 import {
   hashValue,
-  randomFloatForEdge
+  randomFloatForEdge,
+  randomFloatForCell
 } from './random.js';
 import { positionToCell, positionToLayer } from './spatial.js';
 import {
@@ -102,6 +104,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   const discoveredBarrelRooms = new Set();
   const pendingBarrelSpawns = [];
   const decorativeLights = [];
+  const hallwayPortalChance = 0.28;
 
   function normalizeSpawnPosition(position) {
     if (!position || typeof position !== 'object') {
@@ -489,6 +492,434 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
   }
 
+  function maybeAddHallwayPortal(
+    vertices,
+    hallwayOrientation,
+    gx,
+    gz,
+    layerIndex,
+    centerX,
+    centerZ,
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    baseY,
+    roomHeight,
+    corridorWidth,
+    wallThickness,
+    profile,
+    bounds,
+    colliders
+  ) {
+    if (!hallwayOrientation) {
+      return false;
+    }
+    const seedForLayer = getLayerSeed(layerIndex);
+    const spawnRoll = randomFloatForCell(gx, gz, 811, seedForLayer);
+    if (spawnRoll > hallwayPortalChance) {
+      return false;
+    }
+    const directionRoll = randomFloatForCell(gx, gz, 812, seedForLayer);
+    const variationRoll = randomFloatForCell(gx, gz, 813, seedForLayer);
+    const direction = directionRoll < 0.5 ? -1 : 1;
+    addPerpendicularPortalAttachment(
+      vertices,
+      hallwayOrientation,
+      direction,
+      centerX,
+      centerZ,
+      minX,
+      maxX,
+      minZ,
+      maxZ,
+      baseY,
+      roomHeight,
+      corridorWidth,
+      wallThickness,
+      profile,
+      bounds,
+      colliders,
+      variationRoll
+    );
+    return true;
+  }
+
+  function addPerpendicularPortalAttachment(
+    vertices,
+    orientation,
+    direction,
+    centerX,
+    centerZ,
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    baseY,
+    roomHeight,
+    corridorWidth,
+    wallThickness,
+    profile,
+    bounds,
+    colliders,
+    variation
+  ) {
+    const branchFloorHeight = Math.min(roomHeight * 0.05, 0.12);
+    const availableWidth = orientation === 'x' ? maxZ - minZ : maxX - minX;
+    const clampedWidth = Math.min(Math.max(corridorWidth, 0.5), availableWidth * 0.9);
+    const halfWidth = clampedWidth * 0.5;
+    const branchLength = roomSize * (1.1 + variation * 0.7);
+    const chamberDepth = roomSize * (1.4 + variation * 0.8);
+    const branchSpan = orientation === 'x' ? maxX - minX : maxZ - minZ;
+    const branchWidth = Math.min(
+      Math.max(branchSpan * 0.3, corridorWidth * 0.6),
+      branchSpan * 0.85
+    );
+    const frameColor = mixColors(profile.wallColor, profile.accentColor, 0.6);
+    const walkwayColor = mixColors(profile.floorColor, profile.accentColor, 0.35);
+    const chamberFloorColor = mixColors(profile.floorColor, profile.wallColor, 0.2);
+    const pillarColor = mixColors(profile.wallColor, profile.accentColor, 0.45);
+    const wallThicknessScaled = Math.max(0.1, wallThickness * 0.7);
+    const chamberHeight = Math.min(roomHeight * 0.85, roomHeight - 0.05);
+    const portalBottom = baseY + Math.min(roomHeight * 0.15, 0.35);
+    const portalTop = baseY + Math.min(roomHeight * 0.9, roomHeight - 0.05);
+    const frameThickness = Math.min(branchWidth * 0.08, wallThickness * 1.2);
+    const frameDepth = Math.min(0.25, wallThickness * 1.1);
+    const portalColor = [...mixColors(profile.accentColor, [0.7, 0.9, 1], 0.55), 1.3];
+
+    function addFloorCollider(minXValue, minZValue, maxXValue, maxZValue) {
+      if (!colliders) {
+        return;
+      }
+      addCollider(colliders, minXValue, baseY, minZValue, maxXValue, baseY + branchFloorHeight, maxZValue);
+    }
+
+    function addWallCollider(minXValue, minZValue, maxXValue, maxZValue) {
+      if (!colliders) {
+        return;
+      }
+      addCollider(colliders, minXValue, baseY, minZValue, maxXValue, baseY + chamberHeight, maxZValue);
+    }
+
+    if (orientation === 'x') {
+      const branchHalfWidth = branchWidth * 0.5;
+      const branchMinX = Math.max(centerX - branchHalfWidth, minX + wallThickness * 0.25);
+      const branchMaxX = Math.min(centerX + branchHalfWidth, maxX - wallThickness * 0.25);
+      const startZ = centerZ + direction * Math.max(halfWidth - 0.02, clampedWidth * 0.45);
+      const endZ = startZ + direction * branchLength;
+      const branchMinZ = Math.min(startZ, endZ);
+      const branchMaxZ = Math.max(startZ, endZ);
+      if (branchMaxX <= branchMinX || branchMaxZ <= branchMinZ) {
+        return;
+      }
+
+      addBox(
+        vertices,
+        branchMinX,
+        baseY,
+        branchMinZ,
+        branchMaxX,
+        baseY + branchFloorHeight,
+        branchMaxZ,
+        walkwayColor,
+        bounds
+      );
+      addFloorCollider(branchMinX, branchMinZ, branchMaxX, branchMaxZ);
+
+      const portalPlaneZ = startZ;
+      const inset = Math.min((branchMaxX - branchMinX) * 0.15, branchWidth * 0.1);
+      const portalMinX = branchMinX + inset;
+      const portalMaxX = branchMaxX - inset;
+      const portalCorners = direction > 0
+        ? [
+            [portalMinX, portalBottom, portalPlaneZ],
+            [portalMaxX, portalBottom, portalPlaneZ],
+            [portalMaxX, portalTop, portalPlaneZ],
+            [portalMinX, portalTop, portalPlaneZ]
+          ]
+        : [
+            [portalMaxX, portalBottom, portalPlaneZ],
+            [portalMinX, portalBottom, portalPlaneZ],
+            [portalMinX, portalTop, portalPlaneZ],
+            [portalMaxX, portalTop, portalPlaneZ]
+          ];
+      addQuad(vertices, portalCorners, [0, 0, direction > 0 ? 1 : -1], portalColor, bounds);
+
+      addBox(
+        vertices,
+        portalMinX - frameThickness,
+        portalBottom,
+        portalPlaneZ - frameDepth,
+        portalMinX,
+        portalTop,
+        portalPlaneZ + frameDepth,
+        frameColor,
+        bounds
+      );
+      addBox(
+        vertices,
+        portalMaxX,
+        portalBottom,
+        portalPlaneZ - frameDepth,
+        portalMaxX + frameThickness,
+        portalTop,
+        portalPlaneZ + frameDepth,
+        frameColor,
+        bounds
+      );
+      addBox(
+        vertices,
+        portalMinX - frameThickness,
+        portalTop,
+        portalPlaneZ - frameDepth,
+        portalMaxX + frameThickness,
+        portalTop + frameThickness,
+        portalPlaneZ + frameDepth,
+        frameColor,
+        bounds
+      );
+
+      const entryEdge = direction > 0 ? branchMaxZ : branchMinZ;
+      const chamberMinZ = direction > 0 ? entryEdge : entryEdge - chamberDepth;
+      const chamberMaxZ = direction > 0 ? entryEdge + chamberDepth : entryEdge;
+      const chamberHalfWidth = Math.min(branchHalfWidth * 1.8, (maxX - minX) * 0.9);
+      const chamberMinX = centerX - chamberHalfWidth;
+      const chamberMaxX = centerX + chamberHalfWidth;
+      addBox(
+        vertices,
+        chamberMinX,
+        baseY,
+        chamberMinZ,
+        chamberMaxX,
+        baseY + branchFloorHeight,
+        chamberMaxZ,
+        chamberFloorColor,
+        bounds
+      );
+      addFloorCollider(chamberMinX, chamberMinZ, chamberMaxX, chamberMaxZ);
+
+      addBox(
+        vertices,
+        chamberMinX,
+        baseY,
+        chamberMinZ,
+        chamberMinX + wallThicknessScaled,
+        baseY + chamberHeight,
+        chamberMaxZ,
+        profile.wallColor,
+        bounds
+      );
+      addWallCollider(chamberMinX, chamberMinZ, chamberMinX + wallThicknessScaled, chamberMaxZ);
+      addBox(
+        vertices,
+        chamberMaxX - wallThicknessScaled,
+        baseY,
+        chamberMinZ,
+        chamberMaxX,
+        baseY + chamberHeight,
+        chamberMaxZ,
+        profile.wallColor,
+        bounds
+      );
+      addWallCollider(chamberMaxX - wallThicknessScaled, chamberMinZ, chamberMaxX, chamberMaxZ);
+      const farWallMinZ = direction > 0 ? chamberMaxZ - wallThicknessScaled : chamberMinZ;
+      const farWallMaxZ = direction > 0 ? chamberMaxZ : chamberMinZ + wallThicknessScaled;
+      addBox(
+        vertices,
+        chamberMinX,
+        baseY,
+        farWallMinZ,
+        chamberMaxX,
+        baseY + chamberHeight,
+        farWallMaxZ,
+        profile.wallColor,
+        bounds
+      );
+      addWallCollider(chamberMinX, farWallMinZ, chamberMaxX, farWallMaxZ);
+
+      const plinthWidth = Math.min(branchWidth * 0.8, (maxX - minX) * 0.7);
+      const plinthDepth = chamberDepth * 0.35;
+      const plinthMinX = centerX - plinthWidth * 0.5;
+      const plinthMaxX = centerX + plinthWidth * 0.5;
+      const plinthOffsetZ = chamberDepth * 0.25;
+      const plinthMinZ = direction > 0
+        ? chamberMinZ + plinthOffsetZ
+        : chamberMaxZ - plinthOffsetZ - plinthDepth;
+      const plinthMaxZ = plinthMinZ + plinthDepth;
+      const plinthTop = baseY + Math.min(roomHeight * 0.6, roomHeight - 0.2);
+      addBox(
+        vertices,
+        plinthMinX,
+        baseY,
+        plinthMinZ,
+        plinthMaxX,
+        plinthTop,
+        plinthMaxZ,
+        pillarColor,
+        bounds
+      );
+      addWallCollider(plinthMinX, plinthMinZ, plinthMaxX, plinthMaxZ);
+    } else {
+      const branchHalfWidth = branchWidth * 0.5;
+      const branchMinZ = Math.max(centerZ - branchHalfWidth, minZ + wallThickness * 0.25);
+      const branchMaxZ = Math.min(centerZ + branchHalfWidth, maxZ - wallThickness * 0.25);
+      const startX = centerX + direction * Math.max(halfWidth - 0.02, clampedWidth * 0.45);
+      const endX = startX + direction * branchLength;
+      const branchMinX = Math.min(startX, endX);
+      const branchMaxX = Math.max(startX, endX);
+      if (branchMaxZ <= branchMinZ || branchMaxX <= branchMinX) {
+        return;
+      }
+
+      addBox(
+        vertices,
+        branchMinX,
+        baseY,
+        branchMinZ,
+        branchMaxX,
+        baseY + branchFloorHeight,
+        branchMaxZ,
+        walkwayColor,
+        bounds
+      );
+      addFloorCollider(branchMinX, branchMinZ, branchMaxX, branchMaxZ);
+
+      const portalPlaneX = startX;
+      const inset = Math.min((branchMaxZ - branchMinZ) * 0.15, branchWidth * 0.1);
+      const portalMinZ = branchMinZ + inset;
+      const portalMaxZ = branchMaxZ - inset;
+      const portalCorners = direction > 0
+        ? [
+            [portalPlaneX, portalBottom, portalMinZ],
+            [portalPlaneX, portalBottom, portalMaxZ],
+            [portalPlaneX, portalTop, portalMaxZ],
+            [portalPlaneX, portalTop, portalMinZ]
+          ]
+        : [
+            [portalPlaneX, portalBottom, portalMaxZ],
+            [portalPlaneX, portalBottom, portalMinZ],
+            [portalPlaneX, portalTop, portalMinZ],
+            [portalPlaneX, portalTop, portalMaxZ]
+          ];
+      addQuad(vertices, portalCorners, [direction > 0 ? 1 : -1, 0, 0], portalColor, bounds);
+
+      addBox(
+        vertices,
+        portalPlaneX - frameDepth,
+        portalBottom,
+        portalMinZ - frameThickness,
+        portalPlaneX + frameDepth,
+        portalTop,
+        portalMinZ,
+        frameColor,
+        bounds
+      );
+      addBox(
+        vertices,
+        portalPlaneX - frameDepth,
+        portalBottom,
+        portalMaxZ,
+        portalPlaneX + frameDepth,
+        portalTop,
+        portalMaxZ + frameThickness,
+        frameColor,
+        bounds
+      );
+      addBox(
+        vertices,
+        portalPlaneX - frameDepth,
+        portalTop,
+        portalMinZ - frameThickness,
+        portalPlaneX + frameDepth,
+        portalTop + frameThickness,
+        portalMaxZ + frameThickness,
+        frameColor,
+        bounds
+      );
+
+      const entryEdge = direction > 0 ? branchMaxX : branchMinX;
+      const chamberMinX = direction > 0 ? entryEdge : entryEdge - chamberDepth;
+      const chamberMaxX = direction > 0 ? entryEdge + chamberDepth : entryEdge;
+      const chamberHalfWidth = Math.min(branchHalfWidth * 1.8, (maxZ - minZ) * 0.9);
+      const chamberMinZ = centerZ - chamberHalfWidth;
+      const chamberMaxZ = centerZ + chamberHalfWidth;
+      addBox(
+        vertices,
+        chamberMinX,
+        baseY,
+        chamberMinZ,
+        chamberMaxX,
+        baseY + branchFloorHeight,
+        chamberMaxZ,
+        chamberFloorColor,
+        bounds
+      );
+      addFloorCollider(chamberMinX, chamberMinZ, chamberMaxX, chamberMaxZ);
+
+      addBox(
+        vertices,
+        chamberMinX,
+        baseY,
+        chamberMinZ,
+        chamberMaxX,
+        baseY + chamberHeight,
+        chamberMinZ + wallThicknessScaled,
+        profile.wallColor,
+        bounds
+      );
+      addWallCollider(chamberMinX, chamberMinZ, chamberMaxX, chamberMinZ + wallThicknessScaled);
+      addBox(
+        vertices,
+        chamberMinX,
+        baseY,
+        chamberMaxZ - wallThicknessScaled,
+        chamberMaxX,
+        baseY + chamberHeight,
+        chamberMaxZ,
+        profile.wallColor,
+        bounds
+      );
+      addWallCollider(chamberMinX, chamberMaxZ - wallThicknessScaled, chamberMaxX, chamberMaxZ);
+      const farWallMinX = direction > 0 ? chamberMaxX - wallThicknessScaled : chamberMinX;
+      const farWallMaxX = direction > 0 ? chamberMaxX : chamberMinX + wallThicknessScaled;
+      addBox(
+        vertices,
+        farWallMinX,
+        baseY,
+        chamberMinZ,
+        farWallMaxX,
+        baseY + chamberHeight,
+        chamberMaxZ,
+        profile.wallColor,
+        bounds
+      );
+      addWallCollider(farWallMinX, chamberMinZ, farWallMaxX, chamberMaxZ);
+
+      const plinthDepth = Math.min(branchWidth * 0.8, (maxZ - minZ) * 0.7);
+      const plinthWidth = chamberDepth * 0.35;
+      const plinthMinZ = centerZ - plinthDepth * 0.5;
+      const plinthMaxZ = centerZ + plinthDepth * 0.5;
+      const plinthOffsetX = chamberDepth * 0.25;
+      const plinthMinX = direction > 0
+        ? chamberMinX + plinthOffsetX
+        : chamberMaxX - plinthOffsetX - plinthWidth;
+      const plinthMaxX = plinthMinX + plinthWidth;
+      const plinthTop = baseY + Math.min(roomHeight * 0.6, roomHeight - 0.2);
+      addBox(
+        vertices,
+        plinthMinX,
+        baseY,
+        plinthMinZ,
+        plinthMaxX,
+        plinthTop,
+        plinthMaxZ,
+        pillarColor,
+        bounds
+      );
+      addWallCollider(plinthMinX, plinthMinZ, plinthMaxX, plinthMaxZ);
+    }
+  }
+
   function buildGeometryForCenter(cx, cz) {
     const vertices = [];
     decorativeLights.length = 0;
@@ -776,6 +1207,26 @@ export function createProceduralRoomSystem(device, options = {}) {
               profile.floorColor,
               profile.wallColor,
               profile.accentColor,
+              bounds,
+              colliders
+            );
+            maybeAddHallwayPortal(
+              vertices,
+              hallwayOrientation,
+              gx,
+              gz,
+              layerIndex,
+              centerX,
+              centerZ,
+              minX,
+              maxX,
+              minZ,
+              maxZ,
+              baseY,
+              roomHeight,
+              doubleDoorWidth * 1.1,
+              wallThickness,
+              profile,
               bounds,
               colliders
             );
