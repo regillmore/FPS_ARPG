@@ -419,9 +419,9 @@ export function createProceduralRoomSystem(device, options = {}) {
     const halfWidth = clampedWidth * 0.5;
     const centerX = (minX + maxX) * 0.5;
     const centerZ = (minZ + maxZ) * 0.5;
-    const floorMinY = baseY + 0.02;
+    const floorMinY = baseY;
     const floorMaxY = floorMinY + Math.min(0.12, roomHeight * 0.05);
-    const wallTopY = Math.min(baseY + roomHeight * 0.65, baseY + roomHeight - 0.2);
+    const wallTopY = Math.min(baseY + roomHeight * 0.66, baseY + roomHeight - 0.2);
     const capMinY = wallTopY;
     const capMaxY = Math.min(capMinY + Math.min(roomHeight * 0.1, 0.3), baseY + roomHeight);
     const walkwayColor = mixColors(floorColor, accentColor, 0.4);
@@ -451,7 +451,7 @@ export function createProceduralRoomSystem(device, options = {}) {
         }
       }
 
-      const capInsetZ = Math.min(clampedWidth * 0.25, Math.max(clampedWidth * 0.15, 0.1));
+      const capInsetZ = 0; //Math.min(clampedWidth * 0.25, Math.max(clampedWidth * 0.15, 0.1));
       const capMinZ = Math.min(corridorMaxZ, corridorMinZ + capInsetZ);
       const capMaxZ = Math.max(capMinZ, corridorMaxZ - capInsetZ);
       if (capMaxZ - capMinZ > 1e-3) {
@@ -480,7 +480,7 @@ export function createProceduralRoomSystem(device, options = {}) {
         }
       }
 
-      const capInsetX = Math.min(clampedWidth * 0.25, Math.max(clampedWidth * 0.15, 0.1));
+      const capInsetX = 0; //Math.min(clampedWidth * 0.25, Math.max(clampedWidth * 0.15, 0.1));
       const capMinX = Math.min(corridorMaxX, corridorMinX + capInsetX);
       const capMaxX = Math.max(capMinX, corridorMaxX - capInsetX);
       if (capMaxX - capMinX > 1e-3) {
