@@ -366,9 +366,6 @@ export function createProceduralRoomSystem(device, options = {}) {
       if (!state) {
         return;
       }
-      if (state === 'open') {
-        return;
-      }
       if (state === 'solid') {
         solidDirections.push(direction);
       }
