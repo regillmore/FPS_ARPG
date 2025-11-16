@@ -40,6 +40,13 @@ const directionOffsets = {
   west: [-1, 0]
 };
 
+const cornerAdjacency = Object.freeze({
+  north: Object.freeze(['east', 'west']),
+  south: Object.freeze(['east', 'west']),
+  east: Object.freeze(['north', 'south']),
+  west: Object.freeze(['north', 'south'])
+});
+
 export function createProceduralRoomSystem(device, options = {}) {
   const roomSize = options.roomSize ?? DEFAULT_ROOM_SIZE;
   const roomHeight = options.roomHeight ?? DEFAULT_ROOM_HEIGHT;
@@ -100,7 +107,9 @@ export function createProceduralRoomSystem(device, options = {}) {
   const cellLayerEdgeStates = new Map();
   const cellVerticalOpenings = new Map();
   const discoveredBarrelRooms = new Set();
+  const discoveredCameraRooms = new Set();
   const pendingBarrelSpawns = [];
+  const pendingCameraSpawns = [];
   const decorativeLights = [];
 
   function normalizeSpawnPosition(position) {
@@ -120,6 +129,31 @@ export function createProceduralRoomSystem(device, options = {}) {
     return [px, py, pz];
   }
 
+  function normalizeDirection(direction, fallback) {
+    function tryNormalize(source) {
+      if (!source || typeof source !== 'object') {
+        return null;
+      }
+      const arrayLike = Array.isArray(source) || ArrayBuffer.isView(source) ? source : null;
+      if (!arrayLike) {
+        return null;
+      }
+      const x = Number(arrayLike[0]);
+      const y = Number(arrayLike[1]);
+      const z = Number(arrayLike[2]);
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+        return null;
+      }
+      const length = Math.hypot(x, y, z);
+      if (!(length > 1e-5)) {
+        return null;
+      }
+      return [x / length, y / length, z / length];
+    }
+
+    return tryNormalize(direction) ?? tryNormalize(fallback) ?? null;
+  }
+
   function scheduleBarrelSpawnPoint(spawn) {
     if (!spawn) {
       return false;
@@ -133,12 +167,42 @@ export function createProceduralRoomSystem(device, options = {}) {
     return true;
   }
 
+  function scheduleCameraSpawnPoint(spawn) {
+    if (!spawn) {
+      return false;
+    }
+
+    const normalizedPosition = normalizeSpawnPosition(spawn.position ?? spawn);
+    if (!normalizedPosition) {
+      return false;
+    }
+
+    const forward = normalizeDirection(spawn.forward, [0, 0, -1]);
+    if (!forward) {
+      return false;
+    }
+
+    const up = normalizeDirection(spawn.up, [0, 1, 0]) ?? [0, 1, 0];
+    const key = typeof spawn.key === 'string' ? spawn.key : spawn.key ? String(spawn.key) : '';
+    pendingCameraSpawns.push({
+      key,
+      position: [normalizedPosition[0], normalizedPosition[1], normalizedPosition[2]],
+      forward: [forward[0], forward[1], forward[2]],
+      up: [up[0], up[1], up[2]]
+    });
+    return true;
+  }
+
   function getCellKey(x, z) {
     return `${x},${z}`;
   }
 
   function getBarrelRoomKey(layerIndex, x, z) {
     return `${layerIndex}:${getCellKey(x, z)}`;
+  }
+
+  function getCameraRoomKey(layerIndex, x, z) {
+    return `camera:${layerIndex}:${getCellKey(x, z)}`;
   }
 
   function getLayerSeed(layerIndex) {
@@ -282,6 +346,92 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
   }
 
+  function evaluateCellForCamera(x, z, layerIndex) {
+    const roomKey = getCameraRoomKey(layerIndex, x, z);
+    if (discoveredCameraRooms.has(roomKey)) {
+      return;
+    }
+
+    const edges = getCellEdgesForLayer(layerIndex, x, z);
+    if (!edges) {
+      return;
+    }
+
+    const directions = ['north', 'south', 'east', 'west'];
+    const solidDirections = [];
+
+    for (let i = 0; i < directions.length; i += 1) {
+      const direction = directions[i];
+      const state = edges[direction];
+      if (!state) {
+        return;
+      }
+      if (state === 'open') {
+        return;
+      }
+      if (state === 'solid') {
+        solidDirections.push(direction);
+      }
+    }
+
+    if (solidDirections.length !== 2) {
+      return;
+    }
+
+    const [dirA, dirB] = solidDirections;
+    const adjacency = cornerAdjacency[dirA];
+    if (!adjacency || !adjacency.includes(dirB)) {
+      return;
+    }
+
+    const inset = Math.max(wallThickness * 0.5 + 0.15, halfRoom * 0.25);
+    const cornerOffset = halfRoom - inset;
+    if (!(cornerOffset > 0.05)) {
+      return;
+    }
+
+    const centerX = x * roomSize;
+    const centerZ = z * roomSize;
+    const baseY = layerIndex * levelHeight;
+    const mountY = baseY + roomHeight - Math.max(0.35, roomHeight * 0.15);
+
+    let offsetX = 0;
+    let offsetZ = 0;
+
+    if (solidDirections.includes('east')) {
+      offsetX = cornerOffset;
+    } else if (solidDirections.includes('west')) {
+      offsetX = -cornerOffset;
+    }
+
+    if (solidDirections.includes('south')) {
+      offsetZ = cornerOffset;
+    } else if (solidDirections.includes('north')) {
+      offsetZ = -cornerOffset;
+    }
+
+    if (offsetX === 0 || offsetZ === 0) {
+      return;
+    }
+
+    const position = [centerX + offsetX, mountY, centerZ + offsetZ];
+    const forward = normalizeDirection([-offsetX, 0, -offsetZ], [0, 0, -1]);
+    if (!forward) {
+      return;
+    }
+
+    const scheduled = scheduleCameraSpawnPoint({
+      key: roomKey,
+      position,
+      forward,
+      up: [0, 1, 0]
+    });
+
+    if (scheduled) {
+      discoveredCameraRooms.add(roomKey);
+    }
+  }
+
   function updateCellVerticalOpeningForLayer(x, z, layerIndex) {
     const key = getCellKey(x, z);
     const perLayer = cellLayerEdgeStates.get(key);
@@ -363,6 +513,8 @@ export function createProceduralRoomSystem(device, options = {}) {
 
       evaluateCellForBarrel(ax, az, layerIndex);
       evaluateCellForBarrel(bx, bz, layerIndex);
+      evaluateCellForCamera(ax, az, layerIndex);
+      evaluateCellForCamera(bx, bz, layerIndex);
     }
   }
 
@@ -1033,7 +1185,14 @@ export function createProceduralRoomSystem(device, options = {}) {
       }
       return pendingBarrelSpawns.splice(0, pendingBarrelSpawns.length);
     },
+    consumeCameraSpawnPoints: () => {
+      if (pendingCameraSpawns.length === 0) {
+        return [];
+      }
+      return pendingCameraSpawns.splice(0, pendingCameraSpawns.length);
+    },
     scheduleBarrelSpawnPoint,
+    scheduleCameraSpawnPoint,
     dispose: () => {
       if (vertexBuffer) {
         vertexBuffer.destroy();
