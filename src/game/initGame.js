@@ -201,7 +201,8 @@ export async function initializeGame({
   hudController,
   overlayController,
   experienceTracker,
-  inventoryManager
+  inventoryManager,
+  framerateDisplay
 }) {
   try {
     const {
@@ -651,6 +652,7 @@ export async function initializeGame({
     function frame(now) {
       const deltaTime = Math.min((now - lastTime) / 1000, 0.2);
       lastTime = now;
+      framerateDisplay?.update?.(deltaTime);
 
       const isPaused = pauseControls?.isPaused?.();
       const usePressedThisFrame =
