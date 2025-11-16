@@ -45,6 +45,7 @@ function resolvePlayerCollisions(position, colliders) {
   const halfHeight = PLAYER_COLLISION_HALF_HEIGHT;
   const maxIterations = PLAYER_COLLISION_ITERATIONS;
   const nearFloorEpsilon = 1e-4;
+  const verticalOverlapTolerance = 1e-4;
 
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
     let adjusted = false;
@@ -57,7 +58,10 @@ function resolvePlayerCollisions(position, colliders) {
         continue;
       }
 
-      if (playerMaxY <= collider.minY || playerMinY >= collider.maxY) {
+      if (
+        playerMaxY <= collider.minY + verticalOverlapTolerance ||
+        playerMinY >= collider.maxY - verticalOverlapTolerance
+      ) {
         continue;
       }
 
