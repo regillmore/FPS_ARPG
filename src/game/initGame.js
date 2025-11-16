@@ -642,17 +642,38 @@ export async function initializeGame({
       typeof pauseControls?.getDiagnosticsState === 'function'
         ? pauseControls.getDiagnosticsState()
         : null;
+    const initialOptions =
+      typeof pauseControls?.getOptionsState === 'function'
+        ? pauseControls.getOptionsState()
+        : null;
     let disableDynamicLights = Boolean(initialDiagnostics?.disableLights);
     let disableEnemies = Boolean(initialDiagnostics?.disableEnemies);
     let showFramerate = Boolean(initialDiagnostics?.showFramerate);
+    const resolveFramerateCap = (value) => {
+      const numericValue = Number(value);
+      if (!Number.isFinite(numericValue) || numericValue <= 0) {
+        return 0;
+      }
+      return Math.max(1, Math.round(numericValue));
+    };
+    let frameIntervalTargetMs = 0;
+    const applyFramerateTarget = (value) => {
+      const normalized = resolveFramerateCap(value);
+      frameIntervalTargetMs = normalized > 0 ? 1000 / normalized : 0;
+    };
 
     framerateDisplay?.setVisible?.(showFramerate);
+    applyFramerateTarget(initialOptions?.framerateCap);
 
     window.addEventListener('game-diagnostics-change', (event) => {
       disableDynamicLights = Boolean(event?.detail?.disableLights);
       disableEnemies = Boolean(event?.detail?.disableEnemies);
       showFramerate = Boolean(event?.detail?.showFramerate);
       framerateDisplay?.setVisible?.(showFramerate);
+    });
+
+    window.addEventListener('game-options-change', (event) => {
+      applyFramerateTarget(event?.detail?.framerateCap);
     });
 
     const ensureRenderableUniformResources = (entity) => {
@@ -799,10 +820,26 @@ export async function initializeGame({
     const viewDirection = new Float32Array(3);
 
     let lastTime = performance.now();
+    let frameAccumulator = 0;
 
     function frame(now) {
-      const deltaTime = Math.min((now - lastTime) / 1000, 0.2);
+      const elapsed = now - lastTime;
       lastTime = now;
+      frameAccumulator += elapsed;
+
+      if (frameIntervalTargetMs > 0) {
+        if (frameAccumulator + 0.25 < frameIntervalTargetMs) {
+          requestAnimationFrame(frame);
+          return;
+        }
+        frameAccumulator = Math.max(frameAccumulator - frameIntervalTargetMs, 0);
+      }
+
+      const deltaMs = frameIntervalTargetMs > 0 ? frameIntervalTargetMs : frameAccumulator;
+      const deltaTime = Math.min(deltaMs / 1000, 0.2);
+      if (frameIntervalTargetMs === 0) {
+        frameAccumulator = 0;
+      }
       framerateDisplay?.update?.(deltaTime);
 
       const isPaused = pauseControls?.isPaused?.();
