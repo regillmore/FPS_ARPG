@@ -3,6 +3,7 @@ import { FirstPersonController } from '../fpsController.js';
 import { initWebGPU } from '../webgpu/initWebGPU.js';
 import { createBasicPipeline } from '../webgpu/pipeline.js';
 import { createProceduralRoomSystem } from '../world/proceduralRooms.js';
+import { createBossRoom } from '../world/bossRoom.js';
 import { getWeapon } from './playerWeapons.js';
 import { createEnemyManager } from './enemies/enemyManager.js';
 import { createProjectileManager } from './projectiles.js';
@@ -199,6 +200,199 @@ function resolvePlayerCollisions(position, colliders) {
   return result;
 }
 
+function extendBoundsWith(target, source) {
+  if (!target || !source) {
+    return;
+  }
+
+  const minKeys = ['minX', 'minY', 'minZ'];
+  const maxKeys = ['maxX', 'maxY', 'maxZ'];
+
+  for (const key of minKeys) {
+    const value = Number(source[key]);
+    if (!Number.isFinite(value)) {
+      continue;
+    }
+    const current = Number(target[key]);
+    target[key] = Number.isFinite(current) ? Math.min(current, value) : value;
+  }
+
+  for (const key of maxKeys) {
+    const value = Number(source[key]);
+    if (!Number.isFinite(value)) {
+      continue;
+    }
+    const current = Number(target[key]);
+    target[key] = Number.isFinite(current) ? Math.max(current, value) : value;
+  }
+}
+
+function normalizePortalVector(value, fallback) {
+  const source =
+    (Array.isArray(value) || ArrayBuffer.isView(value)) && value.length >= 3
+      ? value
+      : fallback;
+  const vx = Number(source?.[0]);
+  const vy = Number(source?.[1]);
+  const vz = Number(source?.[2]);
+  const vector = new Float32Array([
+    Number.isFinite(vx) ? vx : fallback[0],
+    Number.isFinite(vy) ? vy : fallback[1],
+    Number.isFinite(vz) ? vz : fallback[2]
+  ]);
+  const length = Math.hypot(vector[0], vector[1], vector[2]);
+  if (length <= 1e-5) {
+    vector[0] = fallback[0];
+    vector[1] = fallback[1];
+    vector[2] = fallback[2];
+    return vector;
+  }
+  vector[0] /= length;
+  vector[1] /= length;
+  vector[2] /= length;
+  return vector;
+}
+
+function crossVectors(a, b) {
+  return new Float32Array([
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0]
+  ]);
+}
+
+function createPortalTravelSystem(portalDefinitions, controller) {
+  if (!Array.isArray(portalDefinitions) || !controller) {
+    return { update: () => false };
+  }
+
+  const normalizedPortals = [];
+  const portalMap = new Map();
+  const portalStates = new Map();
+
+  for (let i = 0; i < portalDefinitions.length; i += 1) {
+    const definition = portalDefinitions[i];
+    if (!definition || !definition.id) {
+      continue;
+    }
+    const center = normalizePortalVector(definition.center, [0, 0, 0]);
+    const normal = normalizePortalVector(definition.normal ?? [0, 0, 1], [0, 0, 1]);
+    const up = normalizePortalVector(definition.up ?? WORLD_UP, WORLD_UP);
+    let right = definition.right
+      ? normalizePortalVector(definition.right, [1, 0, 0])
+      : crossVectors(up, normal);
+    const rightLength = Math.hypot(right[0], right[1], right[2]);
+    if (rightLength <= 1e-5) {
+      right = new Float32Array([1, 0, 0]);
+    } else {
+      right[0] /= rightLength;
+      right[1] /= rightLength;
+      right[2] /= rightLength;
+    }
+
+    const widthValue = Number(definition.width);
+    const heightValue = Number(definition.height);
+    const resolvedWidth = Number.isFinite(widthValue) && widthValue > 0 ? widthValue : 2.0;
+    const resolvedHeight = Number.isFinite(heightValue) && heightValue > 0 ? heightValue : 3.0;
+    const exitOffsetValue = Number(definition.exitOffset);
+    const cooldownValue = Number(definition.cooldown);
+    const triggerThresholdValue = Number(definition.triggerThreshold);
+
+    const portal = {
+      id: String(definition.id),
+      linkedPortalId: definition.linkedPortalId ?? '',
+      center,
+      normal,
+      up,
+      right,
+      width: resolvedWidth,
+      height: resolvedHeight,
+      halfWidth: resolvedWidth * 0.5,
+      halfHeight: resolvedHeight * 0.5,
+      exitOffset: Number.isFinite(exitOffsetValue) ? exitOffsetValue : 1.0,
+      cooldown: Number.isFinite(cooldownValue) ? Math.max(0.05, cooldownValue) : 0.35,
+      triggerThreshold: Number.isFinite(triggerThresholdValue) ? Math.max(0, triggerThresholdValue) : 0.05
+    };
+
+    normalizedPortals.push(portal);
+    portalMap.set(portal.id, portal);
+    portalStates.set(portal.id, { lastDistance: null, cooldown: 0 });
+  }
+
+  if (normalizedPortals.length === 0) {
+    return { update: () => false };
+  }
+
+  function update(deltaTime) {
+    if (!controller.position) {
+      return false;
+    }
+    let teleported = false;
+
+    for (let i = 0; i < normalizedPortals.length; i += 1) {
+      const portal = normalizedPortals[i];
+      const state = portalStates.get(portal.id);
+      if (!state) {
+        continue;
+      }
+
+      state.cooldown = Math.max(0, state.cooldown - deltaTime);
+
+      const offsetX = controller.position[0] - portal.center[0];
+      const offsetY = controller.position[1] - portal.center[1];
+      const offsetZ = controller.position[2] - portal.center[2];
+      const lateral = offsetX * portal.right[0] + offsetY * portal.right[1] + offsetZ * portal.right[2];
+      const vertical = offsetX * portal.up[0] + offsetY * portal.up[1] + offsetZ * portal.up[2];
+      const distance = offsetX * portal.normal[0] + offsetY * portal.normal[1] + offsetZ * portal.normal[2];
+
+      if (state.lastDistance === null) {
+        state.lastDistance = distance;
+      }
+
+      const withinFrame = Math.abs(lateral) <= portal.halfWidth && Math.abs(vertical) <= portal.halfHeight;
+      const crossedPlane = state.lastDistance > portal.triggerThreshold && distance <= 0;
+
+      if (!teleported && withinFrame && crossedPlane && state.cooldown <= 0) {
+        const destination = portal.linkedPortalId ? portalMap.get(portal.linkedPortalId) : null;
+        if (destination) {
+          const exitOffset = destination.exitOffset ?? 1.0;
+          controller.position[0] =
+            destination.center[0] +
+            destination.right[0] * lateral +
+            destination.up[0] * vertical +
+            destination.normal[0] * exitOffset;
+          controller.position[1] =
+            destination.center[1] +
+            destination.right[1] * lateral +
+            destination.up[1] * vertical +
+            destination.normal[1] * exitOffset;
+          controller.position[2] =
+            destination.center[2] +
+            destination.right[2] * lateral +
+            destination.up[2] * vertical +
+            destination.normal[2] * exitOffset;
+
+          state.cooldown = portal.cooldown;
+          state.lastDistance = -portal.triggerThreshold;
+          const destinationState = portalStates.get(destination.id);
+          if (destinationState) {
+            destinationState.cooldown = destination.cooldown;
+            destinationState.lastDistance = -destination.triggerThreshold;
+          }
+          teleported = true;
+          break;
+        }
+      }
+
+      state.lastDistance = distance;
+    }
+
+    return teleported;
+  }
+
+  return { update };
+}
+
 export async function initializeGame({
   canvas,
   pauseControls,
@@ -224,11 +418,34 @@ export async function initializeGame({
       generationRadius: 5,
       initialLayer: 0
     });
+    const bossRoom = createBossRoom(device);
+    const staticWorldGeometry = [];
+    if (bossRoom?.geometry?.vertexBuffer && bossRoom?.geometry?.vertexCount > 0) {
+      staticWorldGeometry.push(bossRoom.geometry);
+    }
+    if (bossRoom?.portalGeometry?.vertexBuffer && bossRoom?.portalGeometry?.vertexCount > 0) {
+      staticWorldGeometry.push(bossRoom.portalGeometry);
+    }
+    const bossRoomBounds = bossRoom?.bounds ?? null;
+    const bossRoomColliders = Array.isArray(bossRoom?.colliders) ? bossRoom.colliders : null;
+    const bossRoomLights = Array.isArray(bossRoom?.lights) ? bossRoom.lights : [];
+    const bossRoomPortals = Array.isArray(bossRoom?.portals) ? bossRoom.portals : [];
     const roomColliders = roomSystem.getColliders();
     const playerCollisionScratch = [];
     let roomVertexBuffer = roomSystem.getVertexBuffer();
     let roomVertexCount = roomSystem.getVertexCount();
     const bounds = roomSystem.getBounds();
+    if (bossRoomBounds) {
+      extendBoundsWith(bounds, bossRoomBounds);
+    }
+    if (roomColliders && bossRoomColliders) {
+      for (let i = 0; i < bossRoomColliders.length; i += 1) {
+        const collider = bossRoomColliders[i];
+        if (collider) {
+          roomColliders.push(collider);
+        }
+      }
+    }
     const bulletHoleManager = createBulletHoleManager(device);
     const clonePositionArray = (source) => {
       if (!source) {
@@ -483,6 +700,7 @@ export async function initializeGame({
 
     const controller = new FirstPersonController(canvas);
     pauseControls?.setController?.(controller);
+    const portalTravel = createPortalTravelSystem(bossRoomPortals, controller);
 
     const handleInventoryDrop = (detail) => {
       if (!detail || !controller) {
@@ -755,6 +973,12 @@ export async function initializeGame({
         }
       }
 
+      if (bossRoomLights) {
+        for (let i = 0; i < bossRoomLights.length; i += 1) {
+          considerLight(bossRoomLights[i]);
+        }
+      }
+
       return target;
     };
 
@@ -815,10 +1039,25 @@ export async function initializeGame({
         controller.update(deltaTime);
       }
 
-      const geometryChanged = roomSystem.update(controller.position);
+      portalTravel.update(deltaTime);
+
+      const allowProceduralUpdate =
+        typeof roomSystem.isPositionWithinGenerationRadius === 'function'
+          ? roomSystem.isPositionWithinGenerationRadius(controller.position, {
+              horizontalPadding: 0,
+              verticalPadding: 0
+            })
+          : true;
+
+      const geometryChanged = allowProceduralUpdate
+        ? roomSystem.update(controller.position)
+        : false;
       if (geometryChanged) {
         roomVertexBuffer = roomSystem.getVertexBuffer();
         roomVertexCount = roomSystem.getVertexCount();
+        if (bossRoomBounds) {
+          extendBoundsWith(bounds, bossRoomBounds);
+        }
         spawnProceduralBarrels();
       }
 
@@ -1311,6 +1550,18 @@ export async function initializeGame({
       pass.setBindGroup(0, worldUniformBindGroup);
       pass.setVertexBuffer(0, roomVertexBuffer);
       pass.draw(roomVertexCount, 1, 0, 0);
+
+      if (staticWorldGeometry.length > 0) {
+        for (let i = 0; i < staticWorldGeometry.length; i += 1) {
+          const geometry = staticWorldGeometry[i];
+          if (!geometry || !geometry.vertexBuffer || !geometry.vertexCount) {
+            continue;
+          }
+          pass.setVertexBuffer(0, geometry.vertexBuffer);
+          pass.draw(geometry.vertexCount, 1, 0, 0);
+        }
+        pass.setVertexBuffer(0, roomVertexBuffer);
+      }
 
       if (Array.isArray(worldItems) && worldItems.length > 0) {
         for (const item of worldItems) {
