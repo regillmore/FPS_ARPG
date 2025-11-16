@@ -45,7 +45,7 @@ function resolvePlayerCollisions(position, colliders) {
   const halfHeight = PLAYER_COLLISION_HALF_HEIGHT;
   const maxIterations = PLAYER_COLLISION_ITERATIONS;
   const nearFloorEpsilon = 1e-4;
-  const verticalOverlapTolerance = 1e-4;
+  const overlapTolerance = 1e-4;
 
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
     let adjusted = false;
@@ -59,8 +59,8 @@ function resolvePlayerCollisions(position, colliders) {
       }
 
       if (
-        playerMaxY <= collider.minY + verticalOverlapTolerance ||
-        playerMinY >= collider.maxY - verticalOverlapTolerance
+        playerMaxY <= collider.minY + overlapTolerance ||
+        playerMinY >= collider.maxY - overlapTolerance
       ) {
         continue;
       }
@@ -71,10 +71,10 @@ function resolvePlayerCollisions(position, colliders) {
       const playerMaxZ = position[2] + radius;
 
       if (
-        playerMaxX <= collider.minX ||
-        playerMinX >= collider.maxX ||
-        playerMaxZ <= collider.minZ ||
-        playerMinZ >= collider.maxZ
+        playerMaxX <= collider.minX + overlapTolerance ||
+        playerMinX >= collider.maxX - overlapTolerance ||
+        playerMaxZ <= collider.minZ + overlapTolerance ||
+        playerMinZ >= collider.maxZ - overlapTolerance
       ) {
         continue;
       }
