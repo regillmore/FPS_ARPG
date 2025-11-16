@@ -174,9 +174,12 @@ export function mat4InvertRigidBody(out, matrix) {
   out[10] = r22;
   out[11] = 0;
 
-  out[12] = -(r00 * tx + r01 * ty + r02 * tz);
-  out[13] = -(r10 * tx + r11 * ty + r12 * tz);
-  out[14] = -(r20 * tx + r21 * ty + r22 * tz);
+  // Translation needs to apply the transposed rotation (rows of the original
+  // matrix correspond to columns of the inverted rotation). Multiplying by the
+  // original column vectors ensures we compute -(R^T * t).
+  out[12] = -(r00 * tx + r10 * ty + r20 * tz);
+  out[13] = -(r01 * tx + r11 * ty + r21 * tz);
+  out[14] = -(r02 * tx + r12 * ty + r22 * tz);
   out[15] = 1;
   return out;
 }
