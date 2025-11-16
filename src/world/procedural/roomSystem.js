@@ -40,6 +40,8 @@ const directionOffsets = {
   west: [-1, 0]
 };
 
+const HALLWAY_COLLIDER_OVERLAP = 0.05;
+
 export function createProceduralRoomSystem(device, options = {}) {
   const roomSize = options.roomSize ?? DEFAULT_ROOM_SIZE;
   const roomHeight = options.roomHeight ?? DEFAULT_ROOM_HEIGHT;
@@ -433,13 +435,16 @@ export function createProceduralRoomSystem(device, options = {}) {
       const corridorMaxZ = Math.min(maxZ, centerZ + halfWidth);
       addBox(vertices, minX, floorMinY, corridorMinZ, maxX, floorMaxY, corridorMaxZ, walkwayColor, bounds);
 
+      const extendedMinX = minX - HALLWAY_COLLIDER_OVERLAP;
+      const extendedMaxX = maxX + HALLWAY_COLLIDER_OVERLAP;
+
       if (sideThickness > 1e-3) {
         const leftThickness = Math.min(sideThickness, Math.max(0, corridorMinZ - minZ));
         if (leftThickness > 1e-3) {
           const leftMinZ = Math.max(minZ, corridorMinZ - leftThickness);
           const leftMaxZ = Math.max(leftMinZ, corridorMinZ);
           addBox(vertices, minX, baseY, leftMinZ, maxX, wallTopY, leftMaxZ, sideColor, bounds);
-          addCollider(colliders, minX, baseY, leftMinZ, maxX, wallTopY, leftMaxZ);
+          addCollider(colliders, extendedMinX, baseY, leftMinZ, extendedMaxX, wallTopY, leftMaxZ);
         }
 
         const rightThickness = Math.min(sideThickness, Math.max(0, maxZ - corridorMaxZ));
@@ -447,7 +452,7 @@ export function createProceduralRoomSystem(device, options = {}) {
           const rightMinZ = Math.min(corridorMaxZ, maxZ - rightThickness);
           const rightMaxZ = Math.min(maxZ, corridorMaxZ + rightThickness);
           addBox(vertices, minX, baseY, rightMinZ, maxX, wallTopY, rightMaxZ, sideColor, bounds);
-          addCollider(colliders, minX, baseY, rightMinZ, maxX, wallTopY, rightMaxZ);
+          addCollider(colliders, extendedMinX, baseY, rightMinZ, extendedMaxX, wallTopY, rightMaxZ);
         }
       }
 
@@ -462,13 +467,16 @@ export function createProceduralRoomSystem(device, options = {}) {
       const corridorMaxX = Math.min(maxX, centerX + halfWidth);
       addBox(vertices, corridorMinX, floorMinY, minZ, corridorMaxX, floorMaxY, maxZ, walkwayColor, bounds);
 
+      const extendedMinZ = minZ - HALLWAY_COLLIDER_OVERLAP;
+      const extendedMaxZ = maxZ + HALLWAY_COLLIDER_OVERLAP;
+
       if (sideThickness > 1e-3) {
         const leftThickness = Math.min(sideThickness, Math.max(0, corridorMinX - minX));
         if (leftThickness > 1e-3) {
           const leftMinX = Math.max(minX, corridorMinX - leftThickness);
           const leftMaxX = Math.max(leftMinX, corridorMinX);
           addBox(vertices, leftMinX, baseY, minZ, leftMaxX, wallTopY, maxZ, sideColor, bounds);
-          addCollider(colliders, leftMinX, baseY, minZ, leftMaxX, wallTopY, maxZ);
+          addCollider(colliders, leftMinX, baseY, extendedMinZ, leftMaxX, wallTopY, extendedMaxZ);
         }
 
         const rightThickness = Math.min(sideThickness, Math.max(0, maxX - corridorMaxX));
@@ -476,7 +484,7 @@ export function createProceduralRoomSystem(device, options = {}) {
           const rightMinX = Math.min(corridorMaxX, maxX - rightThickness);
           const rightMaxX = Math.min(maxX, corridorMaxX + rightThickness);
           addBox(vertices, rightMinX, baseY, minZ, rightMaxX, wallTopY, maxZ, sideColor, bounds);
-          addCollider(colliders, rightMinX, baseY, minZ, rightMaxX, wallTopY, maxZ);
+          addCollider(colliders, rightMinX, baseY, extendedMinZ, rightMaxX, wallTopY, extendedMaxZ);
         }
       }
 
