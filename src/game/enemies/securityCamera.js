@@ -125,11 +125,9 @@ function addBox(target, min, max, color, glow = 0, transform = null) {
   pushQuad(target, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], baseNormals.bottom, color, glow);
 }
 
-function addVisionCone(target, transform = null) {
+function addVisionCone(target) {
   const y = LOCAL_BOUNDS.minY - VISION_CONE_FLOOR_OFFSET;
-  const transformPoint = transform && typeof transform.point === 'function' ? transform.point : null;
-  const transformNormal = transform && typeof transform.normal === 'function' ? transform.normal : null;
-  const normal = transformNormal ? transformNormal([0, 1, 0]) : [0, 1, 0];
+  const normal = [0, 1, 0];
   const totalAngle = VISION_CONE_HALF_ANGLE * 2;
   const angleStep = totalAngle / VISION_CONE_SEGMENTS;
   const startAngle = -VISION_CONE_HALF_ANGLE;
@@ -137,17 +135,10 @@ function addVisionCone(target, transform = null) {
   for (let i = 0; i < VISION_CONE_SEGMENTS; i += 1) {
     const angleA = startAngle + angleStep * i;
     const angleB = angleA + angleStep;
-    let innerA = [Math.sin(angleA) * VISION_CONE_MIN_RANGE, y, Math.cos(angleA) * VISION_CONE_MIN_RANGE];
-    let innerB = [Math.sin(angleB) * VISION_CONE_MIN_RANGE, y, Math.cos(angleB) * VISION_CONE_MIN_RANGE];
-    let outerA = [Math.sin(angleA) * VISION_CONE_MAX_RANGE, y, Math.cos(angleA) * VISION_CONE_MAX_RANGE];
-    let outerB = [Math.sin(angleB) * VISION_CONE_MAX_RANGE, y, Math.cos(angleB) * VISION_CONE_MAX_RANGE];
-
-    if (transformPoint) {
-      innerA = transformPoint(innerA);
-      innerB = transformPoint(innerB);
-      outerA = transformPoint(outerA);
-      outerB = transformPoint(outerB);
-    }
+    const innerA = [Math.sin(angleA) * VISION_CONE_MIN_RANGE, y, Math.cos(angleA) * VISION_CONE_MIN_RANGE];
+    const innerB = [Math.sin(angleB) * VISION_CONE_MIN_RANGE, y, Math.cos(angleB) * VISION_CONE_MIN_RANGE];
+    const outerA = [Math.sin(angleA) * VISION_CONE_MAX_RANGE, y, Math.cos(angleA) * VISION_CONE_MAX_RANGE];
+    const outerB = [Math.sin(angleB) * VISION_CONE_MAX_RANGE, y, Math.cos(angleB) * VISION_CONE_MAX_RANGE];
 
     pushVertex(target, innerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
     pushVertex(target, outerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
