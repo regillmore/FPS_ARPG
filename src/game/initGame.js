@@ -894,26 +894,15 @@ export async function initializeGame({
     const viewDirection = new Float32Array(3);
 
     let lastTime = performance.now();
-    let frameAccumulator = 0;
 
     function frame(now) {
       const elapsed = now - lastTime;
+      if (frameIntervalTargetMs > 0 && elapsed + 0.25 < frameIntervalTargetMs) {
+        requestAnimationFrame(frame);
+        return;
+      }
+      const deltaTime = Math.min(elapsed / 1000, 0.2);
       lastTime = now;
-      frameAccumulator += elapsed;
-
-      if (frameIntervalTargetMs > 0) {
-        if (frameAccumulator + 0.25 < frameIntervalTargetMs) {
-          requestAnimationFrame(frame);
-          return;
-        }
-        frameAccumulator = Math.max(frameAccumulator - frameIntervalTargetMs, 0);
-      }
-
-      const deltaMs = frameIntervalTargetMs > 0 ? frameIntervalTargetMs : frameAccumulator;
-      const deltaTime = Math.min(deltaMs / 1000, 0.2);
-      if (frameIntervalTargetMs === 0) {
-        frameAccumulator = 0;
-      }
       framerateDisplay?.update?.(deltaTime);
 
       const isPaused = pauseControls?.isPaused?.();
