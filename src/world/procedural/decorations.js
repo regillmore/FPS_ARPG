@@ -63,7 +63,6 @@ export function addCagedElectricWallLight(
   centerX,
   centerZ,
   baseY,
-  layerIndex,
   roomSize,
   roomHeight,
   wallThickness,
@@ -325,8 +324,7 @@ export function addCagedElectricWallLight(
         forwardY,
         forwardZ,
         1.5
-      ]),
-      layerIndex
+      ])
     });
   }
 }

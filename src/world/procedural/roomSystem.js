@@ -854,7 +854,6 @@ export function createProceduralRoomSystem(device, options = {}) {
                 centerX,
                 centerZ,
                 baseY,
-                layerIndex,
                 roomSize,
                 roomHeight,
                 wallThickness,
