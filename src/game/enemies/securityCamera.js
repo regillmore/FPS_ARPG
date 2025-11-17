@@ -20,6 +20,8 @@ const RECORDING_LIGHT_ON_GLOW = 0.7;
 const DEFAULT_PLAYER_RADIUS = 0.4;
 const DEFAULT_PLAYER_HALF_HEIGHT = 1.0;
 const OCCLUSION_PADDING = 0.15;
+const ROOM_BOUNDARY_TOLERANCE = 1e-4;
+const ROOM_DIRECTION_EPSILON = 1e-5;
 
 const COLORS = Object.freeze({
   mount: [0.32, 0.34, 0.36],
@@ -125,28 +127,52 @@ function addBox(target, min, max, color, glow = 0, transform = null) {
   pushQuad(target, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], baseNormals.bottom, color, glow);
 }
 
-function addVisionCone(target) {
+function addVisionCone(target, options = {}) {
+  const metadata = options.metadata ?? null;
   const y = LOCAL_BOUNDS.minY - VISION_CONE_FLOOR_OFFSET;
   const normal = [0, 1, 0];
   const totalAngle = VISION_CONE_HALF_ANGLE * 2;
   const angleStep = totalAngle / VISION_CONE_SEGMENTS;
   const startAngle = -VISION_CONE_HALF_ANGLE;
 
+  if (metadata) {
+    metadata.floatOffset = target.length;
+  }
+
   for (let i = 0; i < VISION_CONE_SEGMENTS; i += 1) {
     const angleA = startAngle + angleStep * i;
     const angleB = angleA + angleStep;
-    const innerA = [Math.sin(angleA) * VISION_CONE_MIN_RANGE, y, Math.cos(angleA) * VISION_CONE_MIN_RANGE];
-    const innerB = [Math.sin(angleB) * VISION_CONE_MIN_RANGE, y, Math.cos(angleB) * VISION_CONE_MIN_RANGE];
-    const outerA = [Math.sin(angleA) * VISION_CONE_MAX_RANGE, y, Math.cos(angleA) * VISION_CONE_MAX_RANGE];
-    const outerB = [Math.sin(angleB) * VISION_CONE_MAX_RANGE, y, Math.cos(angleB) * VISION_CONE_MAX_RANGE];
+    const sinA = Math.sin(angleA);
+    const cosA = Math.cos(angleA);
+    const sinB = Math.sin(angleB);
+    const cosB = Math.cos(angleB);
+    const innerA = [sinA * VISION_CONE_MIN_RANGE, y, cosA * VISION_CONE_MIN_RANGE];
+    const innerB = [sinB * VISION_CONE_MIN_RANGE, y, cosB * VISION_CONE_MIN_RANGE];
+    const outerA = [sinA * VISION_CONE_MAX_RANGE, y, cosA * VISION_CONE_MAX_RANGE];
+    const outerB = [sinB * VISION_CONE_MAX_RANGE, y, cosB * VISION_CONE_MAX_RANGE];
 
     pushVertex(target, innerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
+    const outerBOffsetA = target.length;
     pushVertex(target, outerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
     pushVertex(target, innerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
 
     pushVertex(target, innerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
+    const outerAOffset = target.length;
     pushVertex(target, outerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
+    const outerBOffsetB = target.length;
     pushVertex(target, outerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
+
+    if (metadata) {
+      metadata.outerVertices.push(
+        { floatOffset: outerBOffsetA, sinAngle: sinB, cosAngle: cosB },
+        { floatOffset: outerAOffset, sinAngle: sinA, cosAngle: cosA },
+        { floatOffset: outerBOffsetB, sinAngle: sinB, cosAngle: cosB }
+      );
+    }
+  }
+
+  if (metadata) {
+    metadata.floatCount = target.length - metadata.floatOffset;
   }
 }
 
@@ -195,11 +221,15 @@ function createTiltTransform(pivot, angle) {
   };
 }
 
-function createSecurityCameraGeometry(device) {
+function createSecurityCameraGeometry(device, options = {}) {
   const vertices = [];
   let recordingLightFloatOffset = -1;
   let recordingLightFloatCount = 0;
   const tiltTransform = createTiltTransform(CAMERA_TILT_PIVOT, CAMERA_TILT_ANGLE);
+  const includeVisionConeMetadata = Boolean(options.includeVisionConeMetadata);
+  const visionConeMetadata = includeVisionConeMetadata
+    ? { floatOffset: 0, floatCount: 0, outerVertices: [] }
+    : null;
 
   // Corner mount and brace
   addBox(vertices, [-0.22, -0.35, -0.22], [0.22, -0.15, 0.1], COLORS.mount);
@@ -224,7 +254,7 @@ function createSecurityCameraGeometry(device) {
   );
   recordingLightFloatCount = vertices.length - recordingLightFloatOffset;
 
-  addVisionCone(vertices, tiltTransform);
+  addVisionCone(vertices, { metadata: visionConeMetadata });
 
   const vertexData = new Float32Array(vertices);
   const vertexBuffer = device.createBuffer({
@@ -256,6 +286,22 @@ function createSecurityCameraGeometry(device) {
     };
   }
 
+  if (visionConeMetadata && visionConeMetadata.floatCount > 0) {
+    const start = visionConeMetadata.floatOffset;
+    const end = start + visionConeMetadata.floatCount;
+    const data = vertexData.slice(start, end);
+    geometry.visionCone = {
+      byteOffset: start * 4,
+      floatCount: visionConeMetadata.floatCount,
+      data,
+      outerVertices: visionConeMetadata.outerVertices.map((entry) => ({
+        floatOffset: entry.floatOffset - start,
+        sinAngle: entry.sinAngle,
+        cosAngle: entry.cosAngle
+      }))
+    };
+  }
+
   return geometry;
 }
 
@@ -272,6 +318,65 @@ function resolvePosition(options = {}) {
     Number.isFinite(y) ? y : DEFAULT_POSITION[1],
     Number.isFinite(z) ? z : DEFAULT_POSITION[2]
   ]);
+}
+
+function resolveRoomBounds(options = {}) {
+  const source = options.roomBounds ?? null;
+  if (!source || typeof source !== 'object') {
+    return null;
+  }
+  const minX = Number(source.minX);
+  const maxX = Number(source.maxX);
+  const minZ = Number(source.minZ);
+  const maxZ = Number(source.maxZ);
+  if (
+    !Number.isFinite(minX) ||
+    !Number.isFinite(maxX) ||
+    !Number.isFinite(minZ) ||
+    !Number.isFinite(maxZ) ||
+    minX >= maxX ||
+    minZ >= maxZ
+  ) {
+    return null;
+  }
+  return {
+    minX,
+    maxX,
+    minZ,
+    maxZ
+  };
+}
+
+function resolveRoomMaxHorizontalDistance(bounds, originX, originZ, dirX, dirZ) {
+  if (!bounds) {
+    return VISION_CONE_MAX_RANGE;
+  }
+
+  const resolveAxis = (direction, min, max, origin) => {
+    if (direction > ROOM_DIRECTION_EPSILON) {
+      return (max - origin) / direction;
+    }
+    if (direction < -ROOM_DIRECTION_EPSILON) {
+      return (min - origin) / direction;
+    }
+    return Infinity;
+  };
+
+  const distanceX = resolveAxis(dirX, bounds.minX, bounds.maxX, originX);
+  const distanceZ = resolveAxis(dirZ, bounds.minZ, bounds.maxZ, originZ);
+  let distance = Math.min(distanceX, distanceZ);
+
+  if (!(distance > 0) || !Number.isFinite(distance)) {
+    if (distanceX > 0 && Number.isFinite(distanceX)) {
+      distance = distanceX;
+    } else if (distanceZ > 0 && Number.isFinite(distanceZ)) {
+      distance = distanceZ;
+    } else {
+      distance = 0;
+    }
+  }
+
+  return Math.min(Math.max(distance, 0), VISION_CONE_MAX_RANGE);
 }
 
 function normalizeVector(source, fallback) {
@@ -394,8 +499,11 @@ export function createSecurityCamera(device, options = {}) {
     throw new Error('A GPUDevice is required to create a security camera.');
   }
 
-  const geometry = createSecurityCameraGeometry(device);
   const translation = resolvePosition(options);
+  const roomBounds = resolveRoomBounds(options);
+  const geometry = createSecurityCameraGeometry(device, {
+    includeVisionConeMetadata: Boolean(roomBounds)
+  });
   const layerResolver =
     typeof options.layerResolver === 'function' ? options.layerResolver : null;
   let cameraLayerIndex = normalizeLayerIndex(options.layerIndex);
@@ -415,6 +523,7 @@ export function createSecurityCamera(device, options = {}) {
   const currentRight = new Float32Array(baseRight);
   const currentForward = new Float32Array(baseForward);
   const planarForward = new Float32Array(baseForward);
+  const planarRight = new Float32Array(baseRight);
   const modelMatrix = new Float32Array(16);
   const worldBounds = {
     minX: 0,
@@ -447,9 +556,11 @@ export function createSecurityCamera(device, options = {}) {
   const horizontalToPlayer = new Float32Array(3);
   const occlusionDirection = new Float32Array(3);
   let planarForwardReady = false;
+  let planarRightReady = false;
   let playerDetected = false;
   let recordingLightActive = false;
   const recordingLightMetadata = geometry.recordingLight ?? null;
+  const visionConeMetadata = geometry.visionCone ?? null;
 
   function updateOrientation(yaw) {
     const cosYaw = Math.cos(yaw);
@@ -482,9 +593,71 @@ export function createSecurityCamera(device, options = {}) {
     } else {
       planarForwardReady = false;
     }
+
+    if (planarForwardReady) {
+      planarRight[0] = currentRight[0];
+      planarRight[1] = currentRight[1];
+      planarRight[2] = currentRight[2];
+      planarRightReady = true;
+    } else {
+      planarRightReady = false;
+    }
+
+    updateVisionConeIndicator();
   }
 
   updateOrientation(0);
+
+  function resolveHorizontalRoomRange(dirX, dirZ) {
+    if (!roomBounds) {
+      return VISION_CONE_MAX_RANGE;
+    }
+    return resolveRoomMaxHorizontalDistance(roomBounds, translation[0], translation[2], dirX, dirZ);
+  }
+
+  function updateVisionConeIndicator() {
+    if (
+      !visionConeMetadata ||
+      !visionConeMetadata.data ||
+      !visionConeMetadata.outerVertices ||
+      visionConeMetadata.outerVertices.length === 0 ||
+      !roomBounds ||
+      !planarForwardReady ||
+      !planarRightReady
+    ) {
+      return;
+    }
+
+    const data = visionConeMetadata.data;
+    let updated = false;
+
+    for (let i = 0; i < visionConeMetadata.outerVertices.length; i += 1) {
+      const entry = visionConeMetadata.outerVertices[i];
+      const cosAngle = entry.cosAngle;
+      const sinAngle = entry.sinAngle;
+      const dirX = planarForward[0] * cosAngle + planarRight[0] * sinAngle;
+      const dirZ = planarForward[2] * cosAngle + planarRight[2] * sinAngle;
+      const range = resolveHorizontalRoomRange(dirX, dirZ);
+      const newX = sinAngle * range;
+      const newZ = cosAngle * range;
+      const baseIndex = entry.floatOffset;
+      const currentX = data[baseIndex];
+      const currentZ = data[baseIndex + 2];
+      if (Math.abs(currentX - newX) > 1e-4 || Math.abs(currentZ - newZ) > 1e-4) {
+        data[baseIndex] = newX;
+        data[baseIndex + 2] = newZ;
+        updated = true;
+      }
+    }
+
+    if (updated && geometry.vertexBuffer) {
+      try {
+        device.queue.writeBuffer(geometry.vertexBuffer, visionConeMetadata.byteOffset, data);
+      } catch (error) {
+        console.warn('Failed to update security camera vision indicator:', error);
+      }
+    }
+  }
 
   function updateRecordingLight(active) {
     if (!recordingLightMetadata || recordingLightActive === active) {
@@ -542,6 +715,21 @@ export function createSecurityCamera(device, options = {}) {
       return;
     }
 
+    if (roomBounds) {
+      if (
+        px < roomBounds.minX - ROOM_BOUNDARY_TOLERANCE ||
+        px > roomBounds.maxX + ROOM_BOUNDARY_TOLERANCE ||
+        pz < roomBounds.minZ - ROOM_BOUNDARY_TOLERANCE ||
+        pz > roomBounds.maxZ + ROOM_BOUNDARY_TOLERANCE
+      ) {
+        if (playerDetected) {
+          playerDetected = false;
+          updateRecordingLight(false);
+        }
+        return;
+      }
+    }
+
     const playerLayerIndex = resolvePlayerLayerIndex(context, py);
     if (
       cameraLayerIndex !== null &&
@@ -579,11 +767,7 @@ export function createSecurityCamera(device, options = {}) {
       horizontalToPlayer[2]
     );
 
-    if (
-      horizontalDistance < VISION_CONE_MIN_RANGE ||
-      horizontalDistance > VISION_CONE_MAX_RANGE ||
-      !planarForwardReady
-    ) {
+    if (horizontalDistance < VISION_CONE_MIN_RANGE || !planarForwardReady) {
       if (playerDetected) {
         playerDetected = false;
         updateRecordingLight(false);
@@ -601,6 +785,23 @@ export function createSecurityCamera(device, options = {}) {
       normalizedHZ * planarForward[2];
 
     if (alignment < cosVisionHalfAngle) {
+      if (playerDetected) {
+        playerDetected = false;
+        updateRecordingLight(false);
+      }
+      return;
+    }
+
+    const maxHorizontalDistance = resolveHorizontalRoomRange(normalizedHX, normalizedHZ);
+    if (!(maxHorizontalDistance > VISION_CONE_MIN_RANGE - 1e-3)) {
+      if (playerDetected) {
+        playerDetected = false;
+        updateRecordingLight(false);
+      }
+      return;
+    }
+
+    if (horizontalDistance > maxHorizontalDistance + 1e-4) {
       if (playerDetected) {
         playerDetected = false;
         updateRecordingLight(false);
@@ -662,6 +863,7 @@ export function createSecurityCamera(device, options = {}) {
     forward: currentForward,
     up: upAxis,
     bounds: worldBounds,
+    roomBounds,
     isPlayerDetected() {
       return playerDetected;
     },
@@ -730,6 +932,10 @@ export function createSecurityCamera(device, options = {}) {
       if (recordingLightMetadata) {
         recordingLightMetadata.offData = null;
         recordingLightMetadata.onData = null;
+      }
+      if (visionConeMetadata) {
+        visionConeMetadata.data = null;
+        visionConeMetadata.outerVertices = null;
       }
     }
   };

@@ -154,6 +154,37 @@ export function createProceduralRoomSystem(device, options = {}) {
     return tryNormalize(direction) ?? tryNormalize(fallback) ?? null;
   }
 
+  function normalizeRoomBounds(bounds) {
+    if (!bounds || typeof bounds !== 'object') {
+      return null;
+    }
+
+    const minX = Number(bounds.minX);
+    const maxX = Number(bounds.maxX);
+    const minZ = Number(bounds.minZ);
+    const maxZ = Number(bounds.maxZ);
+
+    if (
+      !Number.isFinite(minX) ||
+      !Number.isFinite(maxX) ||
+      !Number.isFinite(minZ) ||
+      !Number.isFinite(maxZ)
+    ) {
+      return null;
+    }
+
+    if (minX >= maxX || minZ >= maxZ) {
+      return null;
+    }
+
+    return {
+      minX,
+      maxX,
+      minZ,
+      maxZ
+    };
+  }
+
   function scheduleBarrelSpawnPoint(spawn) {
     if (!spawn) {
       return false;
@@ -183,12 +214,14 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
 
     const up = normalizeDirection(spawn.up, [0, 1, 0]) ?? [0, 1, 0];
+    const roomBounds = normalizeRoomBounds(spawn.roomBounds);
     const key = typeof spawn.key === 'string' ? spawn.key : spawn.key ? String(spawn.key) : '';
     pendingCameraSpawns.push({
       key,
       position: [normalizedPosition[0], normalizedPosition[1], normalizedPosition[2]],
       forward: [forward[0], forward[1], forward[2]],
-      up: [up[0], up[1], up[2]]
+      up: [up[0], up[1], up[2]],
+      roomBounds
     });
     return true;
   }
@@ -417,11 +450,19 @@ export function createProceduralRoomSystem(device, options = {}) {
       return;
     }
 
+    const roomBounds = {
+      minX: centerX - halfRoom,
+      maxX: centerX + halfRoom,
+      minZ: centerZ - halfRoom,
+      maxZ: centerZ + halfRoom
+    };
+
     const scheduled = scheduleCameraSpawnPoint({
       key: roomKey,
       position,
       forward,
-      up: [0, 1, 0]
+      up: [0, 1, 0],
+      roomBounds
     });
 
     if (scheduled) {

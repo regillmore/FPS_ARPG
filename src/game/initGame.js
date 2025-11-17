@@ -250,6 +250,26 @@ export async function initializeGame({
       }
       return [x, y, z];
     };
+    const cloneRoomBounds = (source) => {
+      if (!source || typeof source !== 'object') {
+        return null;
+      }
+      const minX = Number(source.minX);
+      const maxX = Number(source.maxX);
+      const minZ = Number(source.minZ);
+      const maxZ = Number(source.maxZ);
+      if (
+        !Number.isFinite(minX) ||
+        !Number.isFinite(maxX) ||
+        !Number.isFinite(minZ) ||
+        !Number.isFinite(maxZ) ||
+        minX >= maxX ||
+        minZ >= maxZ
+      ) {
+        return null;
+      }
+      return { minX, maxX, minZ, maxZ };
+    };
 
     const requeueProceduralEnemy = (enemy) => {
       if (!enemy) {
@@ -303,11 +323,16 @@ export async function initializeGame({
         spawnContext.type === 'procedural-camera' &&
         typeof roomSystem.scheduleCameraSpawnPoint === 'function'
       ) {
+        let roomBounds = cloneRoomBounds(spawnContext.roomBounds);
+        if (!roomBounds && enemy.roomBounds) {
+          roomBounds = cloneRoomBounds(enemy.roomBounds);
+        }
         roomSystem.scheduleCameraSpawnPoint({
           key: spawnContext.roomKey ?? '',
           position,
           forward: spawnContext.forward ?? enemy.forward ?? [0, 0, -1],
-          up: spawnContext.up ?? enemy.up ?? [0, 1, 0]
+          up: spawnContext.up ?? enemy.up ?? [0, 1, 0],
+          roomBounds
         });
       }
     };
@@ -472,6 +497,7 @@ export async function initializeGame({
 
         const forward = clonePositionArray(spawn?.forward) ?? [0, 0, -1];
         const up = clonePositionArray(spawn?.up) ?? [0, 1, 0];
+        const roomBounds = cloneRoomBounds(spawn?.roomBounds);
 
         const cameraLayerIndex = layerResolver ? layerResolver(position[1]) : null;
         const camera = enemyManager.spawnSecurityCamera({
@@ -480,6 +506,7 @@ export async function initializeGame({
           up,
           layerResolver,
           layerIndex: cameraLayerIndex,
+          roomBounds,
           onDeath() {
             if (!securityCameraBestiaryUnlocked) {
               securityCameraBestiaryUnlocked = true;
@@ -498,7 +525,8 @@ export async function initializeGame({
             roomKey: spawn?.key ?? '',
             position: clonePositionArray(position),
             forward: clonePositionArray(forward),
-            up: clonePositionArray(up)
+            up: clonePositionArray(up),
+            roomBounds: cloneRoomBounds(roomBounds)
           };
         }
       }
