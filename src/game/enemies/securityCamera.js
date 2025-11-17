@@ -33,6 +33,9 @@ const DEFAULT_POSITION = Object.freeze([0, 0, 0]);
 const DEFAULT_FORWARD = Object.freeze([0, 0, -1]);
 const DEFAULT_UP = Object.freeze([0, 1, 0]);
 
+const CAMERA_TILT_ANGLE = Math.PI / 11;
+const CAMERA_TILT_PIVOT = Object.freeze([0, 0.02, 0.3]);
+
 const LOCAL_BOUNDS = Object.freeze({
   minX: -0.25,
   maxX: 0.25,
@@ -78,7 +81,7 @@ function pushQuad(target, corners, normal, color, glow = 0) {
   pushVertex(target, d, normal, color, glow);
 }
 
-function addBox(target, min, max, color, glow = 0) {
+function addBox(target, min, max, color, glow = 0, transform = null) {
   const [minX, minY, minZ] = min;
   const [maxX, maxY, maxZ] = max;
   const corners = {
@@ -92,12 +95,34 @@ function addBox(target, min, max, color, glow = 0) {
     ftr: [maxX, maxY, maxZ]
   };
 
-  pushQuad(target, [corners.fbl, corners.fbr, corners.ftr, corners.ftl], [0, 0, 1], color, glow);
-  pushQuad(target, [corners.nbr, corners.nbl, corners.ntl, corners.ntr], [0, 0, -1], color, glow);
-  pushQuad(target, [corners.nbl, corners.fbl, corners.ftl, corners.ntl], [-1, 0, 0], color, glow);
-  pushQuad(target, [corners.fbr, corners.nbr, corners.ntr, corners.ftr], [1, 0, 0], color, glow);
-  pushQuad(target, [corners.ntl, corners.ftl, corners.ftr, corners.ntr], [0, 1, 0], color, glow);
-  pushQuad(target, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], [0, -1, 0], color, glow);
+  const pointTransform = transform && typeof transform.point === 'function' ? transform.point : null;
+  if (pointTransform) {
+    for (const key of Object.keys(corners)) {
+      corners[key] = pointTransform(corners[key]);
+    }
+  }
+
+  const baseNormals = {
+    front: [0, 0, 1],
+    back: [0, 0, -1],
+    left: [-1, 0, 0],
+    right: [1, 0, 0],
+    top: [0, 1, 0],
+    bottom: [0, -1, 0]
+  };
+  const normalTransform = transform && typeof transform.normal === 'function' ? transform.normal : null;
+  if (normalTransform) {
+    for (const key of Object.keys(baseNormals)) {
+      baseNormals[key] = normalTransform(baseNormals[key]);
+    }
+  }
+
+  pushQuad(target, [corners.fbl, corners.fbr, corners.ftr, corners.ftl], baseNormals.front, color, glow);
+  pushQuad(target, [corners.nbr, corners.nbl, corners.ntl, corners.ntr], baseNormals.back, color, glow);
+  pushQuad(target, [corners.nbl, corners.fbl, corners.ftl, corners.ntl], baseNormals.left, color, glow);
+  pushQuad(target, [corners.fbr, corners.nbr, corners.ntr, corners.ftr], baseNormals.right, color, glow);
+  pushQuad(target, [corners.ntl, corners.ftl, corners.ftr, corners.ntr], baseNormals.top, color, glow);
+  pushQuad(target, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], baseNormals.bottom, color, glow);
 }
 
 function addVisionCone(target) {
@@ -145,10 +170,36 @@ function overrideChunkColors(buffer, color, glow) {
   }
 }
 
+function createTiltTransform(pivot, angle) {
+  const cosAngle = Math.cos(angle);
+  const sinAngle = Math.sin(angle);
+  return {
+    point(point) {
+      const px = Number(point[0]);
+      const py = Number(point[1]);
+      const pz = Number(point[2]);
+      const dx = px - pivot[0];
+      const dy = py - pivot[1];
+      const dz = pz - pivot[2];
+      const rotatedY = dy * cosAngle - dz * sinAngle;
+      const rotatedZ = dy * sinAngle + dz * cosAngle;
+      return [pivot[0] + dx, pivot[1] + rotatedY, pivot[2] + rotatedZ];
+    },
+    normal(normal) {
+      const ny = Number(normal[1]);
+      const nz = Number(normal[2]);
+      const rotatedY = ny * cosAngle - nz * sinAngle;
+      const rotatedZ = ny * sinAngle + nz * cosAngle;
+      return [normal[0], rotatedY, rotatedZ];
+    }
+  };
+}
+
 function createSecurityCameraGeometry(device) {
   const vertices = [];
   let recordingLightFloatOffset = -1;
   let recordingLightFloatCount = 0;
+  const tiltTransform = createTiltTransform(CAMERA_TILT_PIVOT, CAMERA_TILT_ANGLE);
 
   // Corner mount and brace
   addBox(vertices, [-0.22, -0.35, -0.22], [0.22, -0.15, 0.1], COLORS.mount);
@@ -158,9 +209,9 @@ function createSecurityCameraGeometry(device) {
   addBox(vertices, [-0.08, -0.1, -0.05], [0.08, 0.06, 0.3], COLORS.brace);
 
   // Camera housing and lens
-  addBox(vertices, [-0.22, -0.02, 0.3], [0.22, 0.2, 0.85], COLORS.housing);
-  addBox(vertices, [-0.18, 0.02, 0.85], [0.18, 0.18, 0.98], COLORS.highlight);
-  addBox(vertices, [-0.12, 0.05, 0.98], [0.12, 0.15, 1.05], COLORS.lens);
+  addBox(vertices, [-0.22, -0.02, 0.3], [0.22, 0.2, 0.85], COLORS.housing, 0, tiltTransform);
+  addBox(vertices, [-0.18, 0.02, 0.85], [0.18, 0.18, 0.98], COLORS.highlight, 0, tiltTransform);
+  addBox(vertices, [-0.12, 0.05, 0.98], [0.12, 0.15, 1.05], COLORS.lens, 0, tiltTransform);
 
   recordingLightFloatOffset = vertices.length;
   addBox(
@@ -168,11 +219,12 @@ function createSecurityCameraGeometry(device) {
     [-0.05, 0.08, 0.9],
     [0.05, 0.16, 1.02],
     RECORDING_LIGHT_OFF_COLOR,
-    RECORDING_LIGHT_OFF_GLOW
+    RECORDING_LIGHT_OFF_GLOW,
+    tiltTransform
   );
   recordingLightFloatCount = vertices.length - recordingLightFloatOffset;
 
-  addVisionCone(vertices);
+  addVisionCone(vertices, tiltTransform);
 
   const vertexData = new Float32Array(vertices);
   const vertexBuffer = device.createBuffer({
