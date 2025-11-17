@@ -149,7 +149,7 @@ export function createEnemyManager(device, managerOptions = {}) {
     return addEnemy(camera);
   }
 
-  function update(deltaTime) {
+  function update(deltaTime, context = null) {
     for (let i = enemies.length - 1; i >= 0; i -= 1) {
       const enemy = enemies[i];
       if (!enemy) {
@@ -157,7 +157,7 @@ export function createEnemyManager(device, managerOptions = {}) {
         continue;
       }
 
-      enemy.update?.(deltaTime);
+      enemy.update?.(deltaTime, context);
 
       if (!shouldRetainEnemy) {
         continue;

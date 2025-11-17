@@ -557,6 +557,12 @@ export async function initializeGame({
 
     const controller = new FirstPersonController(canvas);
     pauseControls?.setController?.(controller);
+    const enemyUpdateContext = {
+      playerPosition: controller.position,
+      playerRadius: PLAYER_COLLISION_RADIUS,
+      playerHalfHeight: PLAYER_COLLISION_HALF_HEIGHT,
+      staticColliders: roomColliders
+    };
 
     const handleInventoryDrop = (detail) => {
       if (!detail || !controller) {
@@ -1090,7 +1096,9 @@ export async function initializeGame({
         bulletHoleManager.update(deltaTime);
         projectileManager.update(deltaTime);
         if (!disableEnemies) {
-          enemyManager.update(deltaTime);
+          enemyUpdateContext.playerPosition = controller.position;
+          enemyUpdateContext.staticColliders = roomColliders;
+          enemyManager.update(deltaTime, enemyUpdateContext);
         }
         if (primaryFireCooldown > 0) {
           primaryFireCooldown = Math.max(primaryFireCooldown - deltaTime, 0);
