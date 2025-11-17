@@ -13,6 +13,8 @@ const VISION_CONE_SEGMENTS = 18;
 const VISION_CONE_FLOOR_OFFSET = 3.0;
 const VISION_CONE_COLOR = [0.92, 0.78, 0.35];
 const VISION_CONE_GLOW = 0.08;
+const DEFAULT_ROOM_SIZE = 10;
+const VISION_CONE_ROOM_HALF_SIZE = DEFAULT_ROOM_SIZE * 0.5;
 const RECORDING_LIGHT_OFF_COLOR = [0.35, 0.16, 0.16];
 const RECORDING_LIGHT_ON_COLOR = [0.94, 0.2, 0.2];
 const RECORDING_LIGHT_OFF_GLOW = 0.05;
@@ -132,13 +134,24 @@ function addVisionCone(target) {
   const angleStep = totalAngle / VISION_CONE_SEGMENTS;
   const startAngle = -VISION_CONE_HALF_ANGLE;
 
+  function projectToRoomBounds(directionX, directionZ) {
+    const absX = Math.abs(directionX);
+    const absZ = Math.abs(directionZ);
+    const dominantAxis = Math.max(absX, absZ);
+    if (!(dominantAxis > 1e-5)) {
+      return [0, y, 0];
+    }
+    const scale = VISION_CONE_ROOM_HALF_SIZE / dominantAxis;
+    return [directionX * scale, y, directionZ * scale];
+  }
+
   for (let i = 0; i < VISION_CONE_SEGMENTS; i += 1) {
     const angleA = startAngle + angleStep * i;
     const angleB = angleA + angleStep;
     const innerA = [Math.sin(angleA) * VISION_CONE_MIN_RANGE, y, Math.cos(angleA) * VISION_CONE_MIN_RANGE];
     const innerB = [Math.sin(angleB) * VISION_CONE_MIN_RANGE, y, Math.cos(angleB) * VISION_CONE_MIN_RANGE];
-    const outerA = [Math.sin(angleA) * VISION_CONE_MAX_RANGE, y, Math.cos(angleA) * VISION_CONE_MAX_RANGE];
-    const outerB = [Math.sin(angleB) * VISION_CONE_MAX_RANGE, y, Math.cos(angleB) * VISION_CONE_MAX_RANGE];
+    const outerA = projectToRoomBounds(Math.sin(angleA), Math.cos(angleA));
+    const outerB = projectToRoomBounds(Math.sin(angleB), Math.cos(angleB));
 
     pushVertex(target, innerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
     pushVertex(target, outerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
