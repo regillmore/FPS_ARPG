@@ -20,6 +20,7 @@ const RECORDING_LIGHT_ON_GLOW = 0.7;
 const DEFAULT_PLAYER_RADIUS = 0.4;
 const DEFAULT_PLAYER_HALF_HEIGHT = 1.0;
 const OCCLUSION_PADDING = 0.15;
+const VISION_CONE_RANGE_EPSILON = 1e-3;
 
 const COLORS = Object.freeze({
   mount: [0.32, 0.34, 0.36],
@@ -55,6 +56,8 @@ const LOCAL_BOUND_CORNERS = [
   [LOCAL_BOUNDS.maxX, LOCAL_BOUNDS.maxY, LOCAL_BOUNDS.minZ],
   [LOCAL_BOUNDS.maxX, LOCAL_BOUNDS.maxY, LOCAL_BOUNDS.maxZ]
 ];
+
+const VISION_CONE_BASE_Y = LOCAL_BOUNDS.minY - VISION_CONE_FLOOR_OFFSET;
 
 function pushVertex(target, position, normal, color, glow = 0) {
   target.push(
@@ -126,11 +129,27 @@ function addBox(target, min, max, color, glow = 0, transform = null) {
 }
 
 function addVisionCone(target) {
-  const y = LOCAL_BOUNDS.minY - VISION_CONE_FLOOR_OFFSET;
+  const y = VISION_CONE_BASE_Y;
   const normal = [0, 1, 0];
   const totalAngle = VISION_CONE_HALF_ANGLE * 2;
   const angleStep = totalAngle / VISION_CONE_SEGMENTS;
   const startAngle = -VISION_CONE_HALF_ANGLE;
+
+  const metadata = {
+    floatOffset: target.length,
+    floatCount: 0,
+    floorY: y,
+    boundaries: []
+  };
+
+  for (let i = 0; i <= VISION_CONE_SEGMENTS; i += 1) {
+    const angle = startAngle + angleStep * i;
+    metadata.boundaries.push({
+      directionX: Math.sin(angle),
+      directionZ: Math.cos(angle),
+      vertexFloatOffsets: []
+    });
+  }
 
   for (let i = 0; i < VISION_CONE_SEGMENTS; i += 1) {
     const angleA = startAngle + angleStep * i;
@@ -141,13 +160,55 @@ function addVisionCone(target) {
     const outerB = [Math.sin(angleB) * VISION_CONE_MAX_RANGE, y, Math.cos(angleB) * VISION_CONE_MAX_RANGE];
 
     pushVertex(target, innerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
+
+    const outerBOffset = target.length;
     pushVertex(target, outerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
+    metadata.boundaries[i + 1].vertexFloatOffsets.push(outerBOffset);
+
     pushVertex(target, innerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
 
     pushVertex(target, innerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
+
+    const outerAOffset = target.length;
     pushVertex(target, outerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
+    metadata.boundaries[i].vertexFloatOffsets.push(outerAOffset);
+
+    const outerBSecondOffset = target.length;
     pushVertex(target, outerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
+    metadata.boundaries[i + 1].vertexFloatOffsets.push(outerBSecondOffset);
   }
+
+  metadata.floatCount = target.length - metadata.floatOffset;
+  return metadata;
+}
+
+function createVisionConeChunk(vertexData, metadata) {
+  if (!metadata || metadata.floatCount <= 0) {
+    return null;
+  }
+
+  const floatOffset = metadata.floatOffset;
+  const floatCount = metadata.floatCount;
+  const chunk = {
+    byteOffset: floatOffset * 4,
+    data: vertexData.slice(floatOffset, floatOffset + floatCount),
+    floorY: metadata.floorY,
+    boundaries: []
+  };
+
+  for (let i = 0; i < metadata.boundaries.length; i += 1) {
+    const boundary = metadata.boundaries[i];
+    chunk.boundaries.push({
+      directionX: boundary.directionX,
+      directionZ: boundary.directionZ,
+      vertexFloatOffsets: boundary.vertexFloatOffsets.map(
+        (offset) => offset - floatOffset
+      )
+    });
+  }
+
+  chunk.floatCount = floatCount;
+  return chunk;
 }
 
 function normalizeLayerIndex(value) {
@@ -224,7 +285,7 @@ function createSecurityCameraGeometry(device) {
   );
   recordingLightFloatCount = vertices.length - recordingLightFloatOffset;
 
-  addVisionCone(vertices, tiltTransform);
+  const visionConeMetadata = addVisionCone(vertices, tiltTransform);
 
   const vertexData = new Float32Array(vertices);
   const vertexBuffer = device.createBuffer({
@@ -240,6 +301,10 @@ function createSecurityCameraGeometry(device) {
     vertexBuffer,
     vertexCount: vertexData.length / FLOATS_PER_VERTEX
   };
+
+  if (visionConeMetadata) {
+    geometry.visionCone = createVisionConeChunk(vertexData, visionConeMetadata);
+  }
 
   if (recordingLightFloatCount > 0) {
     const offData = vertexData.slice(
@@ -450,6 +515,19 @@ export function createSecurityCamera(device, options = {}) {
   let playerDetected = false;
   let recordingLightActive = false;
   const recordingLightMetadata = geometry.recordingLight ?? null;
+  const visionConeChunk = geometry.visionCone ?? null;
+  const visionConeRanges =
+    visionConeChunk && Array.isArray(visionConeChunk.boundaries)
+      ? new Float32Array(visionConeChunk.boundaries.length)
+      : null;
+  if (visionConeRanges) {
+    for (let i = 0; i < visionConeRanges.length; i += 1) {
+      visionConeRanges[i] = VISION_CONE_MAX_RANGE;
+    }
+  }
+  let visionConeDirty = false;
+  const visionConeOrigin = new Float32Array(3);
+  const visionConeDirection = new Float32Array(3);
 
   function updateOrientation(yaw) {
     const cosYaw = Math.cos(yaw);
@@ -505,6 +583,132 @@ export function createSecurityCamera(device, options = {}) {
     } catch (error) {
       console.warn('Failed to update security camera recording light state:', error);
     }
+  }
+
+  function setVisionConeRange(index, range) {
+    if (!visionConeRanges || index < 0 || index >= visionConeRanges.length) {
+      return;
+    }
+    const clamped = Math.min(
+      Math.max(range, VISION_CONE_MIN_RANGE),
+      VISION_CONE_MAX_RANGE
+    );
+    if (Math.abs(visionConeRanges[index] - clamped) > VISION_CONE_RANGE_EPSILON) {
+      visionConeRanges[index] = clamped;
+      visionConeDirty = true;
+    }
+  }
+
+  function fillVisionConeRanges(value) {
+    if (!visionConeRanges) {
+      return;
+    }
+    for (let i = 0; i < visionConeRanges.length; i += 1) {
+      setVisionConeRange(i, value);
+    }
+  }
+
+  function writeVisionConeGeometryIfDirty() {
+    if (!visionConeChunk || !visionConeRanges || !visionConeDirty || !geometry.vertexBuffer) {
+      return;
+    }
+    const boundaries = Array.isArray(visionConeChunk.boundaries)
+      ? visionConeChunk.boundaries
+      : null;
+    if (!boundaries) {
+      return;
+    }
+
+    for (let i = 0; i < boundaries.length; i += 1) {
+      const boundary = boundaries[i];
+      const range = visionConeRanges[i];
+      const scaledX = boundary.directionX * range;
+      const scaledZ = boundary.directionZ * range;
+      const offsets = boundary.vertexFloatOffsets;
+      if (!Array.isArray(offsets)) {
+        continue;
+      }
+      for (let j = 0; j < offsets.length; j += 1) {
+        const baseIndex = offsets[j];
+        if (baseIndex < 0 || baseIndex + 2 >= visionConeChunk.data.length) {
+          continue;
+        }
+        visionConeChunk.data[baseIndex] = scaledX;
+        visionConeChunk.data[baseIndex + 2] = scaledZ;
+      }
+    }
+
+    try {
+      device.queue.writeBuffer(
+        geometry.vertexBuffer,
+        visionConeChunk.byteOffset,
+        visionConeChunk.data
+      );
+      visionConeDirty = false;
+    } catch (error) {
+      console.warn('Failed to update security camera vision cone geometry:', error);
+    }
+  }
+
+  function updateVisionConeVisualization(context) {
+    if (!visionConeChunk || !visionConeRanges) {
+      return;
+    }
+    if (!planarForwardReady) {
+      fillVisionConeRanges(VISION_CONE_MAX_RANGE);
+      writeVisionConeGeometryIfDirty();
+      return;
+    }
+
+    const staticColliders =
+      context && Array.isArray(context.staticColliders) && context.staticColliders.length > 0
+        ? context.staticColliders
+        : null;
+
+    const localYOffset = visionConeChunk.floorY ?? VISION_CONE_BASE_Y;
+    visionConeOrigin[0] = translation[0] + upAxis[0] * localYOffset;
+    visionConeOrigin[1] = translation[1] + upAxis[1] * localYOffset;
+    visionConeOrigin[2] = translation[2] + upAxis[2] * localYOffset;
+
+    if (!staticColliders) {
+      fillVisionConeRanges(VISION_CONE_MAX_RANGE);
+      writeVisionConeGeometryIfDirty();
+      return;
+    }
+
+    const boundaries = visionConeChunk.boundaries;
+    for (let i = 0; i < boundaries.length; i += 1) {
+      const boundary = boundaries[i];
+      const dirX = boundary.directionX;
+      const dirZ = boundary.directionZ;
+      const worldDirX = dirX * currentRight[0] + dirZ * planarForward[0];
+      const worldDirY = dirX * currentRight[1] + dirZ * planarForward[1];
+      const worldDirZ = dirX * currentRight[2] + dirZ * planarForward[2];
+      const length = Math.hypot(worldDirX, worldDirY, worldDirZ);
+      if (!(length > 1e-5)) {
+        setVisionConeRange(i, VISION_CONE_MAX_RANGE);
+        continue;
+      }
+      visionConeDirection[0] = worldDirX / length;
+      visionConeDirection[1] = worldDirY / length;
+      visionConeDirection[2] = worldDirZ / length;
+
+      let bestDistance = VISION_CONE_MAX_RANGE;
+      for (let j = 0; j < staticColliders.length; j += 1) {
+        const bounds = staticColliders[j];
+        if (!bounds) {
+          continue;
+        }
+        const hit = traceRayAABB(visionConeOrigin, visionConeDirection, bestDistance);
+        if (hit && hit.distance < bestDistance) {
+          const clipped = Math.max(hit.distance - OCCLUSION_PADDING, VISION_CONE_MIN_RANGE);
+          bestDistance = Math.max(clipped, VISION_CONE_MIN_RANGE);
+        }
+      }
+      setVisionConeRange(i, bestDistance);
+    }
+
+    writeVisionConeGeometryIfDirty();
   }
 
   function resolvePlayerLayerIndex(context, fallbackHeight) {
@@ -678,13 +882,16 @@ export function createSecurityCamera(device, options = {}) {
       return hitBoxes;
     },
     update(deltaTime, context) {
+      const frameContext = context ?? null;
       if (!Number.isFinite(deltaTime) || swivelSpeed <= 0 || swivelAmplitude <= 0) {
-        evaluateDetection(context ?? null);
+        updateVisionConeVisualization(frameContext);
+        evaluateDetection(frameContext);
         return;
       }
       swivelPhase += deltaTime * swivelSpeed;
       updateOrientation(Math.sin(swivelPhase) * swivelAmplitude);
-      evaluateDetection(context ?? null);
+      updateVisionConeVisualization(frameContext);
+      evaluateDetection(frameContext);
     },
     takeDamage(amount, context = {}) {
       if (isDestroyed) {
@@ -730,6 +937,11 @@ export function createSecurityCamera(device, options = {}) {
       if (recordingLightMetadata) {
         recordingLightMetadata.offData = null;
         recordingLightMetadata.onData = null;
+      }
+      if (visionConeChunk) {
+        visionConeChunk.data = null;
+        visionConeChunk.boundaries = null;
+        geometry.visionCone = null;
       }
     }
   };
