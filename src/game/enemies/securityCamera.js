@@ -125,6 +125,14 @@ function addVisionCone(target) {
   }
 }
 
+function normalizeLayerIndex(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+  return Math.trunc(number);
+}
+
 function overrideChunkColors(buffer, color, glow) {
   if (!buffer) {
     return;
@@ -336,6 +344,12 @@ export function createSecurityCamera(device, options = {}) {
 
   const geometry = createSecurityCameraGeometry(device);
   const translation = resolvePosition(options);
+  const layerResolver =
+    typeof options.layerResolver === 'function' ? options.layerResolver : null;
+  let cameraLayerIndex = normalizeLayerIndex(options.layerIndex);
+  if (cameraLayerIndex === null && layerResolver) {
+    cameraLayerIndex = normalizeLayerIndex(layerResolver(translation[1]));
+  }
   const forwardAxis = normalizeVector(options.forward, DEFAULT_FORWARD);
   const upAxis = normalizeVector(options.up, DEFAULT_UP);
   const baseRight = new Float32Array(3);
@@ -441,6 +455,20 @@ export function createSecurityCamera(device, options = {}) {
     }
   }
 
+  function resolvePlayerLayerIndex(context, fallbackHeight) {
+    if (!context) {
+      return null;
+    }
+    const provided = normalizeLayerIndex(context.playerLayerIndex);
+    if (provided !== null) {
+      return provided;
+    }
+    if (layerResolver && Number.isFinite(fallbackHeight)) {
+      return normalizeLayerIndex(layerResolver(fallbackHeight));
+    }
+    return null;
+  }
+
   function evaluateDetection(context) {
     if (!context || !context.playerPosition) {
       if (playerDetected) {
@@ -455,6 +483,19 @@ export function createSecurityCamera(device, options = {}) {
     const py = Number(playerPosition[1]);
     const pz = Number(playerPosition[2]);
     if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
+      if (playerDetected) {
+        playerDetected = false;
+        updateRecordingLight(false);
+      }
+      return;
+    }
+
+    const playerLayerIndex = resolvePlayerLayerIndex(context, py);
+    if (
+      cameraLayerIndex !== null &&
+      playerLayerIndex !== null &&
+      playerLayerIndex !== cameraLayerIndex
+    ) {
       if (playerDetected) {
         playerDetected = false;
         updateRecordingLight(false);

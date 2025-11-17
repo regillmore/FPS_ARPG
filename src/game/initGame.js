@@ -224,6 +224,10 @@ export async function initializeGame({
       generationRadius: 5,
       initialLayer: 0
     });
+    const layerResolver =
+      typeof roomSystem.getLayerIndexForHeight === 'function'
+        ? roomSystem.getLayerIndexForHeight
+        : null;
     const roomColliders = roomSystem.getColliders();
     const playerCollisionScratch = [];
     let roomVertexBuffer = roomSystem.getVertexBuffer();
@@ -469,10 +473,13 @@ export async function initializeGame({
         const forward = clonePositionArray(spawn?.forward) ?? [0, 0, -1];
         const up = clonePositionArray(spawn?.up) ?? [0, 1, 0];
 
+        const cameraLayerIndex = layerResolver ? layerResolver(position[1]) : null;
         const camera = enemyManager.spawnSecurityCamera({
           position,
           forward,
           up,
+          layerResolver,
+          layerIndex: cameraLayerIndex,
           onDeath() {
             if (!securityCameraBestiaryUnlocked) {
               securityCameraBestiaryUnlocked = true;
@@ -561,7 +568,8 @@ export async function initializeGame({
       playerPosition: controller.position,
       playerRadius: PLAYER_COLLISION_RADIUS,
       playerHalfHeight: PLAYER_COLLISION_HALF_HEIGHT,
-      staticColliders: roomColliders
+      staticColliders: roomColliders,
+      playerLayerIndex: layerResolver ? layerResolver(controller.position[1]) : null
     };
 
     const handleInventoryDrop = (detail) => {
@@ -1098,6 +1106,9 @@ export async function initializeGame({
         if (!disableEnemies) {
           enemyUpdateContext.playerPosition = controller.position;
           enemyUpdateContext.staticColliders = roomColliders;
+          enemyUpdateContext.playerLayerIndex = layerResolver
+            ? layerResolver(controller.position[1])
+            : null;
           enemyManager.update(deltaTime, enemyUpdateContext);
         }
         if (primaryFireCooldown > 0) {
@@ -1330,11 +1341,6 @@ export async function initializeGame({
           : null;
 
       if (minimapSnapshot) {
-        const layerResolver =
-          typeof roomSystem.getLayerIndexForHeight === 'function'
-            ? roomSystem.getLayerIndexForHeight
-            : null;
-
         if (layerResolver && Number.isFinite(minimapSnapshot.layerIndex)) {
           const minimapEnemies = [];
 
