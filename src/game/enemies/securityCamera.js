@@ -13,6 +13,13 @@ const VISION_CONE_SEGMENTS = 18;
 const VISION_CONE_FLOOR_OFFSET = 3.0;
 const VISION_CONE_COLOR = [0.92, 0.78, 0.35];
 const VISION_CONE_GLOW = 0.08;
+const CAMERA_ROOM_HALF_SIZE = 5; // 10x10 procedural camera rooms.
+const VISION_CONE_ROOM_BOUNDS = Object.freeze({
+  minX: -CAMERA_ROOM_HALF_SIZE,
+  maxX: CAMERA_ROOM_HALF_SIZE,
+  minZ: -CAMERA_ROOM_HALF_SIZE,
+  maxZ: CAMERA_ROOM_HALF_SIZE
+});
 const RECORDING_LIGHT_OFF_COLOR = [0.35, 0.16, 0.16];
 const RECORDING_LIGHT_ON_COLOR = [0.94, 0.2, 0.2];
 const RECORDING_LIGHT_OFF_GLOW = 0.05;
@@ -125,6 +132,76 @@ function addBox(target, min, max, color, glow = 0, transform = null) {
   pushQuad(target, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], baseNormals.bottom, color, glow);
 }
 
+function clipPolygonToAxisAlignedBounds(points, axisIndex, boundary, keepGreater) {
+  if (!points || points.length === 0) {
+    return [];
+  }
+
+  const result = [];
+  let previous = points[points.length - 1];
+  let previousValue = previous[axisIndex];
+  let previousInside = keepGreater ? previousValue >= boundary : previousValue <= boundary;
+
+  for (let i = 0; i < points.length; i += 1) {
+    const current = points[i];
+    const currentValue = current[axisIndex];
+    const currentInside = keepGreater ? currentValue >= boundary : currentValue <= boundary;
+
+    if (currentInside !== previousInside) {
+      const delta = currentValue - previousValue;
+      if (Math.abs(delta) > 1e-5) {
+        const t = (boundary - previousValue) / delta;
+        const intersection = [
+          previous[0] + (current[0] - previous[0]) * t,
+          previous[1] + (current[1] - previous[1]) * t,
+          previous[2] + (current[2] - previous[2]) * t
+        ];
+        result.push(intersection);
+      }
+    }
+
+    if (currentInside) {
+      result.push(current);
+    }
+
+    previous = current;
+    previousValue = currentValue;
+    previousInside = currentInside;
+  }
+
+  return result;
+}
+
+function clipPolygonToRoomBounds(points) {
+  let clipped = points;
+  clipped = clipPolygonToAxisAlignedBounds(clipped, 0, VISION_CONE_ROOM_BOUNDS.minX, true);
+  if (clipped.length === 0) {
+    return clipped;
+  }
+  clipped = clipPolygonToAxisAlignedBounds(clipped, 0, VISION_CONE_ROOM_BOUNDS.maxX, false);
+  if (clipped.length === 0) {
+    return clipped;
+  }
+  clipped = clipPolygonToAxisAlignedBounds(clipped, 2, VISION_CONE_ROOM_BOUNDS.minZ, true);
+  if (clipped.length === 0) {
+    return clipped;
+  }
+  clipped = clipPolygonToAxisAlignedBounds(clipped, 2, VISION_CONE_ROOM_BOUNDS.maxZ, false);
+  return clipped;
+}
+
+function triangulateAndPush(target, polygon, normal, color, glow) {
+  if (!polygon || polygon.length < 3) {
+    return;
+  }
+  const origin = polygon[0];
+  for (let i = 1; i < polygon.length - 1; i += 1) {
+    pushVertex(target, origin, normal, color, glow);
+    pushVertex(target, polygon[i], normal, color, glow);
+    pushVertex(target, polygon[i + 1], normal, color, glow);
+  }
+}
+
 function addVisionCone(target) {
   const y = LOCAL_BOUNDS.minY - VISION_CONE_FLOOR_OFFSET;
   const normal = [0, 1, 0];
@@ -139,14 +216,9 @@ function addVisionCone(target) {
     const innerB = [Math.sin(angleB) * VISION_CONE_MIN_RANGE, y, Math.cos(angleB) * VISION_CONE_MIN_RANGE];
     const outerA = [Math.sin(angleA) * VISION_CONE_MAX_RANGE, y, Math.cos(angleA) * VISION_CONE_MAX_RANGE];
     const outerB = [Math.sin(angleB) * VISION_CONE_MAX_RANGE, y, Math.cos(angleB) * VISION_CONE_MAX_RANGE];
-
-    pushVertex(target, innerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
-    pushVertex(target, outerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
-    pushVertex(target, innerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
-
-    pushVertex(target, innerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
-    pushVertex(target, outerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
-    pushVertex(target, outerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
+    const polygon = [innerA, outerA, outerB, innerB];
+    const clippedPolygon = clipPolygonToRoomBounds(polygon);
+    triangulateAndPush(target, clippedPolygon, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
   }
 }
 
