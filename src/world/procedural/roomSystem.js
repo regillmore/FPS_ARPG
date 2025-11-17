@@ -183,12 +183,15 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
 
     const up = normalizeDirection(spawn.up, [0, 1, 0]) ?? [0, 1, 0];
+    const spawnRoomSize = Number(spawn.roomSize);
+    const unitSize = Number.isFinite(spawnRoomSize) && spawnRoomSize > 0 ? spawnRoomSize : roomSize;
     const key = typeof spawn.key === 'string' ? spawn.key : spawn.key ? String(spawn.key) : '';
     pendingCameraSpawns.push({
       key,
       position: [normalizedPosition[0], normalizedPosition[1], normalizedPosition[2]],
       forward: [forward[0], forward[1], forward[2]],
-      up: [up[0], up[1], up[2]]
+      up: [up[0], up[1], up[2]],
+      roomSize: unitSize
     });
     return true;
   }

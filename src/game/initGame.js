@@ -307,7 +307,8 @@ export async function initializeGame({
           key: spawnContext.roomKey ?? '',
           position,
           forward: spawnContext.forward ?? enemy.forward ?? [0, 0, -1],
-          up: spawnContext.up ?? enemy.up ?? [0, 1, 0]
+          up: spawnContext.up ?? enemy.up ?? [0, 1, 0],
+          roomSize: spawnContext.roomSize
         });
       }
     };
@@ -474,12 +475,14 @@ export async function initializeGame({
         const up = clonePositionArray(spawn?.up) ?? [0, 1, 0];
 
         const cameraLayerIndex = layerResolver ? layerResolver(position[1]) : null;
+        const roomUnitSize = Number.isFinite(spawn?.roomSize) ? spawn.roomSize : undefined;
         const camera = enemyManager.spawnSecurityCamera({
           position,
           forward,
           up,
           layerResolver,
           layerIndex: cameraLayerIndex,
+          roomUnitSize,
           onDeath() {
             if (!securityCameraBestiaryUnlocked) {
               securityCameraBestiaryUnlocked = true;
@@ -498,7 +501,8 @@ export async function initializeGame({
             roomKey: spawn?.key ?? '',
             position: clonePositionArray(position),
             forward: clonePositionArray(forward),
-            up: clonePositionArray(up)
+            up: clonePositionArray(up),
+            roomSize: roomUnitSize
           };
         }
       }

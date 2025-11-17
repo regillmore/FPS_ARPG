@@ -1,5 +1,6 @@
 import { mat4FromRotationTranslation } from '../../math.js';
 import { traceRayAABB } from '../collisions.js';
+import { DEFAULT_ROOM_SIZE } from '../../world/procedural/constants.js';
 
 const FLOATS_PER_VERTEX = 10;
 const DEFAULT_HEALTH = 55;
@@ -7,7 +8,7 @@ const DEFAULT_IMPACT_DAMAGE = 8;
 const DEFAULT_SWIVEL_SPEED = 0.65;
 const DEFAULT_SWIVEL_AMPLITUDE = Math.PI / 6;
 const VISION_CONE_MIN_RANGE = 1.5;
-const VISION_CONE_MAX_RANGE = 15;
+const DEFAULT_VISION_CONE_MAX_RANGE = 15;
 const VISION_CONE_HALF_ANGLE = Math.PI / 8;
 const VISION_CONE_SEGMENTS = 18;
 const VISION_CONE_FLOOR_OFFSET = 3.0;
@@ -125,20 +126,21 @@ function addBox(target, min, max, color, glow = 0, transform = null) {
   pushQuad(target, [corners.nbl, corners.nbr, corners.fbr, corners.fbl], baseNormals.bottom, color, glow);
 }
 
-function addVisionCone(target) {
+function addVisionCone(target, maxRange) {
   const y = LOCAL_BOUNDS.minY - VISION_CONE_FLOOR_OFFSET;
   const normal = [0, 1, 0];
   const totalAngle = VISION_CONE_HALF_ANGLE * 2;
   const angleStep = totalAngle / VISION_CONE_SEGMENTS;
   const startAngle = -VISION_CONE_HALF_ANGLE;
+  const outerRadius = Math.max(VISION_CONE_MIN_RANGE + 0.01, Number(maxRange) || DEFAULT_VISION_CONE_MAX_RANGE);
 
   for (let i = 0; i < VISION_CONE_SEGMENTS; i += 1) {
     const angleA = startAngle + angleStep * i;
     const angleB = angleA + angleStep;
     const innerA = [Math.sin(angleA) * VISION_CONE_MIN_RANGE, y, Math.cos(angleA) * VISION_CONE_MIN_RANGE];
     const innerB = [Math.sin(angleB) * VISION_CONE_MIN_RANGE, y, Math.cos(angleB) * VISION_CONE_MIN_RANGE];
-    const outerA = [Math.sin(angleA) * VISION_CONE_MAX_RANGE, y, Math.cos(angleA) * VISION_CONE_MAX_RANGE];
-    const outerB = [Math.sin(angleB) * VISION_CONE_MAX_RANGE, y, Math.cos(angleB) * VISION_CONE_MAX_RANGE];
+    const outerA = [Math.sin(angleA) * outerRadius, y, Math.cos(angleA) * outerRadius];
+    const outerB = [Math.sin(angleB) * outerRadius, y, Math.cos(angleB) * outerRadius];
 
     pushVertex(target, innerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
     pushVertex(target, outerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
@@ -195,7 +197,7 @@ function createTiltTransform(pivot, angle) {
   };
 }
 
-function createSecurityCameraGeometry(device) {
+function createSecurityCameraGeometry(device, visionConeMaxRange) {
   const vertices = [];
   let recordingLightFloatOffset = -1;
   let recordingLightFloatCount = 0;
@@ -224,7 +226,7 @@ function createSecurityCameraGeometry(device) {
   );
   recordingLightFloatCount = vertices.length - recordingLightFloatOffset;
 
-  addVisionCone(vertices, tiltTransform);
+  addVisionCone(vertices, visionConeMaxRange);
 
   const vertexData = new Float32Array(vertices);
   const vertexBuffer = device.createBuffer({
@@ -389,12 +391,33 @@ function resolveSwivelAmplitude(options = {}) {
   return Math.min(value, Math.PI / 3);
 }
 
+function resolveRoomUnitDimensions(options = {}) {
+  const dimensions = options.roomUnitDimensions ?? null;
+  const fallbackSize = Number(options.roomUnitSize);
+  const normalizedWidth = Number(dimensions?.width);
+  const normalizedDepth = Number(dimensions?.depth);
+  const fallback = Number.isFinite(fallbackSize) && fallbackSize > 0 ? fallbackSize : DEFAULT_ROOM_SIZE;
+  const width = Number.isFinite(normalizedWidth) && normalizedWidth > 0 ? normalizedWidth : fallback;
+  const depth = Number.isFinite(normalizedDepth) && normalizedDepth > 0 ? normalizedDepth : fallback;
+  return { width, depth };
+}
+
+function resolveVisionConeMaxRange(options = {}) {
+  const { width, depth } = resolveRoomUnitDimensions(options);
+  const diagonal = Math.hypot(width, depth);
+  if (Number.isFinite(diagonal) && diagonal > VISION_CONE_MIN_RANGE + 0.05) {
+    return diagonal;
+  }
+  return DEFAULT_VISION_CONE_MAX_RANGE;
+}
+
 export function createSecurityCamera(device, options = {}) {
   if (!device) {
     throw new Error('A GPUDevice is required to create a security camera.');
   }
 
-  const geometry = createSecurityCameraGeometry(device);
+  const visionConeMaxRange = resolveVisionConeMaxRange(options);
+  const geometry = createSecurityCameraGeometry(device, visionConeMaxRange);
   const translation = resolvePosition(options);
   const layerResolver =
     typeof options.layerResolver === 'function' ? options.layerResolver : null;
@@ -581,7 +604,7 @@ export function createSecurityCamera(device, options = {}) {
 
     if (
       horizontalDistance < VISION_CONE_MIN_RANGE ||
-      horizontalDistance > VISION_CONE_MAX_RANGE ||
+      horizontalDistance > visionConeMaxRange ||
       !planarForwardReady
     ) {
       if (playerDetected) {
