@@ -8,9 +8,9 @@ const DEFAULT_SWIVEL_SPEED = 0.65;
 const DEFAULT_SWIVEL_AMPLITUDE = Math.PI / 6;
 const VISION_CONE_MIN_RANGE = 1.5;
 const VISION_CONE_MAX_RANGE = 15;
-const VISION_CONE_HALF_ANGLE = Math.PI / 6;
+const VISION_CONE_HALF_ANGLE = Math.PI / 8;
 const VISION_CONE_SEGMENTS = 18;
-const VISION_CONE_FLOOR_OFFSET = 2.4;
+const VISION_CONE_FLOOR_OFFSET = 2.95;
 const VISION_CONE_COLOR = [0.92, 0.78, 0.35];
 const VISION_CONE_GLOW = 0.08;
 const RECORDING_LIGHT_OFF_COLOR = [0.35, 0.16, 0.16];
@@ -116,12 +116,12 @@ function addVisionCone(target) {
     const outerB = [Math.sin(angleB) * VISION_CONE_MAX_RANGE, y, Math.cos(angleB) * VISION_CONE_MAX_RANGE];
 
     pushVertex(target, innerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
-    pushVertex(target, innerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
     pushVertex(target, outerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
+    pushVertex(target, innerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
 
     pushVertex(target, innerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
-    pushVertex(target, outerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
     pushVertex(target, outerA, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
+    pushVertex(target, outerB, normal, VISION_CONE_COLOR, VISION_CONE_GLOW);
   }
 }
 
