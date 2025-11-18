@@ -252,7 +252,11 @@ export async function initializeGame({
       const forwardZ = Math.cos(controller.yaw);
       const dropX = controller.position[0] + forwardX * dropDistance;
       const dropZ = controller.position[2] + forwardZ * dropDistance;
-      const verticalBase = bounds ? clamp(bounds.minY + 0.05, bounds.minY, bounds.maxY) : 0;
+      const playerFeetY = controller.position[1] - PLAYER_COLLISION_HALF_HEIGHT;
+      const preferredDropY = Number.isFinite(playerFeetY) ? playerFeetY + 0.05 : 0;
+      const verticalBase = bounds
+        ? clamp(preferredDropY, bounds.minY + 0.05, bounds.maxY - 0.05)
+        : preferredDropY;
       const margin = 0.35;
       const resolvedX = bounds ? clamp(dropX, bounds.minX + margin, bounds.maxX - margin) : dropX;
       const resolvedZ = bounds ? clamp(dropZ, bounds.minZ + margin, bounds.maxZ - margin) : dropZ;
