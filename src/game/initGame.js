@@ -10,7 +10,6 @@ import { createBulletHoleManager } from './bulletHoles.js';
 import { traceRayAABB } from './collisions.js';
 import { createWorldItemManager } from './worldItems.js';
 import {
-  AMBIENT_LIGHT,
   DEFAULT_PROJECTILE_SETTINGS,
   DEFAULT_WEAPON_OFFSET,
   DEFAULT_WEAPON_ROLL,
@@ -19,7 +18,6 @@ import {
   ITEM_INTERACTION_DISTANCE_SQ,
   ITEM_INTERACTION_VERTICAL_LIMIT,
   MAX_AIM_DISTANCE,
-  MAX_LIGHTS,
   PICKUP_PROMPT_BLOCKED_COLOR,
   PICKUP_PROMPT_FAILURE_COLOR,
   PICKUP_PROMPT_FAILURE_DURATION,
@@ -30,174 +28,17 @@ import {
   WORLD_UP
 } from './constants.js';
 import { blendWithWhite, floatColorToCss } from './ui/colorUtils.js';
-
-const PLAYER_COLLISION_RADIUS = 0.4;
-const PLAYER_COLLISION_HALF_HEIGHT = 1.0;
-const PLAYER_COLLISION_ITERATIONS = 6;
-
-function resolvePlayerCollisions(position, colliders) {
-  const result = { grounded: false, hitCeiling: false };
-  if (!colliders || colliders.length === 0) {
-    return result;
-  }
-
-  const radius = PLAYER_COLLISION_RADIUS;
-  const halfHeight = PLAYER_COLLISION_HALF_HEIGHT;
-  const maxIterations = PLAYER_COLLISION_ITERATIONS;
-  const nearFloorEpsilon = 1e-4;
-  const overlapTolerance = 1e-4;
-
-  for (let iteration = 0; iteration < maxIterations; iteration += 1) {
-    let adjusted = false;
-    const playerMinY = position[1] - halfHeight;
-    const playerMaxY = position[1] + halfHeight;
-
-    for (let i = 0; i < colliders.length; i += 1) {
-      const collider = colliders[i];
-      if (!collider) {
-        continue;
-      }
-
-      if (
-        playerMaxY <= collider.minY + overlapTolerance ||
-        playerMinY >= collider.maxY - overlapTolerance
-      ) {
-        continue;
-      }
-
-      const playerMinX = position[0] - radius;
-      const playerMaxX = position[0] + radius;
-      const playerMinZ = position[2] - radius;
-      const playerMaxZ = position[2] + radius;
-
-      if (
-        playerMaxX <= collider.minX + overlapTolerance ||
-        playerMinX >= collider.maxX - overlapTolerance ||
-        playerMaxZ <= collider.minZ + overlapTolerance ||
-        playerMinZ >= collider.maxZ - overlapTolerance
-      ) {
-        continue;
-      }
-
-      const overlapX1 = playerMaxX - collider.minX;
-      const overlapX2 = collider.maxX - playerMinX;
-      const resolveX = overlapX1 < overlapX2 ? -overlapX1 : overlapX2;
-
-      const overlapY1 = playerMaxY - collider.minY;
-      const overlapY2 = collider.maxY - playerMinY;
-      const resolveY = overlapY1 < overlapY2 ? -overlapY1 : overlapY2;
-
-      const overlapZ1 = playerMaxZ - collider.minZ;
-      const overlapZ2 = collider.maxZ - playerMinZ;
-      const resolveZ = overlapZ1 < overlapZ2 ? -overlapZ1 : overlapZ2;
-
-      const colliderHeight = collider.maxY - collider.minY;
-      const playerCenterX = position[0];
-      const playerCenterY = position[1];
-      const playerCenterZ = position[2];
-      const withinHorizontalBounds =
-        playerCenterX >= collider.minX &&
-        playerCenterX <= collider.maxX &&
-        playerCenterZ >= collider.minZ &&
-        playerCenterZ <= collider.maxZ;
-
-      const treatAsFloorOrCeiling =
-        colliderHeight <= halfHeight * 2 + 0.1 &&
-        withinHorizontalBounds &&
-        (playerCenterY >= collider.maxY - 1e-3 || playerCenterY <= collider.minY + 1e-3);
-
-      if (treatAsFloorOrCeiling) {
-        position[1] += resolveY;
-        if (resolveY > 0) {
-          result.grounded = true;
-        } else if (resolveY < 0) {
-          result.hitCeiling = true;
-        } else if (playerMinY >= collider.maxY - nearFloorEpsilon) {
-          result.grounded = true;
-        }
-      } else {
-        let smallestAxis = 'x';
-        let smallestResolve = resolveX;
-        let smallestMagnitude = Math.abs(resolveX);
-
-        const absResolveY = Math.abs(resolveY);
-        if (absResolveY < smallestMagnitude) {
-          smallestAxis = 'y';
-          smallestResolve = resolveY;
-          smallestMagnitude = absResolveY;
-        }
-
-        const absResolveZ = Math.abs(resolveZ);
-        if (absResolveZ < smallestMagnitude || smallestAxis === 'x' && absResolveZ === smallestMagnitude) {
-          smallestAxis = 'z';
-          smallestResolve = resolveZ;
-        }
-
-        if (smallestAxis === 'x') {
-          position[0] += smallestResolve;
-        } else if (smallestAxis === 'y') {
-          position[1] += smallestResolve;
-          if (smallestResolve > 0) {
-            result.grounded = true;
-          } else if (smallestResolve < 0) {
-            result.hitCeiling = true;
-          }
-        } else {
-          position[2] += smallestResolve;
-        }
-      }
-
-      adjusted = true;
-      break;
-    }
-
-    if (!adjusted) {
-      break;
-    }
-  }
-
-  if (!result.grounded) {
-    const playerMinY = position[1] - halfHeight;
-    const playerCenterX = position[0];
-    const playerCenterZ = position[2];
-    const groundSnapDistance = Math.max(nearFloorEpsilon * 10, 0.01);
-    const horizontalTolerance = radius * 0.1;
-
-    for (let i = 0; i < colliders.length; i += 1) {
-      const collider = colliders[i];
-      if (!collider) {
-        continue;
-      }
-
-      const colliderHeight = collider.maxY - collider.minY;
-      if (colliderHeight > halfHeight * 2 + 0.1) {
-        continue;
-      }
-
-      if (
-        playerCenterX < collider.minX - horizontalTolerance ||
-        playerCenterX > collider.maxX + horizontalTolerance ||
-        playerCenterZ < collider.minZ - horizontalTolerance ||
-        playerCenterZ > collider.maxZ + horizontalTolerance
-      ) {
-        continue;
-      }
-
-      if (
-        playerMinY >= collider.maxY - groundSnapDistance &&
-        playerMinY <= collider.maxY + groundSnapDistance
-      ) {
-        if (playerMinY < collider.maxY) {
-          position[1] = collider.maxY + halfHeight;
-        }
-        result.grounded = true;
-        break;
-      }
-    }
-  }
-
-  return result;
-}
+import {
+  resolvePlayerCollisions,
+  PLAYER_COLLISION_RADIUS,
+  PLAYER_COLLISION_HALF_HEIGHT
+} from './playerCollisions.js';
+import { createProceduralSpawner } from './proceduralSpawner.js';
+import {
+  createEntityUniformManager,
+  createLightGatherer,
+  writeUniformData
+} from './rendering/renderUtils.js';
 
 export async function initializeGame({
   canvas,
@@ -234,108 +75,7 @@ export async function initializeGame({
     let roomVertexCount = roomSystem.getVertexCount();
     const bounds = roomSystem.getBounds();
     const bulletHoleManager = createBulletHoleManager(device);
-    const clonePositionArray = (source) => {
-      if (!source) {
-        return null;
-      }
-      const arrayLike = Array.isArray(source) || ArrayBuffer.isView(source) ? source : null;
-      if (!arrayLike) {
-        return null;
-      }
-      const x = Number(arrayLike[0]);
-      const y = Number(arrayLike[1]);
-      const z = Number(arrayLike[2]);
-      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
-        return null;
-      }
-      return [x, y, z];
-    };
-    const cloneRoomBounds = (source) => {
-      if (!source || typeof source !== 'object') {
-        return null;
-      }
-      const minX = Number(source.minX);
-      const maxX = Number(source.maxX);
-      const minZ = Number(source.minZ);
-      const maxZ = Number(source.maxZ);
-      if (
-        !Number.isFinite(minX) ||
-        !Number.isFinite(maxX) ||
-        !Number.isFinite(minZ) ||
-        !Number.isFinite(maxZ) ||
-        minX >= maxX ||
-        minZ >= maxZ
-      ) {
-        return null;
-      }
-      return { minX, maxX, minZ, maxZ };
-    };
-
-    const requeueProceduralEnemy = (enemy) => {
-      if (!enemy) {
-        return;
-      }
-      const spawnContext = enemy.spawnContext ?? null;
-      if (!spawnContext) {
-        return;
-      }
-
-      let position = clonePositionArray(spawnContext.position);
-      if (!position) {
-        position = clonePositionArray(enemy.position);
-      }
-      if (!position && enemy.bounds) {
-        const minX = Number(enemy.bounds.minX);
-        const maxX = Number(enemy.bounds.maxX);
-        const minY = Number(enemy.bounds.minY);
-        const maxY = Number(enemy.bounds.maxY);
-        const minZ = Number(enemy.bounds.minZ);
-        const maxZ = Number(enemy.bounds.maxZ);
-        if (
-          Number.isFinite(minX) &&
-          Number.isFinite(maxX) &&
-          Number.isFinite(minY) &&
-          Number.isFinite(maxY) &&
-          Number.isFinite(minZ) &&
-          Number.isFinite(maxZ)
-        ) {
-          position = [
-            (minX + maxX) * 0.5,
-            (minY + maxY) * 0.5,
-            (minZ + maxZ) * 0.5
-          ];
-        }
-      }
-
-      if (!position) {
-        return;
-      }
-
-      if (
-        spawnContext.type === 'procedural-barrel' &&
-        typeof roomSystem.scheduleBarrelSpawnPoint === 'function'
-      ) {
-        roomSystem.scheduleBarrelSpawnPoint({
-          key: spawnContext.roomKey ?? '',
-          position
-        });
-      } else if (
-        spawnContext.type === 'procedural-camera' &&
-        typeof roomSystem.scheduleCameraSpawnPoint === 'function'
-      ) {
-        let roomBounds = cloneRoomBounds(spawnContext.roomBounds);
-        if (!roomBounds && enemy.roomBounds) {
-          roomBounds = cloneRoomBounds(enemy.roomBounds);
-        }
-        roomSystem.scheduleCameraSpawnPoint({
-          key: spawnContext.roomKey ?? '',
-          position,
-          forward: spawnContext.forward ?? enemy.forward ?? [0, 0, -1],
-          up: spawnContext.up ?? enemy.up ?? [0, 1, 0],
-          roomBounds
-        });
-      }
-    };
+    let requeueProceduralEnemy = () => {};
 
     const enemyManager = createEnemyManager(device, {
       onEnemyDamaged: (details) => {
@@ -399,6 +139,14 @@ export async function initializeGame({
       }
     });
 
+    const proceduralSpawner = createProceduralSpawner({
+      roomSystem,
+      enemyManager,
+      layerResolver,
+      eventTarget: window
+    });
+    requeueProceduralEnemy = proceduralSpawner.requeueProceduralEnemy;
+
     const projectileManager = createProjectileManager(device, {
       bounds,
       getDynamicColliders: () =>
@@ -420,117 +168,7 @@ export async function initializeGame({
     const worldItemManager = createWorldItemManager(device);
     enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
 
-    let barrelBestiaryUnlocked = false;
-    let securityCameraBestiaryUnlocked = false;
-
-    const spawnProceduralBarrels = () => {
-      const spawns = roomSystem.consumeBarrelSpawnPoints();
-      if (!spawns || spawns.length === 0) {
-        return;
-      }
-
-      for (const spawn of spawns) {
-        const position = clonePositionArray(spawn?.position);
-        if (!position) {
-          continue;
-        }
-
-        const shouldSpawnHere =
-          typeof roomSystem.isPositionWithinGenerationRadius === 'function'
-            ? roomSystem.isPositionWithinGenerationRadius(position)
-            : true;
-
-        if (!shouldSpawnHere) {
-          roomSystem.scheduleBarrelSpawnPoint?.(spawn);
-          continue;
-        }
-
-        const barrel = enemyManager.spawnBarrel({
-          position,
-          onDeath() {
-            if (!barrelBestiaryUnlocked) {
-              barrelBestiaryUnlocked = true;
-              window.dispatchEvent(
-                new CustomEvent('bestiary-unlock', {
-                  detail: { enemyType: 'barrel' }
-                })
-              );
-            }
-          }
-        });
-
-        if (barrel) {
-          barrel.spawnContext = {
-            type: 'procedural-barrel',
-            roomKey: spawn?.key ?? '',
-            position
-          };
-        }
-      }
-    };
-
-    const spawnProceduralCameras = () => {
-      if (typeof roomSystem.consumeCameraSpawnPoints !== 'function') {
-        return;
-      }
-
-      const spawns = roomSystem.consumeCameraSpawnPoints();
-      if (!spawns || spawns.length === 0) {
-        return;
-      }
-
-      for (const spawn of spawns) {
-        const position = clonePositionArray(spawn?.position);
-        if (!position) {
-          continue;
-        }
-
-        const shouldSpawnHere =
-          typeof roomSystem.isPositionWithinGenerationRadius === 'function'
-            ? roomSystem.isPositionWithinGenerationRadius(position)
-            : true;
-
-        if (!shouldSpawnHere) {
-          roomSystem.scheduleCameraSpawnPoint?.(spawn);
-          continue;
-        }
-
-        const forward = clonePositionArray(spawn?.forward) ?? [0, 0, -1];
-        const up = clonePositionArray(spawn?.up) ?? [0, 1, 0];
-        const roomBounds = cloneRoomBounds(spawn?.roomBounds);
-
-        const cameraLayerIndex = layerResolver ? layerResolver(position[1]) : null;
-        const camera = enemyManager.spawnSecurityCamera({
-          position,
-          forward,
-          up,
-          layerResolver,
-          layerIndex: cameraLayerIndex,
-          roomBounds,
-          onDeath() {
-            if (!securityCameraBestiaryUnlocked) {
-              securityCameraBestiaryUnlocked = true;
-              window.dispatchEvent(
-                new CustomEvent('bestiary-unlock', {
-                  detail: { enemyType: 'security-camera' }
-                })
-              );
-            }
-          }
-        });
-
-        if (camera) {
-          camera.spawnContext = {
-            type: 'procedural-camera',
-            roomKey: spawn?.key ?? '',
-            position: clonePositionArray(position),
-            forward: clonePositionArray(forward),
-            up: clonePositionArray(up),
-            roomBounds: cloneRoomBounds(roomBounds)
-          };
-        }
-      }
-    };
+    const { spawnProceduralBarrels, spawnProceduralCameras } = proceduralSpawner;
 
     spawnProceduralBarrels();
     spawnProceduralCameras();
@@ -752,7 +390,6 @@ export async function initializeGame({
     const weaponModel = new Float32Array(16);
     const worldUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
     const weaponUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
-    const lightSelectionScratch = [];
     const activeLightsScratch = [];
     const initialDiagnostics =
       typeof pauseControls?.getDiagnosticsState === 'function'
@@ -792,128 +429,13 @@ export async function initializeGame({
       applyFramerateTarget(event?.detail?.framerateCap);
     });
 
-    const ensureRenderableUniformResources = (entity) => {
-      if (!entity || entity.uniformBuffer) {
-        return;
-      }
-
-      const uniformBuffer = device.createBuffer({
-        size: UNIFORM_BYTE_LENGTH,
-        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-      });
-
-      const uniformBindGroup = device.createBindGroup({
-        layout: uniformBindGroupLayout,
-        entries: [
-          {
-            binding: 0,
-            resource: {
-              buffer: uniformBuffer
-            }
-          }
-        ]
-      });
-
-      const uniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
-      const originalDestroy = typeof entity.destroy === 'function' ? entity.destroy.bind(entity) : null;
-
-      entity.uniformBuffer = uniformBuffer;
-      entity.uniformBindGroup = uniformBindGroup;
-      entity.uniformData = uniformData;
-      entity.destroy = () => {
-        uniformBuffer.destroy?.();
-        entity.uniformBuffer = null;
-        entity.uniformBindGroup = null;
-        entity.uniformData = null;
-        if (originalDestroy) {
-          originalDestroy();
-        }
-      };
-    };
-
-    const gatherActiveLights = (position, target) => {
-      lightSelectionScratch.length = 0;
-      target.length = 0;
-
-      if (disableDynamicLights) {
-        return target;
-      }
-
-      const px = position?.[0] ?? 0;
-      const py = position?.[1] ?? 0;
-      const pz = position?.[2] ?? 0;
-
-      const considerLight = (light) => {
-        if (!light || !light.position || !light.color) {
-          return;
-        }
-        const lp = light.position;
-        const dx = lp[0] - px;
-        const dy = lp[1] - py;
-        const dz = lp[2] - pz;
-        const distanceSq = dx * dx + dy * dy + dz * dz;
-
-        let insertIndex = target.length;
-        for (let i = 0; i < target.length; i += 1) {
-          if (distanceSq < lightSelectionScratch[i]) {
-            insertIndex = i;
-            break;
-          }
-        }
-
-        if (insertIndex < MAX_LIGHTS) {
-          lightSelectionScratch.splice(insertIndex, 0, distanceSq);
-          target.splice(insertIndex, 0, light);
-          if (target.length > MAX_LIGHTS) {
-            target.length = MAX_LIGHTS;
-            lightSelectionScratch.length = MAX_LIGHTS;
-          }
-        } else if (target.length < MAX_LIGHTS) {
-          lightSelectionScratch.push(distanceSq);
-          target.push(light);
-        }
-      };
-
-      const decorativeLights = roomSystem.getDecorativeLights?.();
-      if (decorativeLights) {
-        for (let i = 0; i < decorativeLights.length; i += 1) {
-          considerLight(decorativeLights[i]);
-        }
-      }
-
-      return target;
-    };
-
-    const writeUniformData = (target, viewProjection, modelMatrix, lights) => {
-      target.set(viewProjection, 0);
-      target.set(modelMatrix, 16);
-      target[32] = AMBIENT_LIGHT[0];
-      target[33] = AMBIENT_LIGHT[1];
-      target[34] = AMBIENT_LIGHT[2];
-      const lightCount = Math.min(Array.isArray(lights) ? lights.length : 0, MAX_LIGHTS);
-      target[35] = lightCount;
-      for (let i = 0; i < MAX_LIGHTS; i += 1) {
-        const base = 36 + i * 12;
-        const light = i < lightCount ? lights[i] : null;
-        if (light) {
-          target[base + 0] = light.position[0];
-          target[base + 1] = light.position[1];
-          target[base + 2] = light.position[2];
-          target[base + 3] = light.position[3] ?? 1.0;
-          target[base + 4] = light.color[0];
-          target[base + 5] = light.color[1];
-          target[base + 6] = light.color[2];
-          target[base + 7] = light.color[3] ?? 1.0;
-          const direction = light.direction;
-          target[base + 8] = direction ? direction[0] : 0;
-          target[base + 9] = direction ? direction[1] : 0;
-          target[base + 10] = direction ? direction[2] : 0;
-          target[base + 11] = direction ? direction[3] ?? 0 : 0;
-        } else {
-          target.fill(0, base, base + 12);
-        }
-      }
-    };
+    const ensureRenderableUniformResources = createEntityUniformManager(
+      device,
+      uniformBindGroupLayout
+    );
+    const gatherActiveLights = createLightGatherer(roomSystem, {
+      disableLightsRef: () => disableDynamicLights
+    });
 
     const weaponForward = new Float32Array(3);
     const weaponRight = new Float32Array(3);
