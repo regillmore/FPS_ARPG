@@ -347,6 +347,17 @@ function resolveRoomBounds(options = {}) {
   };
 }
 
+function resolveCameraFacingRoomCorner(bounds, position) {
+  if (!bounds || !position) {
+    return null;
+  }
+  const centerX = (bounds.minX + bounds.maxX) * 0.5;
+  const centerZ = (bounds.minZ + bounds.maxZ) * 0.5;
+  const x = position[0] <= centerX ? bounds.maxX : bounds.minX;
+  const z = position[2] <= centerZ ? bounds.maxZ : bounds.minZ;
+  return { x, z };
+}
+
 function resolveRoomMaxHorizontalDistance(bounds, originX, originZ, dirX, dirZ) {
   if (!bounds) {
     return VISION_CONE_MAX_RANGE;
@@ -501,6 +512,9 @@ export function createSecurityCamera(device, options = {}) {
 
   const translation = resolvePosition(options);
   const roomBounds = resolveRoomBounds(options);
+  const facingRoomCorner = roomBounds
+    ? resolveCameraFacingRoomCorner(roomBounds, translation)
+    : null;
   const geometry = createSecurityCameraGeometry(device, {
     includeVisionConeMetadata: Boolean(roomBounds)
   });
@@ -630,6 +644,24 @@ export function createSecurityCamera(device, options = {}) {
 
     const data = visionConeMetadata.data;
     let updated = false;
+    let snapToFacingCorner = false;
+    let facingCornerLocalX = 0;
+    let facingCornerLocalZ = 0;
+
+    if (facingRoomCorner) {
+      const cornerDirX = facingRoomCorner.x - translation[0];
+      const cornerDirZ = facingRoomCorner.z - translation[2];
+      const cornerDistance = Math.hypot(cornerDirX, cornerDirZ);
+      if (cornerDistance > 1e-4) {
+        const forwardProjection = planarForward[0] * cornerDirX + planarForward[2] * cornerDirZ;
+        const cosCorner = forwardProjection / cornerDistance;
+        if (cosCorner >= cosVisionHalfAngle) {
+          snapToFacingCorner = true;
+          facingCornerLocalX = planarRight[0] * cornerDirX + planarRight[2] * cornerDirZ;
+          facingCornerLocalZ = forwardProjection;
+        }
+      }
+    }
 
     for (let i = 0; i < visionConeMetadata.outerVertices.length; i += 1) {
       const entry = visionConeMetadata.outerVertices[i];
@@ -638,8 +670,18 @@ export function createSecurityCamera(device, options = {}) {
       const dirX = planarForward[0] * cosAngle + planarRight[0] * sinAngle;
       const dirZ = planarForward[2] * cosAngle + planarRight[2] * sinAngle;
       const range = resolveHorizontalRoomRange(dirX, dirZ);
-      const newX = sinAngle * range;
-      const newZ = cosAngle * range;
+      let newX = sinAngle * range;
+      let newZ = cosAngle * range;
+
+      if (
+        snapToFacingCorner &&
+        Math.abs(entry.sinAngle) <= 1e-5 &&
+        entry.cosAngle >= 1 - 1e-5
+      ) {
+        newX = facingCornerLocalX;
+        newZ = facingCornerLocalZ;
+      }
+
       const baseIndex = entry.floatOffset;
       const currentX = data[baseIndex];
       const currentZ = data[baseIndex + 2];
