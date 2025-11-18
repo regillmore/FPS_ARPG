@@ -1,6 +1,10 @@
 import { createCellProfile } from '../profile.js';
 import { hashValue } from '../random.js';
 
+function isElevatorCell(x, z) {
+  return x === 0 && z === 0;
+}
+
 export function createCellState(worldSeed) {
   const layerSeeds = new Map();
   const layerCellProfiles = new Map();
@@ -89,31 +93,22 @@ export function createCellState(worldSeed) {
 
   function updateCellVerticalOpeningForLayer(x, z, layerIndex) {
     const key = getCellKey(x, z);
-    const perLayer = cellLayerEdgeStates.get(key);
-    const edges = perLayer ? perLayer.get(layerIndex) : null;
 
-    let doorwayCount = 0;
-    let openEdge = false;
-    let closedCount = 0;
-
-    if (edges) {
-      const edgeStates = [edges.north, edges.south, edges.east, edges.west];
-      for (let i = 0; i < edgeStates.length; i += 1) {
-        const state = edgeStates[i];
-        if (state === 'doorway') {
-          doorwayCount += 1;
-        } else if (state === 'open') {
-          openEdge = true;
-        } else {
-          closedCount += 1;
-        }
-      }
+    if (isElevatorCell(x, z)) {
+      const openings = getVerticalOpeningStates(key);
+      openings.set(layerIndex, true);
+      return;
     }
 
-    const shouldOpen =
-      (doorwayCount === 1 && closedCount >= 3 && !openEdge) || closedCount === 4;
-    const openings = getVerticalOpeningStates(key);
-    openings.set(layerIndex, shouldOpen);
+    const openings = cellVerticalOpenings.get(key);
+    if (!openings) {
+      return;
+    }
+
+    openings.delete(layerIndex);
+    if (openings.size === 0) {
+      cellVerticalOpenings.delete(key);
+    }
   }
 
   return {

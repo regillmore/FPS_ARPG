@@ -674,17 +674,19 @@ export function createRoomGeometryBuilder({
           }
 
           if (isOrigin) {
-            addOriginElevator(
-              vertices,
-              minX,
-              maxX,
-              minZ,
-              maxZ,
-              baseY,
-              roomHeight,
-              wallThickness,
-              profile
-            );
+            if (layerIndex === 0) {
+              addOriginElevator(
+                vertices,
+                minX,
+                maxX,
+                minZ,
+                maxZ,
+                baseY,
+                roomHeight,
+                wallThickness,
+                profile
+              );
+            }
             edges.roomType = 'elevator';
           } else if (hallwayOrientation && !hasVerticalOpeningFromAbove) {
             addHallwayBridge(
