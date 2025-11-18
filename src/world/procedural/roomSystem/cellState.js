@@ -93,22 +93,32 @@ export function createCellState(worldSeed) {
 
   function updateCellVerticalOpeningForLayer(x, z, layerIndex) {
     const key = getCellKey(x, z);
+    const perLayer = cellLayerEdgeStates.get(key);
+    const edges = perLayer ? perLayer.get(layerIndex) : null;
 
-    if (isElevatorCell(x, z)) {
-      const openings = getVerticalOpeningStates(key);
-      openings.set(layerIndex, true);
-      return;
+    let doorwayCount = 0;
+    let openEdge = false;
+    let closedCount = 0;
+
+    if (edges) {
+      const edgeStates = [edges.north, edges.south, edges.east, edges.west];
+      for (let i = 0; i < edgeStates.length; i += 1) {
+        const state = edgeStates[i];
+        if (state === 'doorway') {
+          doorwayCount += 1;
+        } else if (state === 'open') {
+          openEdge = true;
+        } else {
+          closedCount += 1;
+        }
+      }
     }
 
-    const openings = cellVerticalOpenings.get(key);
-    if (!openings) {
-      return;
-    }
-
-    openings.delete(layerIndex);
-    if (openings.size === 0) {
-      cellVerticalOpenings.delete(key);
-    }
+    const hasProceduralOpening =
+      (doorwayCount === 1 && closedCount >= 3 && !openEdge) || closedCount === 4;
+    const shouldOpen = isElevatorCell(x, z) || hasProceduralOpening;
+    const openings = getVerticalOpeningStates(key);
+    openings.set(layerIndex, shouldOpen);
   }
 
   return {
