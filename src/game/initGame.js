@@ -178,7 +178,7 @@ export async function initializeGame({
       itemId: 'field-medkit',
       displayName: 'Field Medkit',
       rarity: 'uncommon',
-      position: [0.85, 0.15, -1.35],
+      position: [0.85, 0, -1.35],
       inventory: {
         itemId: 'field-medkit',
         itemType: 'consumable',

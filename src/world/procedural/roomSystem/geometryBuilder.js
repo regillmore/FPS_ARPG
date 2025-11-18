@@ -261,15 +261,15 @@ export function createRoomGeometryBuilder({
     addBox(
       vertices,
       platformMinX + trimMargin / 2,
-      baseY,
-      platformMinZ - trimMargin / 2,
-      platformMaxX - trimMargin / 2,
-      baseY + platformHeight + trimMargin,
+      baseY - platformHeight,
+      platformMinZ + trimMargin / 2,
+      platformMaxX + trimMargin / 2,
+      baseY + 0.01,
       platformMaxZ + trimMargin / 2,
       platformColor,
       bounds
     );
-    addCollider(colliders, platformMinX, baseY, platformMinZ, platformMaxX, baseY + platformHeight + trimMargin, platformMaxZ);
+    addCollider(colliders, platformMinX, baseY - platformHeight, platformMinZ, platformMaxX, baseY, platformMaxZ);
 
     const trimHeight = Math.min(platformHeight * 0.5, 0.07);
     if (trimHeight > 1e-3) {
@@ -277,10 +277,10 @@ export function createRoomGeometryBuilder({
       addBox(
         vertices,
         platformMinX - trimMargin,
-        baseY + platformHeight - trimHeight,
+        baseY - trimHeight,
         platformMinZ - trimMargin,
         platformMaxX + trimMargin,
-        baseY + platformHeight,
+        baseY,
         platformMaxZ + trimMargin,
         trimColor,
         bounds
@@ -288,7 +288,7 @@ export function createRoomGeometryBuilder({
     }
 
     const railThickness = Math.min(Math.max(elevatorSize * 0.08, wallThickness * 0.5), wallThickness * 1.4);
-    const railMinY = baseY + platformHeight;
+    const railMinY = baseY;
     const railMaxY = Math.min(baseY + roomHeight - 0.25, railMinY + Math.max(roomHeight * 0.6, 1.2));
     const railColor = mixColors(profile.wallColor, profile.accentColor, 0.55);
 
