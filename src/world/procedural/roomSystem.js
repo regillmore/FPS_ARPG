@@ -11,27 +11,10 @@ import {
   DEFAULT_WALL_THICKNESS,
   VERTEX_STRIDE
 } from './constants.js';
-import { mixColors } from './color.js';
-import { createCellProfile, createEdgeKey, determineEdgeType } from './profile.js';
-import {
-  addFloorSlab,
-  addHorizontalSection,
-  addSlabColliders,
-  addBox,
-  addCollider
-} from './geometry.js';
-import { addCagedElectricWallLight } from './decorations.js';
-import {
-  hashValue,
-  randomFloatForEdge
-} from './random.js';
 import { positionToCell, positionToLayer } from './spatial.js';
-import {
-  buildDoorwayAlongX,
-  buildDoorwayAlongZ,
-  buildSolidWallAlongX,
-  buildSolidWallAlongZ
-} from './walls.js';
+import { createCellState } from './roomSystem/cellState.js';
+import { createSpawnManager } from './roomSystem/spawnManager.js';
+import { createRoomGeometryBuilder } from './roomSystem/geometryBuilder.js';
 
 const directionOffsets = {
   north: [0, -1],
@@ -101,969 +84,84 @@ export function createProceduralRoomSystem(device, options = {}) {
   let centerCellX = 0;
   let centerCellZ = 0;
 
-  const layerSeeds = new Map();
-  const layerCellProfiles = new Map();
   const colliders = [];
-  const cellLayerEdgeStates = new Map();
-  const cellVerticalOpenings = new Map();
-  const discoveredBarrelRooms = new Set();
-  const discoveredCameraRooms = new Set();
-  const pendingBarrelSpawns = [];
-  const pendingCameraSpawns = [];
   const decorativeLights = [];
 
-  function normalizeSpawnPosition(position) {
-    if (!position || typeof position !== 'object') {
-      return null;
-    }
-    const source = Array.isArray(position) || ArrayBuffer.isView(position) ? position : null;
-    if (!source) {
-      return null;
-    }
-    const px = Number(source[0]);
-    const py = Number(source[1]);
-    const pz = Number(source[2]);
-    if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
-      return null;
-    }
-    return [px, py, pz];
-  }
+  const cellState = createCellState(worldSeed);
+  const {
+    getCellKey,
+    getLayerSeed,
+    getLayerProfiles,
+    getCellProfileForLayer,
+    getExistingCellEdgesForLayer,
+    getCellEdgesForLayer,
+    getExistingVerticalOpeningStates,
+    updateCellVerticalOpeningForLayer
+  } = cellState;
 
-  function normalizeDirection(direction, fallback) {
-    function tryNormalize(source) {
-      if (!source || typeof source !== 'object') {
-        return null;
-      }
-      const arrayLike = Array.isArray(source) || ArrayBuffer.isView(source) ? source : null;
-      if (!arrayLike) {
-        return null;
-      }
-      const x = Number(arrayLike[0]);
-      const y = Number(arrayLike[1]);
-      const z = Number(arrayLike[2]);
-      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
-        return null;
-      }
-      const length = Math.hypot(x, y, z);
-      if (!(length > 1e-5)) {
-        return null;
-      }
-      return [x / length, y / length, z / length];
-    }
-
-    return tryNormalize(direction) ?? tryNormalize(fallback) ?? null;
-  }
-
-  function normalizeRoomBounds(bounds) {
-    if (!bounds || typeof bounds !== 'object') {
-      return null;
-    }
-
-    const minX = Number(bounds.minX);
-    const maxX = Number(bounds.maxX);
-    const minZ = Number(bounds.minZ);
-    const maxZ = Number(bounds.maxZ);
-
-    if (
-      !Number.isFinite(minX) ||
-      !Number.isFinite(maxX) ||
-      !Number.isFinite(minZ) ||
-      !Number.isFinite(maxZ)
-    ) {
-      return null;
-    }
-
-    if (minX >= maxX || minZ >= maxZ) {
-      return null;
-    }
-
-    return {
-      minX,
-      maxX,
-      minZ,
-      maxZ
-    };
-  }
-
-  function scheduleBarrelSpawnPoint(spawn) {
-    if (!spawn) {
-      return false;
-    }
-    const normalizedPosition = normalizeSpawnPosition(spawn.position ?? spawn);
-    if (!normalizedPosition) {
-      return false;
-    }
-    const key = typeof spawn.key === 'string' ? spawn.key : spawn.key ? String(spawn.key) : '';
-    pendingBarrelSpawns.push({ key, position: normalizedPosition });
-    return true;
-  }
-
-  function scheduleCameraSpawnPoint(spawn) {
-    if (!spawn) {
-      return false;
-    }
-
-    const normalizedPosition = normalizeSpawnPosition(spawn.position ?? spawn);
-    if (!normalizedPosition) {
-      return false;
-    }
-
-    const forward = normalizeDirection(spawn.forward, [0, 0, -1]);
-    if (!forward) {
-      return false;
-    }
-
-    const up = normalizeDirection(spawn.up, [0, 1, 0]) ?? [0, 1, 0];
-    const roomBounds = normalizeRoomBounds(spawn.roomBounds);
-    const key = typeof spawn.key === 'string' ? spawn.key : spawn.key ? String(spawn.key) : '';
-    pendingCameraSpawns.push({
-      key,
-      position: [normalizedPosition[0], normalizedPosition[1], normalizedPosition[2]],
-      forward: [forward[0], forward[1], forward[2]],
-      up: [up[0], up[1], up[2]],
-      roomBounds
-    });
-    return true;
-  }
-
-  function getCellKey(x, z) {
-    return `${x},${z}`;
-  }
-
-  function getBarrelRoomKey(layerIndex, x, z) {
-    return `${layerIndex}:${getCellKey(x, z)}`;
-  }
-
-  function getCameraRoomKey(layerIndex, x, z) {
-    return `camera:${layerIndex}:${getCellKey(x, z)}`;
-  }
-
-  function getLayerSeed(layerIndex) {
-    let seed = layerSeeds.get(layerIndex);
-    if (seed === undefined) {
-      seed = hashValue(layerIndex, worldSeed) >>> 0;
-      layerSeeds.set(layerIndex, seed);
-    }
-    return seed;
-  }
-
-  function getLayerProfiles(layerIndex) {
-    let profiles = layerCellProfiles.get(layerIndex);
-    if (!profiles) {
-      profiles = new Map();
-      layerCellProfiles.set(layerIndex, profiles);
-    }
-    return profiles;
-  }
-
-  function getCellProfileForLayer(layerIndex, x, z) {
-    const profiles = getLayerProfiles(layerIndex);
-    const key = getCellKey(x, z);
-    let profile = profiles.get(key);
-    if (!profile) {
-      profile = createCellProfile(x, z, getLayerSeed(layerIndex));
-      profiles.set(key, profile);
-    }
-    return profile;
-  }
-
-  function getExistingCellEdgesForLayer(layerIndex, x, z) {
-    const key = getCellKey(x, z);
-    const perLayer = cellLayerEdgeStates.get(key);
-    if (!perLayer) {
-      return null;
-    }
-    const edges = perLayer.get(layerIndex);
-    if (!edges) {
-      return null;
-    }
-    return {
-      north: edges.north ?? null,
-      south: edges.south ?? null,
-      east: edges.east ?? null,
-      west: edges.west ?? null,
-      roomType: edges.roomType ?? null
-    };
-  }
-
-  function getCellEdgesForLayer(layerIndex, x, z) {
-    const key = getCellKey(x, z);
-    let perLayer = cellLayerEdgeStates.get(key);
-    if (!perLayer) {
-      perLayer = new Map();
-      cellLayerEdgeStates.set(key, perLayer);
-    }
-    let edges = perLayer.get(layerIndex);
-    if (!edges) {
-      edges = { north: null, south: null, east: null, west: null, roomType: null };
-      perLayer.set(layerIndex, edges);
-    }
-    return edges;
-  }
-
-  function getVerticalOpeningStates(key) {
-    let openings = cellVerticalOpenings.get(key);
-    if (!openings) {
-      openings = new Map();
-      cellVerticalOpenings.set(key, openings);
-    }
-    return openings;
-  }
-
-  function evaluateCellForBarrel(x, z, layerIndex) {
-    const roomKey = getBarrelRoomKey(layerIndex, x, z);
-    if (discoveredBarrelRooms.has(roomKey)) {
-      return;
-    }
-
-    const edges = getCellEdgesForLayer(layerIndex, x, z);
-    if (!edges) {
-      return;
-    }
-
-    const directions = ['north', 'south', 'east', 'west'];
-    const openDirections = [];
-    const closedDirections = [];
-
-    for (let i = 0; i < directions.length; i += 1) {
-      const direction = directions[i];
-      const state = edges[direction];
-
-      if (state === 'open') {
-        openDirections.push(direction);
-      } else if (state === 'solid' || state === 'doorway') {
-        closedDirections.push(direction);
-      } else {
-        return;
-      }
-    }
-
-    if (openDirections.length !== 2 || closedDirections.length !== 2) {
-      return;
-    }
-
-    const centerX = x * roomSize;
-    const centerZ = z * roomSize;
-    const baseY = layerIndex * levelHeight;
-    const rawOffset = Math.max(roomSize * 0.2, halfRoom * 0.45);
-    const clearance = Math.max(0.6, wallThickness * 1.2);
-    const maxOffset = Math.min(rawOffset, halfRoom - clearance);
-    if (!(maxOffset > 0.25)) {
-      return;
-    }
-    const offsets = [];
-
-    for (let i = 0; i < closedDirections.length; i += 1) {
-      const direction = closedDirections[i];
-      if (direction === 'north') {
-        offsets.push([0, -maxOffset]);
-      } else if (direction === 'south') {
-        offsets.push([0, maxOffset]);
-      } else if (direction === 'east') {
-        offsets.push([maxOffset, 0]);
-      } else if (direction === 'west') {
-        offsets.push([-maxOffset, 0]);
-      }
-    }
-
-    if (offsets.length !== 2) {
-      return;
-    }
-
-    discoveredBarrelRooms.add(roomKey);
-
-    for (let i = 0; i < offsets.length; i += 1) {
-      const [offsetX, offsetZ] = offsets[i];
-      const position = [centerX + offsetX, baseY, centerZ + offsetZ];
-      scheduleBarrelSpawnPoint({ key: roomKey, position });
-    }
-  }
-
-  function evaluateCellForCamera(x, z, layerIndex) {
-    const roomKey = getCameraRoomKey(layerIndex, x, z);
-    if (discoveredCameraRooms.has(roomKey)) {
-      return;
-    }
-
-    const edges = getCellEdgesForLayer(layerIndex, x, z);
-    if (!edges) {
-      return;
-    }
-
-    const directions = ['north', 'south', 'east', 'west'];
-    const solidDirections = [];
-
-    for (let i = 0; i < directions.length; i += 1) {
-      const direction = directions[i];
-      const state = edges[direction];
-      if (!state) {
-        return;
-      }
-      if (state === 'solid') {
-        solidDirections.push(direction);
-      }
-    }
-
-    if (solidDirections.length !== 2) {
-      return;
-    }
-
-    const [dirA, dirB] = solidDirections;
-    const adjacency = cornerAdjacency[dirA];
-    if (!adjacency || !adjacency.includes(dirB)) {
-      return;
-    }
-
-    const inset = Math.max(wallThickness * 0.5 + 0.15, halfRoom * 0.25);
-    const cornerOffset = halfRoom - inset;
-    if (!(cornerOffset > 0.05)) {
-      return;
-    }
-
-    const centerX = x * roomSize;
-    const centerZ = z * roomSize;
-    const baseY = layerIndex * levelHeight;
-    const mountY = baseY + roomHeight - Math.max(0.35, roomHeight * 0.15);
-
-    let offsetX = 0;
-    let offsetZ = 0;
-
-    if (solidDirections.includes('east')) {
-      offsetX = cornerOffset;
-    } else if (solidDirections.includes('west')) {
-      offsetX = -cornerOffset;
-    }
-
-    if (solidDirections.includes('south')) {
-      offsetZ = cornerOffset;
-    } else if (solidDirections.includes('north')) {
-      offsetZ = -cornerOffset;
-    }
-
-    if (offsetX === 0 || offsetZ === 0) {
-      return;
-    }
-
-    const position = [centerX + offsetX, mountY, centerZ + offsetZ];
-    const forward = normalizeDirection([-offsetX, 0, -offsetZ], [0, 0, -1]);
-    if (!forward) {
-      return;
-    }
-
-    const roomBounds = {
-      minX: centerX - halfRoom,
-      maxX: centerX + halfRoom,
-      minZ: centerZ - halfRoom,
-      maxZ: centerZ + halfRoom
-    };
-
-    const scheduled = scheduleCameraSpawnPoint({
-      key: roomKey,
-      position,
-      forward,
-      up: [0, 1, 0],
-      roomBounds
-    });
-
-    if (scheduled) {
-      discoveredCameraRooms.add(roomKey);
-    }
-  }
-
-  function updateCellVerticalOpeningForLayer(x, z, layerIndex) {
-    const key = getCellKey(x, z);
-    const perLayer = cellLayerEdgeStates.get(key);
-    const edges = perLayer ? perLayer.get(layerIndex) : null;
-
-    let doorwayCount = 0;
-    let openEdge = false;
-    let closedCount = 0;
-
-    if (edges) {
-      const edgeStates = [edges.north, edges.south, edges.east, edges.west];
-      for (let i = 0; i < edgeStates.length; i += 1) {
-        const state = edgeStates[i];
-        if (state === 'doorway') {
-          doorwayCount += 1;
-        } else if (state === 'open') {
-          openEdge = true;
-        } else {
-          closedCount += 1;
-        }
-      }
-    }
-
-    const shouldOpen =
-      (doorwayCount === 1 && closedCount >= 3 && !openEdge) || closedCount === 4;
-    const openings = getVerticalOpeningStates(key);
-    openings.set(layerIndex, shouldOpen);
-  }
-
-  function recordEdge(ax, az, bx, bz, layerTypes) {
-    if (!Number.isFinite(ax) || !Number.isFinite(az) || !Number.isFinite(bx) || !Number.isFinite(bz)) {
-      return;
-    }
-
-    const effectiveLayerTypes = new Map();
-    if (layerTypes instanceof Map) {
-      for (const [layerIndex, type] of layerTypes.entries()) {
-        effectiveLayerTypes.set(layerIndex, type);
-      }
-    } else if (Array.isArray(layerTypes)) {
-      for (let i = 0; i < layerTypes.length; i += 1) {
-        const type = layerTypes[i];
-        if (type !== undefined) {
-          effectiveLayerTypes.set(i, type);
-        }
-      }
-    } else if (typeof layerTypes === 'string') {
-      effectiveLayerTypes.set(centerLayerIndex, layerTypes);
-    }
-    const dx = bx - ax;
-    const dz = bz - az;
-    let baseType = effectiveLayerTypes.get(centerLayerIndex);
-    if (baseType === undefined) {
-      const first = effectiveLayerTypes.values().next();
-      baseType = first.done ? 'solid' : first.value;
-    }
-
-    for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
-      const type = effectiveLayerTypes.get(layerIndex) ?? baseType;
-      const edgesA = getCellEdgesForLayer(layerIndex, ax, az);
-      const edgesB = getCellEdgesForLayer(layerIndex, bx, bz);
-
-      if (dx === 1 && dz === 0) {
-        edgesA.east = type;
-        edgesB.west = type;
-      } else if (dx === -1 && dz === 0) {
-        edgesA.west = type;
-        edgesB.east = type;
-      } else if (dx === 0 && dz === 1) {
-        edgesA.south = type;
-        edgesB.north = type;
-      } else if (dx === 0 && dz === -1) {
-        edgesA.north = type;
-        edgesB.south = type;
-      }
-
-      updateCellVerticalOpeningForLayer(ax, az, layerIndex);
-      updateCellVerticalOpeningForLayer(bx, bz, layerIndex);
-
-      evaluateCellForBarrel(ax, az, layerIndex);
-      evaluateCellForBarrel(bx, bz, layerIndex);
-      evaluateCellForCamera(ax, az, layerIndex);
-      evaluateCellForCamera(bx, bz, layerIndex);
-    }
-  }
-
-  function resetBounds() {
-    bounds.minX = Infinity;
-    bounds.maxX = -Infinity;
-    bounds.minY = Infinity;
-    bounds.maxY = -Infinity;
-    bounds.minZ = Infinity;
-    bounds.maxZ = -Infinity;
-  }
-
-  function ensureBufferCapacity(vertexArray) {
-    const buffer = device.createBuffer({
-      size: vertexArray.byteLength,
-      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-      mappedAtCreation: true
-    });
-    new Float32Array(buffer.getMappedRange()).set(vertexArray);
-    buffer.unmap();
-    if (vertexBuffer) {
-      vertexBuffer.destroy();
-    }
-    vertexBuffer = buffer;
-    vertexCount = vertexArray.length / VERTEX_STRIDE;
-  }
-
-  function addHallwayBridge(
-    vertices,
-    orientation,
-    minX,
-    maxX,
-    minZ,
-    maxZ,
-    baseY,
+  const spawnManager = createSpawnManager({
+    getCellKey,
+    getCellEdgesForLayer,
+    roomSize,
     roomHeight,
-    corridorWidth,
     wallThickness,
-    floorColor,
-    wallColor,
-    accentColor,
+    halfRoom,
+    levelHeight,
+    cornerAdjacency
+  });
+
+  const {
+    scheduleBarrelSpawnPoint,
+    scheduleCameraSpawnPoint,
+    consumeBarrelSpawnPoints,
+    consumeCameraSpawnPoints,
+    evaluateCellForBarrel,
+    evaluateCellForCamera
+  } = spawnManager;
+
+  const geometryBuilder = createRoomGeometryBuilder({
     bounds,
-    colliders
-  ) {
-    const length = orientation === 'x' ? maxX - minX : maxZ - minZ;
-    const availableWidth = orientation === 'x' ? maxZ - minZ : maxX - minX;
-    if (length <= 0 || availableWidth <= 0) {
-      return;
+    colliders,
+    decorativeLights,
+    roomSize,
+    roomHeight,
+    levelHeight,
+    floorThickness,
+    floorOpeningMargin,
+    wallThickness,
+    halfRoom,
+    generationRadius,
+    singleDoorWidth,
+    doubleDoorWidth,
+    clampedDoorHeight,
+    getActiveLayerRange: () => ({ min: minActiveLayer, max: maxActiveLayer }),
+    getCenterLayerIndex: () => centerLayerIndex,
+    getCellProfileForLayer,
+    getLayerProfiles,
+    getLayerSeed,
+    getCellEdgesForLayer,
+    getExistingVerticalOpeningStates,
+    updateCellVerticalOpeningForLayer,
+    evaluateCellForBarrel,
+    evaluateCellForCamera,
+    directionOffsets,
+    updateVertexBuffer: (vertexArray) => {
+      const buffer = device.createBuffer({
+        size: vertexArray.byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        mappedAtCreation: true
+      });
+      new Float32Array(buffer.getMappedRange()).set(vertexArray);
+      buffer.unmap();
+      if (vertexBuffer) {
+        vertexBuffer.destroy();
+      }
+      vertexBuffer = buffer;
+      vertexCount = vertexArray.length / VERTEX_STRIDE;
     }
+  });
 
-    const clampedWidth = Math.min(Math.max(corridorWidth, 0.5), availableWidth * 0.9);
-    const sideSpace = Math.max(availableWidth - clampedWidth, 0);
-    const sideThickness = Math.min(Math.max(sideSpace * 0.5, 0), wallThickness * 0.85);
-    const halfWidth = clampedWidth * 0.5;
-    const centerX = (minX + maxX) * 0.5;
-    const centerZ = (minZ + maxZ) * 0.5;
-    const floorMinY = baseY;
-    const floorMaxY = floorMinY + Math.min(0.12, roomHeight * 0.05);
-    const wallTopY = Math.min(baseY + roomHeight * 0.66, baseY + roomHeight - 0.2);
-    const capMinY = wallTopY;
-    const capMaxY = Math.min(capMinY + Math.min(roomHeight * 0.1, 0.3), baseY + roomHeight);
-    const walkwayColor = mixColors(floorColor, accentColor, 0.4);
-    const sideColor = mixColors(wallColor, accentColor, 0.3);
-    const capColor = mixColors(wallColor, accentColor, 0.55);
-
-    if (orientation === 'x') {
-      const corridorMinZ = Math.max(minZ, centerZ - halfWidth);
-      const corridorMaxZ = Math.min(maxZ, centerZ + halfWidth);
-      addBox(vertices, minX, floorMinY, corridorMinZ, maxX, floorMaxY, corridorMaxZ, walkwayColor, bounds);
-
-      if (sideThickness > 1e-3) {
-        const leftThickness = Math.min(sideThickness, Math.max(0, corridorMinZ - minZ));
-        if (leftThickness > 1e-3) {
-          const leftMinZ = Math.max(minZ, corridorMinZ - leftThickness);
-          const leftMaxZ = Math.max(leftMinZ, corridorMinZ);
-          addBox(vertices, minX, baseY, leftMinZ, maxX, wallTopY, leftMaxZ, sideColor, bounds);
-          addCollider(colliders, minX, baseY, leftMinZ, maxX, wallTopY, leftMaxZ);
-        }
-
-        const rightThickness = Math.min(sideThickness, Math.max(0, maxZ - corridorMaxZ));
-        if (rightThickness > 1e-3) {
-          const rightMinZ = Math.min(corridorMaxZ, maxZ - rightThickness);
-          const rightMaxZ = Math.min(maxZ, corridorMaxZ + rightThickness);
-          addBox(vertices, minX, baseY, rightMinZ, maxX, wallTopY, rightMaxZ, sideColor, bounds);
-          addCollider(colliders, minX, baseY, rightMinZ, maxX, wallTopY, rightMaxZ);
-        }
-      }
-
-      const capInsetZ = 0; //Math.min(clampedWidth * 0.25, Math.max(clampedWidth * 0.15, 0.1));
-      const capMinZ = Math.min(corridorMaxZ, corridorMinZ + capInsetZ);
-      const capMaxZ = Math.max(capMinZ, corridorMaxZ - capInsetZ);
-      if (capMaxZ - capMinZ > 1e-3) {
-        addBox(vertices, minX, capMinY, capMinZ, maxX, capMaxY, capMaxZ, capColor, bounds);
-      }
-    } else {
-      const corridorMinX = Math.max(minX, centerX - halfWidth);
-      const corridorMaxX = Math.min(maxX, centerX + halfWidth);
-      addBox(vertices, corridorMinX, floorMinY, minZ, corridorMaxX, floorMaxY, maxZ, walkwayColor, bounds);
-
-      if (sideThickness > 1e-3) {
-        const leftThickness = Math.min(sideThickness, Math.max(0, corridorMinX - minX));
-        if (leftThickness > 1e-3) {
-          const leftMinX = Math.max(minX, corridorMinX - leftThickness);
-          const leftMaxX = Math.max(leftMinX, corridorMinX);
-          addBox(vertices, leftMinX, baseY, minZ, leftMaxX, wallTopY, maxZ, sideColor, bounds);
-          addCollider(colliders, leftMinX, baseY, minZ, leftMaxX, wallTopY, maxZ);
-        }
-
-        const rightThickness = Math.min(sideThickness, Math.max(0, maxX - corridorMaxX));
-        if (rightThickness > 1e-3) {
-          const rightMinX = Math.min(corridorMaxX, maxX - rightThickness);
-          const rightMaxX = Math.min(maxX, corridorMaxX + rightThickness);
-          addBox(vertices, rightMinX, baseY, minZ, rightMaxX, wallTopY, maxZ, sideColor, bounds);
-          addCollider(colliders, rightMinX, baseY, minZ, rightMaxX, wallTopY, maxZ);
-        }
-      }
-
-      const capInsetX = 0; //Math.min(clampedWidth * 0.25, Math.max(clampedWidth * 0.15, 0.1));
-      const capMinX = Math.min(corridorMaxX, corridorMinX + capInsetX);
-      const capMaxX = Math.max(capMinX, corridorMaxX - capInsetX);
-      if (capMaxX - capMinX > 1e-3) {
-        addBox(vertices, capMinX, capMinY, minZ, capMaxX, capMaxY, maxZ, capColor, bounds);
-      }
-    }
-  }
-
-  function buildGeometryForCenter(cx, cz) {
-    const vertices = [];
-    decorativeLights.length = 0;
-    resetBounds();
-    colliders.length = 0;
-
-    const processedEdges = new Set();
-
-    for (let gx = cx - generationRadius; gx <= cx + generationRadius; gx += 1) {
-      for (let gz = cz - generationRadius; gz <= cz + generationRadius; gz += 1) {
-        const key = `${gx},${gz}`;
-        const profilePerLayer = new Map();
-        for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
-          profilePerLayer.set(layerIndex, getCellProfileForLayer(layerIndex, gx, gz));
-        }
-
-        const centerX = gx * roomSize;
-        const centerZ = gz * roomSize;
-        const minX = centerX - halfRoom;
-        const maxX = centerX + halfRoom;
-        const minZ = centerZ - halfRoom;
-        const maxZ = centerZ + halfRoom;
-
-        const holeMinX = minX + floorOpeningMargin;
-        const holeMaxX = maxX - floorOpeningMargin;
-        const holeMinZ = minZ + floorOpeningMargin;
-        const holeMaxZ = maxZ - floorOpeningMargin;
-
-        const neighbors = [
-          [gx + 1, gz],
-          [gx - 1, gz],
-          [gx, gz + 1],
-          [gx, gz - 1]
-        ];
-
-        for (let i = 0; i < neighbors.length; i += 1) {
-          const [nx, nz] = neighbors[i];
-          const edgeKey = createEdgeKey(gx, gz, nx, nz);
-          if (processedEdges.has(edgeKey)) {
-            continue;
-          }
-          processedEdges.add(edgeKey);
-
-          const edgeTypes = new Map();
-          const neighborProfiles = new Map();
-          for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
-            const profiles = getLayerProfiles(layerIndex);
-            const seed = getLayerSeed(layerIndex);
-            edgeTypes.set(layerIndex, determineEdgeType(gx, gz, nx, nz, profiles, seed));
-            neighborProfiles.set(layerIndex, getCellProfileForLayer(layerIndex, nx, nz));
-          }
-
-          recordEdge(gx, gz, nx, nz, edgeTypes);
-
-          if (nx !== gx) {
-            const wallX = (gx + nx) * 0.5 * roomSize;
-            const edgeMinZ = Math.min(gz, nz) * roomSize - halfRoom;
-            const edgeMaxZ = Math.max(gz, nz) * roomSize + halfRoom;
-            for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
-              const type = edgeTypes.get(layerIndex);
-              if (type === 'open') {
-                continue;
-              }
-              const profile = profilePerLayer.get(layerIndex);
-              const neighborProfile = neighborProfiles.get(layerIndex);
-              const wallColor = mixColors(profile.wallColor, neighborProfile.wallColor, 0.5);
-              const accentColor = mixColors(profile.accentColor, neighborProfile.accentColor, 0.5);
-              const isDoubleDoor =
-                type === 'doorway'
-                  ? randomFloatForEdge(gx, gz, nx, nz, 29, getLayerSeed(layerIndex)) < 0.5
-                  : false;
-              const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
-              const localDoorHeight = clampedDoorHeight;
-              const baseY = layerIndex * levelHeight;
-              if (type === 'solid') {
-                buildSolidWallAlongX(
-                  vertices,
-                  wallX,
-                  edgeMinZ,
-                  edgeMaxZ,
-                  roomHeight,
-                  wallColor,
-                  bounds,
-                  wallThickness,
-                  colliders,
-                  baseY
-                );
-              } else if (type === 'doorway') {
-                buildDoorwayAlongX(
-                  vertices,
-                  wallX,
-                  edgeMinZ,
-                  edgeMaxZ,
-                  roomHeight,
-                  localDoorHeight,
-                  localDoorWidth,
-                  wallColor,
-                  accentColor,
-                  bounds,
-                  wallThickness,
-                  colliders,
-                  baseY
-                );
-              }
-            }
-          } else if (nz !== gz) {
-            const wallZ = (gz + nz) * 0.5 * roomSize;
-            const edgeMinX = Math.min(gx, nx) * roomSize - halfRoom;
-            const edgeMaxX = Math.max(gx, nx) * roomSize + halfRoom;
-            for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
-              const type = edgeTypes.get(layerIndex);
-              if (type === 'open') {
-                continue;
-              }
-              const profile = profilePerLayer.get(layerIndex);
-              const neighborProfile = neighborProfiles.get(layerIndex);
-              const wallColor = mixColors(profile.wallColor, neighborProfile.wallColor, 0.5);
-              const accentColor = mixColors(profile.accentColor, neighborProfile.accentColor, 0.5);
-              const isDoubleDoor =
-                type === 'doorway'
-                  ? randomFloatForEdge(gx, gz, nx, nz, 29, getLayerSeed(layerIndex)) < 0.5
-                  : false;
-              const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
-              const localDoorHeight = clampedDoorHeight;
-              const baseY = layerIndex * levelHeight;
-              if (type === 'solid') {
-                buildSolidWallAlongZ(
-                  vertices,
-                  wallZ,
-                  edgeMinX,
-                  edgeMaxX,
-                  roomHeight,
-                  wallColor,
-                  bounds,
-                  wallThickness,
-                  colliders,
-                  baseY
-                );
-              } else if (type === 'doorway') {
-                buildDoorwayAlongZ(
-                  vertices,
-                  wallZ,
-                  edgeMinX,
-                  edgeMaxX,
-                  roomHeight,
-                  localDoorHeight,
-                  localDoorWidth,
-                  wallColor,
-                  accentColor,
-                  bounds,
-                  wallThickness,
-                  colliders,
-                  baseY
-                );
-              }
-            }
-          }
-        }
-
-        const verticalOpeningStates = cellVerticalOpenings.get(key);
-
-        for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
-          const baseY = layerIndex * levelHeight;
-          const ceilingY = baseY + roomHeight;
-          const openFloor =
-            layerIndex > minActiveLayer && verticalOpeningStates
-              ? verticalOpeningStates.get(layerIndex) ?? false
-              : false;
-          const openCeiling =
-            layerIndex < maxActiveLayer && verticalOpeningStates
-              ? verticalOpeningStates.get(layerIndex + 1) ?? false
-              : false;
-          const hasVerticalOpeningFromAbove = Boolean(openCeiling);
-          const isTopLayer = layerIndex === maxActiveLayer;
-          const profile = profilePerLayer.get(layerIndex);
-
-          const edges = getCellEdgesForLayer(layerIndex, gx, gz);
-          let hallwayOrientation = null;
-          if (edges) {
-            const entries = [
-              ['north', edges.north],
-              ['south', edges.south],
-              ['east', edges.east],
-              ['west', edges.west]
-            ];
-            let solidDirection = null;
-            let openCount = 0;
-            let hasDoorway = false;
-            let hasUnknown = false;
-
-            for (let i = 0; i < entries.length; i += 1) {
-              const [direction, state] = entries[i];
-              if (state === 'open') {
-                openCount += 1;
-              } else if (state === 'solid') {
-                if (solidDirection) {
-                  solidDirection = null;
-                  break;
-                }
-                solidDirection = direction;
-              } else if (state === 'doorway') {
-                hasDoorway = true;
-              } else {
-                hasUnknown = true;
-                break;
-              }
-            }
-
-            if (!hasUnknown && !hasDoorway && solidDirection && openCount === 3) {
-              addCagedElectricWallLight(
-                vertices,
-                bounds,
-                solidDirection,
-                centerX,
-                centerZ,
-                baseY,
-                roomSize,
-                roomHeight,
-                wallThickness,
-                profile.wallColor,
-                profile.accentColor,
-                decorativeLights
-              );
-            }
-          }
-
-          if (edges) {
-            const seedForLayer = getLayerSeed(layerIndex);
-            const hasOpenEdge =
-              edges.north === 'open' ||
-              edges.south === 'open' ||
-              edges.east === 'open' ||
-              edges.west === 'open';
-
-            function hasDoubleDoor(direction) {
-              if (edges[direction] !== 'doorway') {
-                return false;
-              }
-              const offset = directionOffsets[direction];
-              if (!offset) {
-                return false;
-              }
-              const nx = gx + offset[0];
-              const nz = gz + offset[1];
-              return randomFloatForEdge(gx, gz, nx, nz, 29, seedForLayer) < 0.5;
-            }
-
-            if (!hasOpenEdge) {
-              const doubleNorth = hasDoubleDoor('north');
-              const doubleSouth = hasDoubleDoor('south');
-              const doubleEast = hasDoubleDoor('east');
-              const doubleWest = hasDoubleDoor('west');
-
-              if (
-                doubleNorth &&
-                doubleSouth &&
-                edges.east === 'solid' &&
-                edges.west === 'solid'
-              ) {
-                hallwayOrientation = 'z';
-              } else if (
-                doubleEast &&
-                doubleWest &&
-                edges.north === 'solid' &&
-                edges.south === 'solid'
-              ) {
-                hallwayOrientation = 'x';
-              }
-            }
-          }
-
-          if (hallwayOrientation && !hasVerticalOpeningFromAbove) {
-            addHallwayBridge(
-              vertices,
-              hallwayOrientation,
-              minX,
-              maxX,
-              minZ,
-              maxZ,
-              baseY,
-              roomHeight,
-              doubleDoorWidth * 1.1,
-              wallThickness,
-              profile.floorColor,
-              profile.wallColor,
-              profile.accentColor,
-              bounds,
-              colliders
-            );
-            edges.roomType = 'hallwayBridge';
-          } else if (edges.roomType === 'hallwayBridge') {
-            edges.roomType = null;
-          }
-
-          addFloorSlab(
-            vertices,
-            baseY,
-            floorThickness,
-            minX,
-            maxX,
-            minZ,
-            maxZ,
-            profile.floorColor,
-            profile.ceilingColor,
-            bounds,
-            openFloor,
-            holeMinX,
-            holeMaxX,
-            holeMinZ,
-            holeMaxZ,
-            colliders
-          );
-
-          if (isTopLayer) {
-            addHorizontalSection(
-              vertices,
-              ceilingY,
-              minX,
-              maxX,
-              minZ,
-              maxZ,
-              [0, -1, 0],
-              profile.ceilingColor,
-              bounds,
-              openCeiling,
-              holeMinX,
-              holeMaxX,
-              holeMinZ,
-              holeMaxZ
-            );
-            addHorizontalSection(
-              vertices,
-              ceilingY,
-              minX,
-              maxX,
-              minZ,
-              maxZ,
-              [0, 1, 0],
-              profile.ceilingColor,
-              bounds,
-              openCeiling,
-              holeMinX,
-              holeMaxX,
-              holeMinZ,
-              holeMaxZ
-            );
-
-            const ceilingThickness = Math.max(floorThickness, 0.05);
-            addSlabColliders(
-              colliders,
-              minX,
-              maxX,
-              minZ,
-              maxZ,
-              ceilingY,
-              ceilingY + ceilingThickness,
-              openCeiling,
-              holeMinX,
-              holeMaxX,
-              holeMinZ,
-              holeMaxZ
-            );
-          }
-        }
-      }
-    }
-
-    const lowestLayerBottom = minActiveLayer * levelHeight - floorThickness;
-    const highestLayerTop = maxActiveLayer * levelHeight + roomHeight;
-
-    if (!Number.isFinite(bounds.minX)) {
-      bounds.minX = cx * roomSize - halfRoom;
-      bounds.maxX = cx * roomSize + halfRoom;
-      bounds.minY = lowestLayerBottom;
-      bounds.maxY = highestLayerTop;
-      bounds.minZ = cz * roomSize - halfRoom;
-      bounds.maxZ = cz * roomSize + halfRoom;
-    } else {
-      bounds.minY = Math.min(bounds.minY, lowestLayerBottom);
-      bounds.maxY = Math.max(bounds.maxY, highestLayerTop);
-    }
-
-    const vertexArray = new Float32Array(vertices);
-    ensureBufferCapacity(vertexArray);
-  }
+  const { buildGeometryForCenter } = geometryBuilder;
 
   function getLayerIndexForHeight(height) {
     const value = Number.isFinite(height) ? height : 0;
@@ -1079,9 +177,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     const py = Number.isFinite(playerPosition[1]) ? playerPosition[1] : 0;
     const pz = Number.isFinite(playerPosition[2]) ? playerPosition[2] : 0;
 
-    const resolvedRadius = Number.isFinite(options.radius)
-      ? Math.floor(options.radius)
-      : 3;
+    const resolvedRadius = Number.isFinite(options.radius) ? Math.floor(options.radius) : 3;
     const clampedRadius = Math.max(1, Math.min(resolvedRadius, generationRadius));
     const layerIndex = getLayerIndexForHeight(py);
     const cellX = positionToCell(px, roomSize, halfRoom);
@@ -1095,7 +191,7 @@ export function createProceduralRoomSystem(device, options = {}) {
           continue;
         }
         const key = getCellKey(gx, gz);
-        const verticalOpeningStates = cellVerticalOpenings.get(key);
+        const verticalOpeningStates = getExistingVerticalOpeningStates(key);
         cells.push({
           x: gx,
           z: gz,
@@ -1216,18 +312,8 @@ export function createProceduralRoomSystem(device, options = {}) {
       layerIndex: centerLayerIndex
     }),
     isPositionWithinGenerationRadius,
-    consumeBarrelSpawnPoints: () => {
-      if (pendingBarrelSpawns.length === 0) {
-        return [];
-      }
-      return pendingBarrelSpawns.splice(0, pendingBarrelSpawns.length);
-    },
-    consumeCameraSpawnPoints: () => {
-      if (pendingCameraSpawns.length === 0) {
-        return [];
-      }
-      return pendingCameraSpawns.splice(0, pendingCameraSpawns.length);
-    },
+    consumeBarrelSpawnPoints,
+    consumeCameraSpawnPoints,
     scheduleBarrelSpawnPoint,
     scheduleCameraSpawnPoint,
     dispose: () => {
