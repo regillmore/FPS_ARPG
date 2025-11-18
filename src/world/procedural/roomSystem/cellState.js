@@ -1,6 +1,10 @@
 import { createCellProfile } from '../profile.js';
 import { hashValue } from '../random.js';
 
+function isElevatorCell(x, z) {
+  return x === 0 && z === 0;
+}
+
 export function createCellState(worldSeed) {
   const layerSeeds = new Map();
   const layerCellProfiles = new Map();
@@ -110,8 +114,9 @@ export function createCellState(worldSeed) {
       }
     }
 
-    const shouldOpen =
+    const hasProceduralOpening =
       (doorwayCount === 1 && closedCount >= 3 && !openEdge) || closedCount === 4;
+    const shouldOpen = isElevatorCell(x, z) || hasProceduralOpening;
     const openings = getVerticalOpeningStates(key);
     openings.set(layerIndex, shouldOpen);
   }
