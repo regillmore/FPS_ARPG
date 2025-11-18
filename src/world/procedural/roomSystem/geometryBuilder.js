@@ -11,6 +11,33 @@ import { addCagedElectricWallLight } from '../decorations.js';
 import { randomFloatForEdge } from '../random.js';
 import { buildDoorwayAlongX, buildDoorwayAlongZ, buildSolidWallAlongX, buildSolidWallAlongZ } from '../walls.js';
 
+function isOriginCell(x, z) {
+  return x === 0 && z === 0;
+}
+
+function getForcedOriginEdgeState(ax, az, bx, bz) {
+  const originInvolved = isOriginCell(ax, az) || isOriginCell(bx, bz);
+  if (!originInvolved || (ax === bx && az === bz)) {
+    return null;
+  }
+
+  if (ax === bx && Math.abs(az - bz) === 1) {
+    // North/South adjacency
+    return 'doorway';
+  }
+
+  if (az === bz && Math.abs(ax - bx) === 1) {
+    // East/West adjacency
+    return 'solid';
+  }
+
+  return null;
+}
+
+function isOriginHallwayDoorway(ax, az, bx, bz) {
+  return getForcedOriginEdgeState(ax, az, bx, bz) === 'doorway';
+}
+
 export function createRoomGeometryBuilder({
   bounds,
   colliders,
@@ -256,6 +283,13 @@ export function createRoomGeometryBuilder({
             neighborProfiles.set(layerIndex, getCellProfileForLayer(layerIndex, nx, nz));
           }
 
+          const forcedState = getForcedOriginEdgeState(gx, gz, nx, nz);
+          if (forcedState) {
+            for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
+              edgeTypes.set(layerIndex, forcedState);
+            }
+          }
+
           recordEdge(gx, gz, nx, nz, edgeTypes);
 
           if (nx !== gx) {
@@ -273,7 +307,8 @@ export function createRoomGeometryBuilder({
               const accentColor = mixColors(profile.accentColor, neighborProfile.accentColor, 0.5);
               const isDoubleDoor =
                 type === 'doorway'
-                  ? randomFloatForEdge(gx, gz, nx, nz, 29, getLayerSeed(layerIndex)) < 0.5
+                  ? isOriginHallwayDoorway(gx, gz, nx, nz) ||
+                    randomFloatForEdge(gx, gz, nx, nz, 29, getLayerSeed(layerIndex)) < 0.5
                   : false;
               const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
               const localDoorHeight = clampedDoorHeight;
@@ -324,7 +359,8 @@ export function createRoomGeometryBuilder({
               const accentColor = mixColors(profile.accentColor, neighborProfile.accentColor, 0.5);
               const isDoubleDoor =
                 type === 'doorway'
-                  ? randomFloatForEdge(gx, gz, nx, nz, 29, getLayerSeed(layerIndex)) < 0.5
+                  ? isOriginHallwayDoorway(gx, gz, nx, nz) ||
+                    randomFloatForEdge(gx, gz, nx, nz, 29, getLayerSeed(layerIndex)) < 0.5
                   : false;
               const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
               const localDoorHeight = clampedDoorHeight;
@@ -448,6 +484,9 @@ export function createRoomGeometryBuilder({
               }
               const nx = gx + offset[0];
               const nz = gz + offset[1];
+              if (isOriginHallwayDoorway(gx, gz, nx, nz)) {
+                return true;
+              }
               return randomFloatForEdge(gx, gz, nx, nz, 29, seedForLayer) < 0.5;
             }
 
