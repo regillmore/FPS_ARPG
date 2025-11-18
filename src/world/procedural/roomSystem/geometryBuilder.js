@@ -230,6 +230,164 @@ export function createRoomGeometryBuilder({
     }
   }
 
+  function addOriginElevator(
+    vertices,
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    baseY,
+    roomHeight,
+    wallThickness,
+    profile
+  ) {
+    const width = maxX - minX;
+    const depth = maxZ - minZ;
+    if (!(width > 0) || !(depth > 0)) {
+      return;
+    }
+
+    const centerX = (minX + maxX) * 0.5;
+    const centerZ = (minZ + maxZ) * 0.5;
+    const elevatorSize = Math.min(width, depth) * 0.62;
+    const halfSize = elevatorSize * 0.5;
+    const platformMinX = centerX - halfSize;
+    const platformMaxX = centerX + halfSize;
+    const platformMinZ = centerZ - halfSize;
+    const platformMaxZ = centerZ + halfSize;
+    const platformHeight = Math.min(Math.max(roomHeight * 0.05, 0.05), 0.10);
+    const platformColor = mixColors(profile.floorColor, profile.accentColor, 0.45);
+    const trimMargin = 0.05;
+    addBox(
+      vertices,
+      platformMinX + trimMargin / 2,
+      baseY,
+      platformMinZ - trimMargin / 2,
+      platformMaxX - trimMargin / 2,
+      baseY + platformHeight + trimMargin,
+      platformMaxZ + trimMargin / 2,
+      platformColor,
+      bounds
+    );
+    addCollider(colliders, platformMinX, baseY, platformMinZ, platformMaxX, baseY + platformHeight + trimMargin, platformMaxZ);
+
+    const trimHeight = Math.min(platformHeight * 0.5, 0.07);
+    if (trimHeight > 1e-3) {
+      const trimColor = mixColors(profile.floorColor, profile.ceilingColor, 0.4);
+      addBox(
+        vertices,
+        platformMinX - trimMargin,
+        baseY + platformHeight - trimHeight,
+        platformMinZ - trimMargin,
+        platformMaxX + trimMargin,
+        baseY + platformHeight,
+        platformMaxZ + trimMargin,
+        trimColor,
+        bounds
+      );
+    }
+
+    const railThickness = Math.min(Math.max(elevatorSize * 0.08, wallThickness * 0.5), wallThickness * 1.4);
+    const railMinY = baseY + platformHeight;
+    const railMaxY = Math.min(baseY + roomHeight - 0.25, railMinY + Math.max(roomHeight * 0.6, 1.2));
+    const railColor = mixColors(profile.wallColor, profile.accentColor, 0.55);
+
+    // East and west rails leave openings toward the doorways on the north/south axis.
+    addBox(
+      vertices,
+      platformMaxX - railThickness,
+      railMinY,
+      platformMinZ,
+      platformMaxX,
+      railMaxY,
+      platformMaxZ,
+      railColor,
+      bounds
+    );
+    addCollider(
+      colliders,
+      platformMaxX - railThickness,
+      railMinY,
+      platformMinZ,
+      platformMaxX,
+      railMaxY,
+      platformMaxZ
+    );
+    addBox(
+      vertices,
+      platformMinX,
+      railMinY,
+      platformMinZ,
+      platformMinX + railThickness,
+      railMaxY,
+      platformMaxZ,
+      railColor,
+      bounds
+    );
+    addCollider(
+      colliders,
+      platformMinX,
+      railMinY,
+      platformMinZ,
+      platformMinX + railThickness,
+      railMaxY,
+      platformMaxZ
+    );
+
+    const postThickness = Math.min(Math.max(elevatorSize * 0.06, 0.08), railThickness);
+    const postColor = mixColors(profile.wallColor, profile.ceilingColor, 0.55);
+    const postMinY = railMinY;
+    const postMaxY = Math.min(baseY + roomHeight - 0.15, railMaxY + Math.max(roomHeight * 0.2, 0.6));
+    const postPositions = [
+      [platformMinX, platformMinZ],
+      [platformMinX, platformMaxZ - postThickness],
+      [platformMaxX - postThickness, platformMinZ],
+      [platformMaxX - postThickness, platformMaxZ - postThickness]
+    ];
+    for (const [px, pz] of postPositions) {
+      addBox(vertices, px - trimMargin, postMinY, pz - trimMargin, px + postThickness + trimMargin, postMaxY, pz + postThickness + trimMargin, postColor, bounds);
+      addCollider(colliders, px, postMinY, pz, px + postThickness, postMaxY, pz + postThickness);
+    }
+
+    const canopyMinY = Math.max(postMaxY + 0.05, baseY + roomHeight * 0.7);
+    const canopyMaxY = Math.min(canopyMinY + Math.min(roomHeight * 0.08, 0.2), baseY + roomHeight - 0.05);
+    const canopyInset = Math.min(elevatorSize * 0.08, wallThickness * 0.6);
+    const canopyColor = mixColors(profile.ceilingColor, profile.accentColor, 0.55);
+    addBox(
+      vertices,
+      platformMinX + canopyInset,
+      canopyMinY,
+      platformMinZ + canopyInset,
+      platformMaxX - canopyInset,
+      canopyMaxY,
+      platformMaxZ - canopyInset,
+      canopyColor,
+      bounds
+    );
+
+    const indicatorWidth = Math.min(wallThickness * 1.1, elevatorSize * 0.18);
+    const indicatorDepth = Math.min(railThickness * 0.85, 0.14);
+    const indicatorHeight = Math.min(Math.max(roomHeight * 0.25, 0.6), roomHeight - 0.4);
+    const indicatorMinY = baseY + roomHeight * 0.25;
+    const indicatorMaxY = indicatorMinY + Math.min(indicatorHeight, roomHeight - 0.5);
+    const indicatorMinX = platformMaxX - railThickness + indicatorDepth * 0.2 - trimMargin;
+    const indicatorMaxX = indicatorMinX + indicatorDepth;
+    const indicatorMinZ = centerZ - indicatorWidth * 0.5;
+    const indicatorMaxZ = indicatorMinZ + indicatorWidth;
+    const indicatorColor = mixColors(profile.accentColor, profile.ceilingColor, 0.5);
+    addBox(
+      vertices,
+      indicatorMinX,
+      indicatorMinY,
+      indicatorMinZ,
+      indicatorMaxX,
+      indicatorMaxY,
+      indicatorMaxZ,
+      indicatorColor,
+      bounds
+    );
+  }
+
   function buildGeometryForCenter(cx, cz) {
     const vertices = [];
     decorativeLights.length = 0;
@@ -466,6 +624,7 @@ export function createRoomGeometryBuilder({
             }
           }
 
+          const isOrigin = isOriginCell(gx, gz);
           if (edges) {
             const seedForLayer = getLayerSeed(layerIndex);
             const hasOpenEdge =
@@ -490,7 +649,7 @@ export function createRoomGeometryBuilder({
               return randomFloatForEdge(gx, gz, nx, nz, 29, seedForLayer) < 0.5;
             }
 
-            if (!hasOpenEdge) {
+            if (!hasOpenEdge && !isOrigin) {
               const doubleNorth = hasDoubleDoor('north');
               const doubleSouth = hasDoubleDoor('south');
               const doubleEast = hasDoubleDoor('east');
@@ -514,7 +673,20 @@ export function createRoomGeometryBuilder({
             }
           }
 
-          if (hallwayOrientation && !hasVerticalOpeningFromAbove) {
+          if (isOrigin) {
+            addOriginElevator(
+              vertices,
+              minX,
+              maxX,
+              minZ,
+              maxZ,
+              baseY,
+              roomHeight,
+              wallThickness,
+              profile
+            );
+            edges.roomType = 'elevator';
+          } else if (hallwayOrientation && !hasVerticalOpeningFromAbove) {
             addHallwayBridge(
               vertices,
               hallwayOrientation,
@@ -531,7 +703,7 @@ export function createRoomGeometryBuilder({
               profile.accentColor
             );
             edges.roomType = 'hallwayBridge';
-          } else if (edges.roomType === 'hallwayBridge') {
+          } else if (edges.roomType === 'hallwayBridge' || edges.roomType === 'elevator') {
             edges.roomType = null;
           }
 
