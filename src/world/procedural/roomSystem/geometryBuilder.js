@@ -368,7 +368,7 @@ export function createRoomGeometryBuilder({
     const indicatorWidth = Math.min(wallThickness * 1.1, elevatorSize * 0.18);
     const indicatorDepth = Math.min(railThickness * 0.85, 0.14);
     const indicatorHeight = Math.min(Math.max(roomHeight * 0.25, 0.6), roomHeight - 0.4);
-    const indicatorMinY = baseY + roomHeight * 0.25;
+    const indicatorMinY = baseY + roomHeight * 0.15;
     const indicatorMaxY = indicatorMinY + Math.min(indicatorHeight, roomHeight - 0.5);
     const indicatorMinX = platformMaxX - railThickness + indicatorDepth * 0.2 - trimMargin;
     const indicatorMaxX = indicatorMinX + indicatorDepth;
