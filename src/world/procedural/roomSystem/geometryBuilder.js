@@ -255,32 +255,33 @@ export function createRoomGeometryBuilder({
     const platformMaxX = centerX + halfSize;
     const platformMinZ = centerZ - halfSize;
     const platformMaxZ = centerZ + halfSize;
-    const platformHeight = Math.min(Math.max(roomHeight * 0.05, 0.05), 0.28);
+    const platformHeight = Math.min(Math.max(roomHeight * 0.05, 0.05), 0.10);
     const platformColor = mixColors(profile.floorColor, profile.accentColor, 0.45);
+    const trimMargin = 0.05;
     addBox(
       vertices,
-      platformMinX,
+      platformMinX + trimMargin / 2,
       baseY,
-      platformMinZ,
-      platformMaxX,
-      baseY + platformHeight,
-      platformMaxZ,
+      platformMinZ - trimMargin / 2,
+      platformMaxX - trimMargin / 2,
+      baseY + platformHeight + trimMargin,
+      platformMaxZ + trimMargin / 2,
       platformColor,
       bounds
     );
-    addCollider(colliders, platformMinX, baseY, platformMinZ, platformMaxX, baseY + platformHeight, platformMaxZ);
+    addCollider(colliders, platformMinX, baseY, platformMinZ, platformMaxX, baseY + platformHeight + trimMargin, platformMaxZ);
 
     const trimHeight = Math.min(platformHeight * 0.5, 0.07);
     if (trimHeight > 1e-3) {
       const trimColor = mixColors(profile.floorColor, profile.ceilingColor, 0.4);
       addBox(
         vertices,
-        platformMinX,
+        platformMinX - trimMargin,
         baseY + platformHeight - trimHeight,
-        platformMinZ,
-        platformMaxX,
+        platformMinZ - trimMargin,
+        platformMaxX + trimMargin,
         baseY + platformHeight,
-        platformMaxZ,
+        platformMaxZ + trimMargin,
         trimColor,
         bounds
       );
@@ -344,7 +345,7 @@ export function createRoomGeometryBuilder({
       [platformMaxX - postThickness, platformMaxZ - postThickness]
     ];
     for (const [px, pz] of postPositions) {
-      addBox(vertices, px, postMinY, pz, px + postThickness, postMaxY, pz + postThickness, postColor, bounds);
+      addBox(vertices, px - trimMargin, postMinY, pz - trimMargin, px + postThickness + trimMargin, postMaxY, pz + postThickness + trimMargin, postColor, bounds);
       addCollider(colliders, px, postMinY, pz, px + postThickness, postMaxY, pz + postThickness);
     }
 
@@ -367,9 +368,9 @@ export function createRoomGeometryBuilder({
     const indicatorWidth = Math.min(wallThickness * 1.1, elevatorSize * 0.18);
     const indicatorDepth = Math.min(railThickness * 0.85, 0.14);
     const indicatorHeight = Math.min(Math.max(roomHeight * 0.25, 0.6), roomHeight - 0.4);
-    const indicatorMinY = baseY + roomHeight * 0.35;
+    const indicatorMinY = baseY + roomHeight * 0.25;
     const indicatorMaxY = indicatorMinY + Math.min(indicatorHeight, roomHeight - 0.5);
-    const indicatorMinX = platformMaxX - railThickness + indicatorDepth * 0.2;
+    const indicatorMinX = platformMaxX - railThickness + indicatorDepth * 0.2 - trimMargin;
     const indicatorMaxX = indicatorMinX + indicatorDepth;
     const indicatorMinZ = centerZ - indicatorWidth * 0.5;
     const indicatorMaxZ = indicatorMinZ + indicatorWidth;
