@@ -121,10 +121,34 @@ export function createProceduralRoomSystem(device, options = {}) {
     elevatorCallPanels.length = 0;
   };
 
+  let elevatorCarDescriptor = null;
+  let elevatorCollider = null;
+  let elevatorVerticalPosition = 0;
+  let elevatorVerticalVelocity = 0;
+  const elevatorTravelSpeed = Math.max(levelHeight * 0.8, 2.5);
+  let lastElevatorUpdateTime =
+    typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
+  const registerElevatorCarDescriptor = (descriptor) => {
+    if (!descriptor) {
+      elevatorCarDescriptor = null;
+      elevatorCollider = null;
+      return;
+    }
+    elevatorCarDescriptor = normalizeElevatorDescriptor(descriptor);
+    updateElevatorCollider();
+  };
+  const resetElevatorCarDescriptor = () => {
+    elevatorCarDescriptor = null;
+    elevatorCollider = null;
+  };
+
   let elevatorCurrentLayerIndex = 0;
   let elevatorTargetLayerIndex = 0;
   let elevatorLastCallLayerIndex = 0;
   let elevatorLastCallTimestamp = 0;
+  elevatorVerticalPosition = elevatorCurrentLayerIndex * levelHeight;
 
   const {
     scheduleBarrelSpawnPoint,
@@ -134,6 +158,8 @@ export function createProceduralRoomSystem(device, options = {}) {
     evaluateCellForBarrel,
     evaluateCellForCamera
   } = spawnManager;
+
+  const getActiveLayerRange = () => ({ min: minActiveLayer, max: maxActiveLayer });
 
   const geometryBuilder = createRoomGeometryBuilder({
     bounds,
@@ -150,7 +176,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     singleDoorWidth,
     doubleDoorWidth,
     clampedDoorHeight,
-    getActiveLayerRange: () => ({ min: minActiveLayer, max: maxActiveLayer }),
+    getActiveLayerRange,
     getCenterLayerIndex: () => centerLayerIndex,
     getCellProfileForLayer,
     getLayerProfiles,
@@ -163,6 +189,8 @@ export function createProceduralRoomSystem(device, options = {}) {
     directionOffsets,
     registerElevatorCallPanel,
     resetElevatorCallPanels,
+    registerElevatorCarDescriptor,
+    resetElevatorCarDescriptor,
     updateVertexBuffer: (vertexArray) => {
       const buffer = device.createBuffer({
         size: vertexArray.byteLength,
@@ -279,7 +307,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     return true;
   }
 
-  function update(playerPosition) {
+  function update(playerPosition, deltaTime = 0) {
     const px = playerPosition?.[0] ?? 0;
     const py = playerPosition?.[1] ?? 0;
     const pz = playerPosition?.[2] ?? 0;
@@ -296,6 +324,17 @@ export function createProceduralRoomSystem(device, options = {}) {
       layerIndex !== centerLayerIndex ||
       desiredMinLayer !== minActiveLayer ||
       desiredMaxLayer !== maxActiveLayer;
+
+    const now =
+      typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+    const elapsedMs = now - lastElevatorUpdateTime;
+    lastElevatorUpdateTime = now;
+    const elevatorDeltaTime = Number.isFinite(deltaTime) && deltaTime > 0
+      ? deltaTime
+      : Math.max(elapsedMs / 1000, 0);
+    advanceElevator(elevatorDeltaTime);
 
     if (!needsRebuild) {
       return false;
@@ -314,10 +353,112 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   function callElevatorToLayer(layerIndex) {
     const resolvedLayer = Number.isFinite(layerIndex) ? Math.floor(layerIndex) : 0;
-    elevatorTargetLayerIndex = resolvedLayer;
-    elevatorCurrentLayerIndex = resolvedLayer;
-    elevatorLastCallLayerIndex = resolvedLayer;
+    const { min: minLayer, max: maxLayer } = getActiveLayerRange();
+    const clampedLayer = Math.min(Math.max(resolvedLayer, minLayer), maxLayer);
+    elevatorTargetLayerIndex = clampedLayer;
+    elevatorLastCallLayerIndex = clampedLayer;
     elevatorLastCallTimestamp = Date.now();
+  }
+
+  function advanceElevator(deltaTime) {
+    if (!Number.isFinite(deltaTime) || deltaTime <= 0) {
+      if (elevatorCurrentLayerIndex !== elevatorTargetLayerIndex) {
+        elevatorCurrentLayerIndex = Math.round(elevatorVerticalPosition / levelHeight);
+      }
+      return;
+    }
+
+    const targetY = elevatorTargetLayerIndex * levelHeight;
+    const distance = targetY - elevatorVerticalPosition;
+    if (Math.abs(distance) <= 1e-4) {
+      elevatorVerticalPosition = targetY;
+      elevatorVerticalVelocity = 0;
+      elevatorCurrentLayerIndex = elevatorTargetLayerIndex;
+      updateElevatorCollider();
+      return;
+    }
+
+    const direction = Math.sign(distance) || 1;
+    const maxStep = elevatorTravelSpeed * deltaTime;
+    let newPosition = elevatorVerticalPosition + direction * maxStep;
+    if (direction > 0) {
+      newPosition = Math.min(newPosition, targetY);
+    } else {
+      newPosition = Math.max(newPosition, targetY);
+    }
+    const actualStep = newPosition - elevatorVerticalPosition;
+    elevatorVerticalVelocity = actualStep / deltaTime;
+    elevatorVerticalPosition = newPosition;
+    if (Math.abs(targetY - elevatorVerticalPosition) <= 1e-3) {
+      elevatorVerticalPosition = targetY;
+      elevatorVerticalVelocity = 0;
+      elevatorCurrentLayerIndex = elevatorTargetLayerIndex;
+    } else {
+      elevatorCurrentLayerIndex = Math.round(elevatorVerticalPosition / levelHeight);
+    }
+    updateElevatorCollider();
+  }
+
+  function updateElevatorCollider() {
+    if (!elevatorCarDescriptor) {
+      elevatorCollider = null;
+      return;
+    }
+    const halfSize = Math.max(0, elevatorCarDescriptor.halfSize ?? 0);
+    elevatorCollider = {
+      minX: elevatorCarDescriptor.center[0] - halfSize,
+      maxX: elevatorCarDescriptor.center[0] + halfSize,
+      minZ: elevatorCarDescriptor.center[1] - halfSize,
+      maxZ: elevatorCarDescriptor.center[1] + halfSize,
+      minY: elevatorVerticalPosition - (elevatorCarDescriptor.platformHeight ?? 0.05),
+      maxY: elevatorVerticalPosition
+    };
+  }
+
+  function normalizeElevatorDescriptor(raw) {
+    if (!raw) {
+      return null;
+    }
+    const centerArray = Array.isArray(raw.center) ? raw.center : [0, 0];
+    const centerX = Number.isFinite(Number(centerArray[0])) ? Number(centerArray[0]) : 0;
+    const centerZ = Number.isFinite(Number(centerArray[1])) ? Number(centerArray[1]) : 0;
+    const baseY = Number.isFinite(Number(raw.baseY)) ? Number(raw.baseY) : 0;
+    const toNumber = (value, fallback = baseY) => {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : fallback;
+    };
+    const toLocal = (value) => toNumber(value) - baseY;
+    const indicator = raw.indicator || {};
+    const indicatorCenterX = (toNumber(indicator.minX, centerX) + toNumber(indicator.maxX, centerX)) * 0.5;
+    const indicatorCenterZ = (toNumber(indicator.minZ, centerZ) + toNumber(indicator.maxZ, centerZ)) * 0.5;
+
+    return {
+      id: raw.id || 'elevator',
+      layerIndex: Number.isFinite(raw.layerIndex) ? Math.floor(raw.layerIndex) : 0,
+      center: [centerX, centerZ],
+      halfSize: Math.max(0, Number(raw.halfSize) || 0),
+      platformHeight: Math.max(0.02, Number(raw.platformHeight) || 0.05),
+      trimMargin: Math.max(0, Number(raw.trimMargin) || 0),
+      trimHeight: Math.max(0, Number(raw.trimHeight) || 0),
+      railThickness: Math.max(0, Number(raw.railThickness) || 0),
+      railBaseOffset: toLocal(raw.railMinY),
+      railHeight: Math.max(0, toNumber(raw.railMaxY) - toNumber(raw.railMinY)),
+      postThickness: Math.max(0, Number(raw.postThickness) || 0),
+      postBaseOffset: toLocal(raw.postMinY),
+      postHeight: Math.max(0, toNumber(raw.postMaxY) - toNumber(raw.postMinY)),
+      canopyBaseOffset: toLocal(raw.canopyMinY),
+      canopyHeight: Math.max(0, toNumber(raw.canopyMaxY) - toNumber(raw.canopyMinY)),
+      canopyInset: Math.max(0, Number(raw.canopyInset) || 0),
+      indicator: {
+        offsetX: indicatorCenterX - centerX,
+        offsetZ: indicatorCenterZ - centerZ,
+        depth: Math.max(0, toNumber(indicator.maxX, centerX) - toNumber(indicator.minX, centerX)),
+        width: Math.max(0, toNumber(indicator.maxZ, centerZ) - toNumber(indicator.minZ, centerZ)),
+        height: Math.max(0, toNumber(indicator.maxY) - toNumber(indicator.minY)),
+        baseOffset: toLocal(indicator.minY)
+      },
+      colors: raw.colors || {}
+    };
   }
 
   function getElevatorState() {
@@ -325,7 +466,11 @@ export function createProceduralRoomSystem(device, options = {}) {
       currentLayerIndex: elevatorCurrentLayerIndex,
       targetLayerIndex: elevatorTargetLayerIndex,
       lastCallLayerIndex: elevatorLastCallLayerIndex,
-      lastCallTimestamp: elevatorLastCallTimestamp
+      lastCallTimestamp: elevatorLastCallTimestamp,
+      positionY: elevatorVerticalPosition,
+      velocity: elevatorVerticalVelocity,
+      isMoving: Math.abs(elevatorVerticalVelocity) > 1e-3 &&
+        Math.abs(elevatorVerticalPosition - elevatorTargetLayerIndex * levelHeight) > 1e-3
     };
   }
 
@@ -347,6 +492,8 @@ export function createProceduralRoomSystem(device, options = {}) {
       layerIndex: centerLayerIndex
     }),
     getElevatorCallPanels: () => elevatorCallPanels,
+    getElevatorCarDescriptor: () => elevatorCarDescriptor,
+    getElevatorCollider: () => elevatorCollider,
     callElevatorToLayer,
     getElevatorState,
     isPositionWithinGenerationRadius,

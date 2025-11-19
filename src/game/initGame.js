@@ -9,6 +9,7 @@ import { createProjectileManager } from './projectiles.js';
 import { createBulletHoleManager } from './bulletHoles.js';
 import { traceRayAABB } from './collisions.js';
 import { createWorldItemManager } from './worldItems.js';
+import { createElevatorCar } from './elevatorCar.js';
 import {
   DEFAULT_PROJECTILE_SETTINGS,
   DEFAULT_WEAPON_OFFSET,
@@ -75,6 +76,24 @@ export async function initializeGame({
     let roomVertexCount = roomSystem.getVertexCount();
     const bounds = roomSystem.getBounds();
     const bulletHoleManager = createBulletHoleManager(device);
+    const elevatorDescriptor =
+      typeof roomSystem.getElevatorCarDescriptor === 'function'
+        ? roomSystem.getElevatorCarDescriptor()
+        : null;
+    const elevatorGeometry = elevatorDescriptor ? createElevatorCar(device, elevatorDescriptor) : null;
+    const elevatorRenderable = elevatorGeometry
+      ? {
+          vertexBuffer: elevatorGeometry.vertexBuffer,
+          vertexCount: elevatorGeometry.vertexCount,
+          modelMatrix: new Float32Array(16),
+          translation: new Float32Array(3),
+          uniformBuffer: null,
+          uniformBindGroup: null,
+          uniformData: null
+        }
+      : null;
+    const ELEVATOR_RIGHT_AXIS = new Float32Array([1, 0, 0]);
+    const ELEVATOR_FORWARD_AXIS = new Float32Array([0, 0, 1]);
     let requeueProceduralEnemy = () => {};
 
     const enemyManager = createEnemyManager(device, {
@@ -472,7 +491,7 @@ export async function initializeGame({
         controller.update(deltaTime);
       }
 
-      const geometryChanged = roomSystem.update(controller.position);
+      const geometryChanged = roomSystem.update(controller.position, deltaTime);
       if (geometryChanged) {
         roomVertexBuffer = roomSystem.getVertexBuffer();
         roomVertexCount = roomSystem.getVertexCount();
@@ -488,6 +507,14 @@ export async function initializeGame({
             playerCollisionScratch.push(collider);
           }
         }
+      }
+
+      const elevatorCollider =
+        typeof roomSystem.getElevatorCollider === 'function'
+          ? roomSystem.getElevatorCollider()
+          : null;
+      if (elevatorCollider) {
+        playerCollisionScratch.push(elevatorCollider);
       }
 
       const dynamicHitBoxes = disableEnemies ? null : enemyManager.getHitBoxes();
@@ -543,6 +570,29 @@ export async function initializeGame({
       viewDirection[2] = center[2] - eye[2];
       mat4LookAt(view, eye, center, WORLD_UP);
       mat4Multiply(viewProj, projection, view);
+
+      const elevatorState =
+        typeof roomSystem.getElevatorState === 'function' ? roomSystem.getElevatorState() : null;
+      let elevatorRenderableActive = false;
+      if (
+        elevatorRenderable &&
+        elevatorRenderable.vertexBuffer &&
+        elevatorRenderable.vertexCount > 0 &&
+        elevatorDescriptor &&
+        elevatorState
+      ) {
+        elevatorRenderable.translation[0] = elevatorDescriptor.center?.[0] ?? 0;
+        elevatorRenderable.translation[1] = elevatorState.positionY ?? 0;
+        elevatorRenderable.translation[2] = elevatorDescriptor.center?.[1] ?? 0;
+        mat4FromRotationTranslation(
+          elevatorRenderable.modelMatrix,
+          ELEVATOR_RIGHT_AXIS,
+          WORLD_UP,
+          ELEVATOR_FORWARD_AXIS,
+          elevatorRenderable.translation
+        );
+        elevatorRenderableActive = true;
+      }
 
       let weaponTransformReady = false;
       if (equippedWeaponDefinition) {
@@ -1037,6 +1087,32 @@ export async function initializeGame({
       pass.setBindGroup(0, worldUniformBindGroup);
       pass.setVertexBuffer(0, roomVertexBuffer);
       pass.draw(roomVertexCount, 1, 0, 0);
+
+      if (elevatorRenderableActive && elevatorRenderable) {
+        ensureRenderableUniformResources(elevatorRenderable);
+        if (
+          elevatorRenderable.uniformBuffer &&
+          elevatorRenderable.uniformBindGroup &&
+          elevatorRenderable.uniformData
+        ) {
+          writeUniformData(
+            elevatorRenderable.uniformData,
+            viewProj,
+            elevatorRenderable.modelMatrix ?? IDENTITY_MATRIX,
+            activeLights
+          );
+          device.queue.writeBuffer(
+            elevatorRenderable.uniformBuffer,
+            0,
+            elevatorRenderable.uniformData
+          );
+          pass.setBindGroup(0, elevatorRenderable.uniformBindGroup);
+          pass.setVertexBuffer(0, elevatorRenderable.vertexBuffer);
+          pass.draw(elevatorRenderable.vertexCount, 1, 0, 0);
+          pass.setBindGroup(0, worldUniformBindGroup);
+          pass.setVertexBuffer(0, roomVertexBuffer);
+        }
+      }
 
       if (Array.isArray(worldItems) && worldItems.length > 0) {
         for (const item of worldItems) {
