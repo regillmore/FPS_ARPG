@@ -1,5 +1,5 @@
-import { mixColors } from '../color.js';
-import { addBox, addCollider } from '../geometry.js';
+import { mixColors } from './color.js';
+import { addBox, addCollider } from './geometry.js';
 
 export function buildElevatorCar({
   vertices,
