@@ -64,6 +64,8 @@ export function createRoomGeometryBuilder({
   evaluateCellForBarrel,
   evaluateCellForCamera,
   directionOffsets,
+  registerElevatorCallPanel,
+  resetElevatorCallPanels,
   updateVertexBuffer
 }) {
   function resetBounds() {
@@ -388,11 +390,126 @@ export function createRoomGeometryBuilder({
     );
   }
 
+  function addElevatorCallPanels(
+    vertices,
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    baseY,
+    roomHeight,
+    wallThickness,
+    profile,
+    layerIndex
+  ) {
+    const centerX = (minX + maxX) * 0.5;
+    const doorwayHalfWidth = Math.min(doubleDoorWidth * 0.5, (maxX - minX) * 0.45);
+    const panelWidth = Math.min(Math.max(doubleDoorWidth * 0.22, 0.18), Math.abs(maxX - minX) * 0.28);
+    const panelHeight = Math.min(Math.max(roomHeight * 0.25, 0.5), roomHeight * 0.5);
+    const panelDepth = Math.min(Math.max(wallThickness * 0.35, 0.04), 0.12);
+    const panelMargin = Math.min(Math.max(wallThickness * 0.8, 0.1), (maxX - minX) * 0.2);
+    const panelCenterX = Math.min(
+      maxX - wallThickness * 0.5 - panelWidth * 0.5,
+      centerX + doorwayHalfWidth + panelMargin + panelWidth * 0.5
+    );
+    const minInteriorX = minX + wallThickness * 0.4;
+    let panelMinX = Math.max(minInteriorX, panelCenterX - panelWidth * 0.5);
+    let panelMaxX = panelMinX + panelWidth;
+    const maxInteriorX = maxX - wallThickness * 0.4;
+    if (panelMaxX > maxInteriorX) {
+      panelMaxX = maxInteriorX;
+      panelMinX = panelMaxX - panelWidth;
+    }
+    if (panelMinX < minInteriorX) {
+      panelMinX = minInteriorX;
+      panelMaxX = panelMinX + panelWidth;
+    }
+    const panelMinY = baseY + Math.max(roomHeight * 0.25, 0.75);
+    const panelMaxY = Math.min(baseY + roomHeight - 0.2, panelMinY + panelHeight);
+    const buttonWidth = Math.min(panelWidth * 0.4, 0.18);
+    const buttonHeight = Math.min(panelHeight * 0.45, 0.2);
+    const buttonDepth = panelDepth * 0.65;
+    const buttonMinX = panelMinX + (panelWidth - buttonWidth) * 0.5;
+    const buttonMaxX = buttonMinX + buttonWidth;
+    const buttonMinY = panelMinY + (panelHeight - buttonHeight) * 0.5;
+    const buttonMaxY = buttonMinY + buttonHeight;
+    const basePanelColor = mixColors(profile.wallColor, profile.accentColor, 0.4);
+    const buttonColor = mixColors(profile.accentColor, profile.ceilingColor, 0.55);
+    const highlightColor = mixColors(buttonColor, [1, 1, 1], 0.2);
+    const registerPanel = typeof registerElevatorCallPanel === 'function'
+      ? registerElevatorCallPanel
+      : null;
+
+    const buildPanelForDirection = (direction) => {
+      const isNorth = direction === 'north';
+      const wallInnerOffset = Math.min(wallThickness * 0.5, 0.08);
+      const panelMinZ = isNorth
+        ? minZ + wallInnerOffset
+        : Math.max(minZ + wallThickness * 0.5, maxZ - wallInnerOffset - panelDepth);
+      const panelMaxZ = isNorth ? panelMinZ + panelDepth : panelMinZ + panelDepth;
+      const buttonMinZ = isNorth ? panelMaxZ - buttonDepth : panelMinZ;
+      const buttonMaxZ = buttonMinZ + buttonDepth;
+
+      addBox(
+        vertices,
+        panelMinX,
+        panelMinY,
+        panelMinZ,
+        panelMaxX,
+        panelMaxY,
+        panelMaxZ,
+        basePanelColor,
+        bounds
+      );
+
+      addBox(
+        vertices,
+        buttonMinX,
+        buttonMinY,
+        buttonMinZ,
+        buttonMaxX,
+        buttonMaxY,
+        buttonMaxZ,
+        buttonColor,
+        bounds
+      );
+
+      if (registerPanel) {
+        registerPanel({
+          id: `elevator-call-${layerIndex}-${direction}`,
+          direction,
+          layerIndex,
+          bounds: {
+            minX: buttonMinX,
+            maxX: buttonMaxX,
+            minY: buttonMinY,
+            maxY: buttonMaxY,
+            minZ: buttonMinZ,
+            maxZ: buttonMaxZ
+          },
+          center: [
+            (buttonMinX + buttonMaxX) * 0.5,
+            (buttonMinY + buttonMaxY) * 0.5,
+            (buttonMinZ + buttonMaxZ) * 0.5
+          ],
+          normal: isNorth ? [0, 0, 1] : [0, 0, -1],
+          accentColor: highlightColor
+        });
+      }
+    };
+
+    buildPanelForDirection('north');
+    buildPanelForDirection('south');
+  }
+
   function buildGeometryForCenter(cx, cz) {
     const vertices = [];
     decorativeLights.length = 0;
     resetBounds();
     colliders.length = 0;
+    if (typeof resetElevatorCallPanels === 'function') {
+      resetElevatorCallPanels();
+    }
 
     const processedEdges = new Set();
     const { min: minActiveLayer, max: maxActiveLayer } = getActiveLayerRange();
@@ -687,6 +804,18 @@ export function createRoomGeometryBuilder({
                 profile
               );
             }
+            addElevatorCallPanels(
+              vertices,
+              minX,
+              maxX,
+              minZ,
+              maxZ,
+              baseY,
+              roomHeight,
+              wallThickness,
+              profile,
+              layerIndex
+            );
             edges.roomType = 'elevator';
           } else if (hallwayOrientation && !hasVerticalOpeningFromAbove) {
             addHallwayBridge(

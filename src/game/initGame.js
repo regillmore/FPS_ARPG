@@ -787,6 +787,8 @@ export async function initializeGame({
       }
 
       const worldItems = typeof worldItemManager.getItems === 'function' ? worldItemManager.getItems() : [];
+      const elevatorCallPanels =
+        typeof roomSystem.getElevatorCallPanels === 'function' ? roomSystem.getElevatorCallPanels() : [];
 
       if (isPaused) {
         overlayController?.hideUsePrompt?.();
@@ -794,6 +796,9 @@ export async function initializeGame({
       } else {
         let highlightedPickup = null;
         let closestPickupDistance = Infinity;
+        let highlightedCallPanel = null;
+        let closestCallPanelDistance = Infinity;
+        const playerLayerIndex = layerResolver ? layerResolver(controller.position[1]) : null;
 
         if (Array.isArray(worldItems) && worldItems.length > 0) {
           for (const item of worldItems) {
@@ -825,7 +830,70 @@ export async function initializeGame({
           }
         }
 
-        if (highlightedPickup) {
+        if (Array.isArray(elevatorCallPanels) && elevatorCallPanels.length > 0) {
+          for (const panel of elevatorCallPanels) {
+            if (!panel || !panel.bounds || !panel.center) {
+              continue;
+            }
+
+            if (
+              Number.isFinite(panel.layerIndex) &&
+              Number.isFinite(playerLayerIndex) &&
+              panel.layerIndex !== playerLayerIndex
+            ) {
+              continue;
+            }
+
+            const dx = controller.position[0] - panel.center[0];
+            const dz = controller.position[2] - panel.center[2];
+            const horizontalDistanceSq = dx * dx + dz * dz;
+            if (horizontalDistanceSq > ITEM_INTERACTION_DISTANCE_SQ) {
+              continue;
+            }
+
+            const verticalDistance = Math.abs(controller.position[1] - panel.center[1]);
+            if (verticalDistance > ITEM_INTERACTION_VERTICAL_LIMIT) {
+              continue;
+            }
+
+            const hit = traceRayAABB(eye, viewDirection, ITEM_AIM_MAX_DISTANCE, panel.bounds);
+            if (!hit) {
+              continue;
+            }
+
+            if (hit.distance < closestCallPanelDistance) {
+              closestCallPanelDistance = hit.distance;
+              highlightedCallPanel = panel;
+            }
+          }
+        }
+
+        const panelHasPriority =
+          highlightedCallPanel && (!highlightedPickup || closestCallPanelDistance <= closestPickupDistance);
+
+        if (panelHasPriority && highlightedCallPanel) {
+          const panelColor = highlightedCallPanel.accentColor || [0.9, 0.9, 0.9];
+          const promptColor = floatColorToCss(panelColor, 'rgb(255, 255, 255)');
+          hudController?.setReticleAccentOverride?.(panelColor);
+
+          if (usePressedThisFrame) {
+            const targetLayer =
+              Number.isFinite(highlightedCallPanel.layerIndex)
+                ? highlightedCallPanel.layerIndex
+                : playerLayerIndex ?? 0;
+            roomSystem?.callElevatorToLayer?.(targetLayer);
+            overlayController?.showTemporaryUsePrompt?.(
+              'Elevator called to this floor',
+              promptColor,
+              PICKUP_PROMPT_SUCCESS_DURATION
+            );
+          }
+
+          overlayController?.showPersistentUsePrompt?.(
+            `Press ${PICKUP_USE_KEY} to call the elevator`,
+            promptColor
+          );
+        } else if (highlightedPickup) {
           const pickupName = highlightedPickup.displayName ?? 'Pickup';
           const highlightColor =
             blendWithWhite(highlightedPickup.accentColor, 0.25) ?? highlightedPickup.accentColor;

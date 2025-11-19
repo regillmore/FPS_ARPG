@@ -110,6 +110,22 @@ export function createProceduralRoomSystem(device, options = {}) {
     cornerAdjacency
   });
 
+  const elevatorCallPanels = [];
+  const registerElevatorCallPanel = (panel) => {
+    if (!panel) {
+      return;
+    }
+    elevatorCallPanels.push(panel);
+  };
+  const resetElevatorCallPanels = () => {
+    elevatorCallPanels.length = 0;
+  };
+
+  let elevatorCurrentLayerIndex = 0;
+  let elevatorTargetLayerIndex = 0;
+  let elevatorLastCallLayerIndex = 0;
+  let elevatorLastCallTimestamp = 0;
+
   const {
     scheduleBarrelSpawnPoint,
     scheduleCameraSpawnPoint,
@@ -145,6 +161,8 @@ export function createProceduralRoomSystem(device, options = {}) {
     evaluateCellForBarrel,
     evaluateCellForCamera,
     directionOffsets,
+    registerElevatorCallPanel,
+    resetElevatorCallPanels,
     updateVertexBuffer: (vertexArray) => {
       const buffer = device.createBuffer({
         size: vertexArray.byteLength,
@@ -294,6 +312,23 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   buildGeometryForCenter(centerCellX, centerCellZ);
 
+  function callElevatorToLayer(layerIndex) {
+    const resolvedLayer = Number.isFinite(layerIndex) ? Math.floor(layerIndex) : 0;
+    elevatorTargetLayerIndex = resolvedLayer;
+    elevatorCurrentLayerIndex = resolvedLayer;
+    elevatorLastCallLayerIndex = resolvedLayer;
+    elevatorLastCallTimestamp = Date.now();
+  }
+
+  function getElevatorState() {
+    return {
+      currentLayerIndex: elevatorCurrentLayerIndex,
+      targetLayerIndex: elevatorTargetLayerIndex,
+      lastCallLayerIndex: elevatorLastCallLayerIndex,
+      lastCallTimestamp: elevatorLastCallTimestamp
+    };
+  }
+
   return {
     update,
     getVertexBuffer: () => vertexBuffer,
@@ -311,6 +346,9 @@ export function createProceduralRoomSystem(device, options = {}) {
       cellZ: centerCellZ,
       layerIndex: centerLayerIndex
     }),
+    getElevatorCallPanels: () => elevatorCallPanels,
+    callElevatorToLayer,
+    getElevatorState,
     isPositionWithinGenerationRadius,
     consumeBarrelSpawnPoints,
     consumeCameraSpawnPoints,
