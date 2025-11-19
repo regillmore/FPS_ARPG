@@ -1,6 +1,85 @@
 import { mixColors } from './color.js';
 import { addBox, addCollider } from './geometry.js';
 
+export function getElevatorPanelLayout({
+  minX,
+  maxX,
+  minZ,
+  maxZ,
+  baseY,
+  roomHeight,
+  wallThickness
+}) {
+  const width = maxX - minX;
+  const depth = maxZ - minZ;
+  if (!(width > 0) || !(depth > 0)) {
+    return null;
+  }
+
+  const centerX = (minX + maxX) * 0.5;
+  const centerZ = (minZ + maxZ) * 0.5;
+  const elevatorSize = Math.min(width, depth) * 0.62;
+  const halfSize = elevatorSize * 0.5;
+  const platformMinX = centerX - halfSize;
+  const platformMaxX = centerX + halfSize;
+  const platformMinZ = centerZ - halfSize;
+  const platformMaxZ = centerZ + halfSize;
+  const trimMargin = 0.05;
+  const railThickness = Math.min(Math.max(elevatorSize * 0.08, wallThickness * 0.5), wallThickness * 1.4);
+  const indicatorWidth = Math.min(wallThickness * 1.1, elevatorSize * 0.18);
+  const indicatorDepth = Math.min(railThickness * 0.85, 0.14);
+  const indicatorHeight = Math.min(Math.max(roomHeight * 0.25, 0.6), roomHeight - 0.4);
+  const indicatorMinY = baseY + roomHeight * 0.15;
+  const indicatorMaxY = indicatorMinY + Math.min(indicatorHeight, roomHeight - 0.5);
+  const indicatorMinX = platformMaxX - railThickness + indicatorDepth * 0.2 - trimMargin;
+  const indicatorMaxX = indicatorMinX + indicatorDepth;
+  const indicatorMinZ = centerZ - indicatorWidth * 0.5;
+  const indicatorMaxZ = indicatorMinZ + indicatorWidth;
+  const totalIndicatorHeight = Math.max(indicatorMaxY - indicatorMinY, 0);
+  const buttonGap = Math.min(totalIndicatorHeight * 0.1, 0.02);
+  const buttonHeight = Math.max((totalIndicatorHeight - buttonGap) * 0.5, 0);
+  const downButtonMaxY = indicatorMinY + buttonHeight;
+  const upButtonMinY = indicatorMaxY - buttonHeight;
+
+  return {
+    platformMinX,
+    platformMaxX,
+    platformMinZ,
+    platformMaxZ,
+    centerX,
+    centerZ,
+    elevatorSize,
+    trimMargin,
+    railThickness,
+    indicator: {
+      minX: indicatorMinX,
+      maxX: indicatorMaxX,
+      minY: indicatorMinY,
+      maxY: indicatorMaxY,
+      minZ: indicatorMinZ,
+      maxZ: indicatorMaxZ
+    },
+    buttons: {
+      up: {
+        minX: indicatorMinX,
+        maxX: indicatorMaxX,
+        minY: upButtonMinY,
+        maxY: indicatorMaxY,
+        minZ: indicatorMinZ,
+        maxZ: indicatorMaxZ
+      },
+      down: {
+        minX: indicatorMinX,
+        maxX: indicatorMaxX,
+        minY: indicatorMinY,
+        maxY: downButtonMaxY,
+        minZ: indicatorMinZ,
+        maxZ: indicatorMaxZ
+      }
+    }
+  };
+}
+
 export function buildElevatorCar({
   vertices,
   colliders,
@@ -14,23 +93,33 @@ export function buildElevatorCar({
   wallThickness,
   profile
 }) {
-  const width = maxX - minX;
-  const depth = maxZ - minZ;
-  if (!(width > 0) || !(depth > 0)) {
+  const layout = getElevatorPanelLayout({
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    baseY,
+    roomHeight,
+    wallThickness
+  });
+
+  if (!layout) {
     return;
   }
 
-  const centerX = (minX + maxX) * 0.5;
-  const centerZ = (minZ + maxZ) * 0.5;
-  const elevatorSize = Math.min(width, depth) * 0.62;
-  const halfSize = elevatorSize * 0.5;
-  const platformMinX = centerX - halfSize;
-  const platformMaxX = centerX + halfSize;
-  const platformMinZ = centerZ - halfSize;
-  const platformMaxZ = centerZ + halfSize;
+  const {
+    platformMinX,
+    platformMaxX,
+    platformMinZ,
+    platformMaxZ,
+    elevatorSize,
+    trimMargin,
+    railThickness,
+    indicator
+  } = layout;
+
   const platformHeight = Math.min(Math.max(roomHeight * 0.05, 0.05), 0.1);
   const platformColor = mixColors(profile.floorColor, profile.accentColor, 0.45);
-  const trimMargin = 0.05;
   addBox(
     vertices,
     platformMinX + trimMargin / 2,
@@ -60,7 +149,6 @@ export function buildElevatorCar({
     );
   }
 
-  const railThickness = Math.min(Math.max(elevatorSize * 0.08, wallThickness * 0.5), wallThickness * 1.4);
   const railMinY = baseY;
   const railMaxY = Math.min(baseY + roomHeight - 0.25, railMinY + Math.max(roomHeight * 0.6, 1.2));
   const railColor = mixColors(profile.wallColor, profile.accentColor, 0.55);
@@ -132,25 +220,18 @@ export function buildElevatorCar({
     bounds
   );
 
-  const indicatorWidth = Math.min(wallThickness * 1.1, elevatorSize * 0.18);
-  const indicatorDepth = Math.min(railThickness * 0.85, 0.14);
-  const indicatorHeight = Math.min(Math.max(roomHeight * 0.25, 0.6), roomHeight - 0.4);
-  const indicatorMinY = baseY + roomHeight * 0.15;
-  const indicatorMaxY = indicatorMinY + Math.min(indicatorHeight, roomHeight - 0.5);
-  const indicatorMinX = platformMaxX - railThickness + indicatorDepth * 0.2 - trimMargin;
-  const indicatorMaxX = indicatorMinX + indicatorDepth;
-  const indicatorMinZ = centerZ - indicatorWidth * 0.5;
-  const indicatorMaxZ = indicatorMinZ + indicatorWidth;
   const indicatorColor = mixColors(profile.accentColor, profile.ceilingColor, 0.5);
-  addBox(
-    vertices,
-    indicatorMinX,
-    indicatorMinY,
-    indicatorMinZ,
-    indicatorMaxX,
-    indicatorMaxY,
-    indicatorMaxZ,
-    indicatorColor,
-    bounds
-  );
+  if (indicator) {
+    addBox(
+      vertices,
+      indicator.minX,
+      indicator.minY,
+      indicator.minZ,
+      indicator.maxX,
+      indicator.maxY,
+      indicator.maxZ,
+      indicatorColor,
+      bounds
+    );
+  }
 }

@@ -65,6 +65,7 @@ export function createRoomGeometryBuilder({
   evaluateCellForBarrel,
   evaluateCellForCamera,
   directionOffsets,
+  getElevatorLayerIndex,
   updateVertexBuffer
 }) {
   function resetBounds() {
@@ -239,6 +240,8 @@ export function createRoomGeometryBuilder({
 
     const processedEdges = new Set();
     const { min: minActiveLayer, max: maxActiveLayer } = getActiveLayerRange();
+    const elevatorLayerIndex =
+      typeof getElevatorLayerIndex === 'function' ? getElevatorLayerIndex() : 0;
 
     for (let gx = cx - generationRadius; gx <= cx + generationRadius; gx += 1) {
       for (let gz = cz - generationRadius; gz <= cz + generationRadius; gz += 1) {
@@ -517,7 +520,7 @@ export function createRoomGeometryBuilder({
           }
 
           if (isOrigin) {
-            if (layerIndex === 0) {
+            if (layerIndex === elevatorLayerIndex) {
               buildElevatorCar({
                 vertices,
                 colliders,

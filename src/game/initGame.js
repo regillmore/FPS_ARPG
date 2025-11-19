@@ -3,6 +3,7 @@ import { FirstPersonController } from '../fpsController.js';
 import { initWebGPU } from '../webgpu/initWebGPU.js';
 import { createBasicPipeline } from '../webgpu/pipeline.js';
 import { createProceduralRoomSystem } from '../world/proceduralRooms.js';
+import { getElevatorPanelLayout } from '../world/procedural/elevatorCar.js';
 import { getWeapon } from './playerWeapons.js';
 import { createEnemyManager } from './enemies/enemyManager.js';
 import { createProjectileManager } from './projectiles.js';
@@ -39,6 +40,23 @@ import {
   createLightGatherer,
   writeUniformData
 } from './rendering/renderUtils.js';
+const ELEVATOR_PROMPT_COLOR = 'rgb(245, 228, 190)';
+const ELEVATOR_RETICLE_ACCENT = [1.0, 0.86, 0.52];
+const ELEVATOR_CELL_MARGIN = 0.2;
+
+function formatFloorLabel(layerIndex) {
+  if (!Number.isFinite(layerIndex)) {
+    return 'G';
+  }
+  const normalized = Math.trunc(layerIndex);
+  if (normalized === 0) {
+    return 'G';
+  }
+  if (normalized < 0) {
+    return `B${Math.abs(normalized)}`;
+  }
+  return String(normalized);
+}
 
 export async function initializeGame({
   canvas,
@@ -65,6 +83,10 @@ export async function initializeGame({
       generationRadius: 5,
       initialLayer: 0
     });
+    const elevatorConfig =
+      typeof roomSystem.getElevatorConfig === 'function'
+        ? roomSystem.getElevatorConfig()
+        : null;
     const layerResolver =
       typeof roomSystem.getLayerIndexForHeight === 'function'
         ? roomSystem.getLayerIndexForHeight
@@ -288,6 +310,124 @@ export async function initializeGame({
       handleInventoryDrop(event?.detail ?? null);
     });
 
+    const elevatorLevelHeight = Number(elevatorConfig?.levelHeight) || 0;
+    const elevatorHeightStep =
+      elevatorLevelHeight > 0 ? elevatorLevelHeight : Number(elevatorConfig?.roomHeight) || 0;
+
+    const attemptElevatorMove = (direction) => {
+      if (!elevatorConfig || typeof roomSystem.setElevatorLayerIndex !== 'function') {
+        return null;
+      }
+      const currentLayer =
+        typeof roomSystem.getElevatorLayerIndex === 'function'
+          ? roomSystem.getElevatorLayerIndex()
+          : 0;
+      const targetLayer = currentLayer + direction;
+      const changed = roomSystem.setElevatorLayerIndex(targetLayer);
+      if (!changed) {
+        return null;
+      }
+      if (elevatorHeightStep > 0) {
+        controller.position[1] += direction * elevatorHeightStep;
+      }
+      controller.verticalVelocity = 0;
+      controller.isGrounded = false;
+      return targetLayer;
+    };
+
+    const tryHandleElevatorInteraction = ({ eye, viewDirection, usePressed }) => {
+      if (
+        !elevatorConfig ||
+        typeof roomSystem.getElevatorLayerIndex !== 'function' ||
+        typeof getElevatorPanelLayout !== 'function'
+      ) {
+        return { handled: false, consumeUse: false };
+      }
+
+      const halfRoom = (elevatorConfig.roomSize ?? 0) * 0.5;
+      if (!(halfRoom > 0)) {
+        return { handled: false, consumeUse: false };
+      }
+
+      const minX = -halfRoom;
+      const maxX = halfRoom;
+      const minZ = -halfRoom;
+      const maxZ = halfRoom;
+      const layerIndex = roomSystem.getElevatorLayerIndex();
+      const baseY = layerIndex * elevatorHeightStep;
+      const roomHeight = elevatorConfig.roomHeight ?? 0;
+      const px = controller.position[0];
+      const py = controller.position[1];
+      const pz = controller.position[2];
+      const verticalMargin = Math.max(roomHeight * 0.1, 0.25);
+
+      if (
+        px < minX + ELEVATOR_CELL_MARGIN ||
+        px > maxX - ELEVATOR_CELL_MARGIN ||
+        pz < minZ + ELEVATOR_CELL_MARGIN ||
+        pz > maxZ - ELEVATOR_CELL_MARGIN ||
+        py < baseY - verticalMargin ||
+        py > baseY + roomHeight + verticalMargin
+      ) {
+        return { handled: false, consumeUse: false };
+      }
+
+      const layout = getElevatorPanelLayout({
+        minX,
+        maxX,
+        minZ,
+        maxZ,
+        baseY,
+        roomHeight,
+        wallThickness: elevatorConfig.wallThickness ?? 0
+      });
+
+      if (!layout || !layout.buttons) {
+        return { handled: false, consumeUse: false };
+      }
+
+      let highlightedButton = null;
+      let closestDistance = Infinity;
+
+      for (const [buttonId, bounds] of Object.entries(layout.buttons)) {
+        const hit = traceRayAABB(eye, viewDirection, ITEM_AIM_MAX_DISTANCE, bounds);
+        if (!hit) {
+          continue;
+        }
+        if (hit.distance < closestDistance) {
+          closestDistance = hit.distance;
+          highlightedButton = buttonId;
+        }
+      }
+
+      if (!highlightedButton) {
+        return { handled: false, consumeUse: false };
+      }
+
+      const direction = highlightedButton === 'down' ? -1 : 1;
+      const actionLabel = direction > 0 ? 'up' : 'down';
+      hudController?.setReticleAccentOverride?.(ELEVATOR_RETICLE_ACCENT);
+      overlayController?.showPersistentUsePrompt?.(
+        `Press ${PICKUP_USE_KEY} to go ${actionLabel}`,
+        ELEVATOR_PROMPT_COLOR
+      );
+
+      if (usePressed) {
+        const targetLayer = attemptElevatorMove(direction);
+        if (targetLayer !== null) {
+          overlayController?.showPersistentUsePrompt?.('', '');
+          overlayController?.showTemporaryUsePrompt?.(
+            `Elevator moving to floor ${formatFloorLabel(targetLayer)}`,
+            ELEVATOR_PROMPT_COLOR,
+            PICKUP_PROMPT_SUCCESS_DURATION
+          );
+          return { handled: true, consumeUse: true };
+        }
+      }
+
+      return { handled: true, consumeUse: false };
+    };
+
     let weaponGeometry = null;
     let equippedWeaponDefinition = null;
     let primaryFireCooldown = 0;
@@ -463,7 +603,7 @@ export async function initializeGame({
       framerateDisplay?.update?.(deltaTime);
 
       const isPaused = pauseControls?.isPaused?.();
-      const usePressedThisFrame =
+      let usePressedThisFrame =
         typeof controller.consumeUsePress === 'function' ? controller.consumeUsePress() : false;
 
       hudController?.setReticleVisible?.(!isPaused && Boolean(equippedWeaponDefinition));
@@ -792,91 +932,103 @@ export async function initializeGame({
         overlayController?.hideUsePrompt?.();
         hudController?.setReticleAccentOverride?.(null);
       } else {
-        let highlightedPickup = null;
-        let closestPickupDistance = Infinity;
+        const elevatorInteraction = tryHandleElevatorInteraction({
+          eye,
+          viewDirection,
+          usePressed: usePressedThisFrame
+        });
 
-        if (Array.isArray(worldItems) && worldItems.length > 0) {
-          for (const item of worldItems) {
-            if (!item || !item.bounds || !item.center) {
-              continue;
-            }
-
-            const dx = controller.position[0] - item.center[0];
-            const dz = controller.position[2] - item.center[2];
-            const horizontalDistanceSq = dx * dx + dz * dz;
-            if (horizontalDistanceSq > ITEM_INTERACTION_DISTANCE_SQ) {
-              continue;
-            }
-
-            const verticalDistance = Math.abs(controller.position[1] - item.center[1]);
-            if (verticalDistance > ITEM_INTERACTION_VERTICAL_LIMIT) {
-              continue;
-            }
-
-            const hit = traceRayAABB(eye, viewDirection, ITEM_AIM_MAX_DISTANCE, item.bounds);
-            if (!hit) {
-              continue;
-            }
-
-            if (hit.distance < closestPickupDistance) {
-              closestPickupDistance = hit.distance;
-              highlightedPickup = item;
-            }
-          }
+        if (elevatorInteraction.consumeUse) {
+          usePressedThisFrame = false;
         }
 
-        if (highlightedPickup) {
-          const pickupName = highlightedPickup.displayName ?? 'Pickup';
-          const highlightColor =
-            blendWithWhite(highlightedPickup.accentColor, 0.25) ?? highlightedPickup.accentColor;
-          const promptColor = floatColorToCss(
-            highlightColor ?? highlightedPickup.accentColor,
-            'rgb(255, 255, 255)'
-          );
-          const canPickup = Boolean(findFirstEmptyInventorySlot?.());
-          let shouldShowPrompt = true;
+        if (!elevatorInteraction.handled) {
+          let highlightedPickup = null;
+          let closestPickupDistance = Infinity;
 
-          hudController?.setReticleAccentOverride?.(highlightColor ?? highlightedPickup.accentColor);
-
-          if (usePressedThisFrame) {
-            if (canPickup) {
-              if (handleWorldItemPickup(highlightedPickup)) {
-                hudController?.setReticleAccentOverride?.(null);
-                overlayController?.showPersistentUsePrompt?.('', '');
-                overlayController?.showTemporaryUsePrompt?.(
-                  `${pickupName} added to pack`,
-                  promptColor,
-                  PICKUP_PROMPT_SUCCESS_DURATION
-                );
-                highlightedPickup = null;
-                shouldShowPrompt = false;
+          if (Array.isArray(worldItems) && worldItems.length > 0) {
+            for (const item of worldItems) {
+              if (!item || !item.bounds || !item.center) {
+                continue;
               }
-            } else {
-              overlayController?.showTemporaryUsePrompt?.(
-                'Pack inventory is full',
-                PICKUP_PROMPT_FAILURE_COLOR,
-                PICKUP_PROMPT_FAILURE_DURATION
-              );
+
+              const dx = controller.position[0] - item.center[0];
+              const dz = controller.position[2] - item.center[2];
+              const horizontalDistanceSq = dx * dx + dz * dz;
+              if (horizontalDistanceSq > ITEM_INTERACTION_DISTANCE_SQ) {
+                continue;
+              }
+
+              const verticalDistance = Math.abs(controller.position[1] - item.center[1]);
+              if (verticalDistance > ITEM_INTERACTION_VERTICAL_LIMIT) {
+                continue;
+              }
+
+              const hit = traceRayAABB(eye, viewDirection, ITEM_AIM_MAX_DISTANCE, item.bounds);
+              if (!hit) {
+                continue;
+              }
+
+              if (hit.distance < closestPickupDistance) {
+                closestPickupDistance = hit.distance;
+                highlightedPickup = item;
+              }
             }
           }
 
-          if (highlightedPickup && shouldShowPrompt) {
-            if (canPickup) {
-              const rarityLabel = highlightedPickup.rarityLabel || '';
-              overlayController?.showPersistentUsePrompt?.(
-                `Press ${PICKUP_USE_KEY} to pick up ${pickupName}${rarityLabel ? ` (${rarityLabel})` : ''}`,
-                promptColor
-              );
-            } else {
-              overlayController?.showPersistentUsePrompt?.(
-                `Pack is full — ${pickupName}`,
-                PICKUP_PROMPT_BLOCKED_COLOR
-              );
+          if (highlightedPickup) {
+            const pickupName = highlightedPickup.displayName ?? 'Pickup';
+            const highlightColor =
+              blendWithWhite(highlightedPickup.accentColor, 0.25) ?? highlightedPickup.accentColor;
+            const promptColor = floatColorToCss(
+              highlightColor ?? highlightedPickup.accentColor,
+              'rgb(255, 255, 255)'
+            );
+            const canPickup = Boolean(findFirstEmptyInventorySlot?.());
+            let shouldShowPrompt = true;
+
+            hudController?.setReticleAccentOverride?.(highlightColor ?? highlightedPickup.accentColor);
+
+            if (usePressedThisFrame) {
+              if (canPickup) {
+                if (handleWorldItemPickup(highlightedPickup)) {
+                  hudController?.setReticleAccentOverride?.(null);
+                  overlayController?.showPersistentUsePrompt?.('', '');
+                  overlayController?.showTemporaryUsePrompt?.(
+                    `${pickupName} added to pack`,
+                    promptColor,
+                    PICKUP_PROMPT_SUCCESS_DURATION
+                  );
+                  highlightedPickup = null;
+                  shouldShowPrompt = false;
+                }
+              } else {
+                overlayController?.showTemporaryUsePrompt?.(
+                  'Pack inventory is full',
+                  PICKUP_PROMPT_FAILURE_COLOR,
+                  PICKUP_PROMPT_FAILURE_DURATION
+                );
+              }
             }
+
+            if (highlightedPickup && shouldShowPrompt) {
+              if (canPickup) {
+                const rarityLabel = highlightedPickup.rarityLabel || '';
+                overlayController?.showPersistentUsePrompt?.(
+                  `Press ${PICKUP_USE_KEY} to pick up ${pickupName}${rarityLabel ? ` (${rarityLabel})` : ''}`,
+                  promptColor
+                );
+              } else {
+                overlayController?.showPersistentUsePrompt?.(
+                  `Pack is full — ${pickupName}`,
+                  PICKUP_PROMPT_BLOCKED_COLOR
+                );
+              }
+            }
+          } else {
+            hudController?.setReticleAccentOverride?.(null);
+            overlayController?.showPersistentUsePrompt?.('', '');
           }
-        } else {
-          hudController?.setReticleAccentOverride?.(null);
-          overlayController?.showPersistentUsePrompt?.('', '');
         }
       }
 

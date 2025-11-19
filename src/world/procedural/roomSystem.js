@@ -62,6 +62,9 @@ export function createProceduralRoomSystem(device, options = {}) {
   let centerLayerIndex = Math.floor(options.initialLayer ?? 0);
   let minActiveLayer = centerLayerIndex - verticalLayerPadding;
   let maxActiveLayer = centerLayerIndex + verticalLayerPadding;
+  let elevatorLayerIndex = 0;
+  let elevatorStateVersion = 0;
+  let appliedElevatorVersion = 0;
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
@@ -145,6 +148,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     evaluateCellForBarrel,
     evaluateCellForCamera,
     directionOffsets,
+    getElevatorLayerIndex: () => elevatorLayerIndex,
     updateVertexBuffer: (vertexArray) => {
       const buffer = device.createBuffer({
         size: vertexArray.byteLength,
@@ -162,6 +166,13 @@ export function createProceduralRoomSystem(device, options = {}) {
   });
 
   const { buildGeometryForCenter } = geometryBuilder;
+
+  const elevatorConfig = Object.freeze({
+    roomSize,
+    roomHeight,
+    wallThickness,
+    levelHeight
+  });
 
   function getLayerIndexForHeight(height) {
     const value = Number.isFinite(height) ? height : 0;
@@ -277,7 +288,8 @@ export function createProceduralRoomSystem(device, options = {}) {
       cellZ !== centerCellZ ||
       layerIndex !== centerLayerIndex ||
       desiredMinLayer !== minActiveLayer ||
-      desiredMaxLayer !== maxActiveLayer;
+      desiredMaxLayer !== maxActiveLayer ||
+      elevatorStateVersion !== appliedElevatorVersion;
 
     if (!needsRebuild) {
       return false;
@@ -289,10 +301,25 @@ export function createProceduralRoomSystem(device, options = {}) {
     minActiveLayer = desiredMinLayer;
     maxActiveLayer = desiredMaxLayer;
     buildGeometryForCenter(cellX, cellZ);
+    appliedElevatorVersion = elevatorStateVersion;
     return true;
   }
 
   buildGeometryForCenter(centerCellX, centerCellZ);
+  appliedElevatorVersion = elevatorStateVersion;
+
+  function setElevatorLayerIndex(nextLayer) {
+    const normalized = Math.trunc(Number(nextLayer));
+    if (!Number.isFinite(normalized)) {
+      return false;
+    }
+    if (normalized === elevatorLayerIndex) {
+      return false;
+    }
+    elevatorLayerIndex = normalized;
+    elevatorStateVersion += 1;
+    return true;
+  }
 
   return {
     update,
@@ -312,6 +339,9 @@ export function createProceduralRoomSystem(device, options = {}) {
       layerIndex: centerLayerIndex
     }),
     isPositionWithinGenerationRadius,
+    getElevatorLayerIndex: () => elevatorLayerIndex,
+    setElevatorLayerIndex,
+    getElevatorConfig: () => elevatorConfig,
     consumeBarrelSpawnPoints,
     consumeCameraSpawnPoints,
     scheduleBarrelSpawnPoint,
