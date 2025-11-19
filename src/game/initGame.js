@@ -43,6 +43,9 @@ import {
 const ELEVATOR_PROMPT_COLOR = 'rgb(245, 228, 190)';
 const ELEVATOR_RETICLE_ACCENT = [1.0, 0.86, 0.52];
 const ELEVATOR_CELL_MARGIN = 0.2;
+const ELEVATOR_SLIDE_SPEED = 3.25;
+const ELEVATOR_SLIDE_MIN_DURATION = 0.45;
+const ELEVATOR_SLIDE_EPSILON = 1e-4;
 
 function formatFloorLabel(layerIndex) {
   if (!Number.isFinite(layerIndex)) {
@@ -313,9 +316,60 @@ export async function initializeGame({
     const elevatorLevelHeight = Number(elevatorConfig?.levelHeight) || 0;
     const elevatorHeightStep =
       elevatorLevelHeight > 0 ? elevatorLevelHeight : Number(elevatorConfig?.roomHeight) || 0;
+    let elevatorSlideState = null;
+
+    const beginElevatorSlide = ({ currentLayer, targetLayer }) => {
+      if (!(elevatorHeightStep > 0)) {
+        return false;
+      }
+
+      const currentHeight = controller.position[1];
+      const currentLayerBase = currentLayer * elevatorHeightStep;
+      const layerOffset = currentHeight - currentLayerBase;
+      const targetHeight = targetLayer * elevatorHeightStep + layerOffset;
+      const distance = targetHeight - currentHeight;
+
+      if (Math.abs(distance) <= ELEVATOR_SLIDE_EPSILON) {
+        controller.position[1] = targetHeight;
+        return false;
+      }
+
+      const duration = Math.max(Math.abs(distance) / ELEVATOR_SLIDE_SPEED, ELEVATOR_SLIDE_MIN_DURATION);
+      elevatorSlideState = {
+        startY: currentHeight,
+        targetY: targetHeight,
+        duration,
+        elapsed: 0
+      };
+
+      return true;
+    };
+
+    const updateElevatorSlide = (deltaTime) => {
+      if (!elevatorSlideState) {
+        return;
+      }
+
+      const state = elevatorSlideState;
+      state.elapsed = Math.min(state.elapsed + deltaTime, state.duration);
+      const progress = state.duration > ELEVATOR_SLIDE_EPSILON ? state.elapsed / state.duration : 1;
+      const easedProgress = progress * progress * (3 - 2 * progress);
+      const nextY = state.startY + (state.targetY - state.startY) * easedProgress;
+      controller.position[1] = nextY;
+      controller.verticalVelocity = 0;
+      controller.isGrounded = false;
+
+      if (progress >= 1 - ELEVATOR_SLIDE_EPSILON) {
+        controller.position[1] = state.targetY;
+        elevatorSlideState = null;
+      }
+    };
 
     const attemptElevatorMove = (direction) => {
       if (!elevatorConfig || typeof roomSystem.setElevatorLayerIndex !== 'function') {
+        return null;
+      }
+      if (elevatorSlideState) {
         return null;
       }
       const currentLayer =
@@ -328,6 +382,11 @@ export async function initializeGame({
         return null;
       }
       if (elevatorHeightStep > 0) {
+        const slideStarted = beginElevatorSlide({ currentLayer, targetLayer });
+        if (!slideStarted) {
+          controller.position[1] += direction * elevatorHeightStep;
+        }
+      } else {
         controller.position[1] += direction * elevatorHeightStep;
       }
       controller.verticalVelocity = 0;
@@ -402,6 +461,15 @@ export async function initializeGame({
 
       if (!highlightedButton) {
         return { handled: false, consumeUse: false };
+      }
+
+      if (elevatorSlideState) {
+        hudController?.setReticleAccentOverride?.(ELEVATOR_RETICLE_ACCENT);
+        overlayController?.showPersistentUsePrompt?.(
+          'Elevator in motion',
+          ELEVATOR_PROMPT_COLOR
+        );
+        return { handled: true, consumeUse: false };
       }
 
       const direction = highlightedButton === 'down' ? -1 : 1;
@@ -611,6 +679,7 @@ export async function initializeGame({
       if (!isPaused) {
         controller.update(deltaTime);
       }
+      updateElevatorSlide(deltaTime);
 
       const geometryChanged = roomSystem.update(controller.position);
       if (geometryChanged) {
