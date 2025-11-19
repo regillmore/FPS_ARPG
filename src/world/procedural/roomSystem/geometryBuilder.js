@@ -8,7 +8,7 @@ import {
   addCollider
 } from '../geometry.js';
 import { buildElevatorCar } from '../elevatorCar.js';
-import { addCagedElectricWallLight } from '../decorations.js';
+import { addCagedElectricWallLight, addElevatorCallPanel } from '../decorations.js';
 import { randomFloatForEdge } from '../random.js';
 import { buildDoorwayAlongX, buildDoorwayAlongZ, buildSolidWallAlongX, buildSolidWallAlongZ } from '../walls.js';
 
@@ -490,6 +490,42 @@ export function createRoomGeometryBuilder({
                 return true;
               }
               return randomFloatForEdge(gx, gz, nx, nz, 29, seedForLayer) < 0.5;
+            }
+
+            if (isOrigin) {
+              if (edges.north === 'doorway' && hasDoubleDoor('north')) {
+                addElevatorCallPanel(
+                  vertices,
+                  bounds,
+                  'north',
+                  centerX,
+                  centerZ,
+                  baseY,
+                  roomSize,
+                  roomHeight,
+                  wallThickness,
+                  doubleDoorWidth,
+                  profile.wallColor,
+                  profile.accentColor
+                );
+              }
+
+              if (edges.south === 'doorway' && hasDoubleDoor('south')) {
+                addElevatorCallPanel(
+                  vertices,
+                  bounds,
+                  'south',
+                  centerX,
+                  centerZ,
+                  baseY,
+                  roomSize,
+                  roomHeight,
+                  wallThickness,
+                  doubleDoorWidth,
+                  profile.wallColor,
+                  profile.accentColor
+                );
+              }
             }
 
             if (!hasOpenEdge && !isOrigin) {

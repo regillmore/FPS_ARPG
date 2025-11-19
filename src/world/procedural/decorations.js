@@ -329,3 +329,144 @@ export function addCagedElectricWallLight(
   }
 }
 
+export function addElevatorCallPanel(
+  vertices,
+  bounds,
+  direction,
+  centerX,
+  centerZ,
+  baseY,
+  roomSize,
+  roomHeight,
+  wallThickness,
+  doorOpeningWidth,
+  wallColor,
+  accentColor
+) {
+  if (!vertices || !bounds) {
+    return;
+  }
+
+  const halfRoom = roomSize * 0.5;
+  const epsilon = Math.min(0.02, wallThickness * 0.25);
+
+  let mountX = centerX;
+  let mountZ = centerZ;
+
+  switch (direction) {
+    case 'north':
+      mountZ = centerZ - halfRoom + wallThickness * 0.5 + epsilon;
+      break;
+    case 'south':
+      mountZ = centerZ + halfRoom - wallThickness * 0.5 - epsilon;
+      break;
+    case 'west':
+      mountX = centerX - halfRoom + wallThickness * 0.5 + epsilon;
+      break;
+    case 'east':
+      mountX = centerX + halfRoom - wallThickness * 0.5 - epsilon;
+      break;
+    default:
+      return;
+  }
+
+  const doorHalfWidth = Math.min(Math.max(doorOpeningWidth * 0.5, 0.35), halfRoom - wallThickness * 0.75);
+  const panelWidth = Math.min(Math.max(roomSize * 0.08, 0.18), 0.42);
+  const panelHeight = Math.min(Math.max(roomHeight * 0.2, 0.55), 1.1);
+  const panelThickness = Math.min(Math.max(wallThickness * 0.4, 0.02), 0.06);
+
+  const panelOffsetX = Math.min(
+    Math.max(doorHalfWidth + panelWidth * 0.6, panelWidth * 0.5),
+    halfRoom - wallThickness - panelWidth * 0.5
+  );
+
+  const mountMinY = baseY + Math.max(0.8, roomHeight * 0.15);
+  const mountMaxY = baseY + Math.min(roomHeight - 0.6, roomHeight * 0.7);
+  const mountY = (mountMinY + mountMaxY) * 0.5;
+
+  const panelBaseColor = mixColors(wallColor, accentColor, 0.45);
+  const trimColor = mixColors(accentColor, [0.08, 0.1, 0.12], 0.55);
+  const buttonColor = mixColors(accentColor, [1, 0.55, 0.2], 0.75);
+
+  const localMinX = panelOffsetX - panelWidth * 0.5;
+  const localMaxX = panelOffsetX + panelWidth * 0.5;
+  const localMinY = -panelHeight * 0.5;
+  const localMaxY = panelHeight * 0.5;
+
+  addLocalBox(
+    vertices,
+    bounds,
+    direction,
+    mountX,
+    mountY,
+    mountZ,
+    localMinX,
+    localMaxX,
+    localMinY,
+    localMaxY,
+    0,
+    panelThickness,
+    panelBaseColor
+  );
+
+  const frameInset = Math.min(panelWidth * 0.08, 0.02);
+  const frameDepth = panelThickness * 0.7;
+  addLocalBox(
+    vertices,
+    bounds,
+    direction,
+    mountX,
+    mountY,
+    mountZ,
+    localMinX + frameInset,
+    localMaxX - frameInset,
+    localMinY + frameInset,
+    localMaxY - frameInset,
+    frameDepth,
+    panelThickness,
+    trimColor
+  );
+
+  const buttonSize = Math.min(panelWidth * 0.35, 0.12);
+  const buttonHalf = buttonSize * 0.5;
+  const buttonInsetY = Math.min(panelHeight * 0.2, 0.12);
+  const buttonMinY = -buttonHalf - buttonInsetY;
+  const buttonMaxY = buttonHalf - buttonInsetY;
+  const glowColor = [buttonColor[0], buttonColor[1], buttonColor[2], 1.8];
+
+  addLocalBox(
+    vertices,
+    bounds,
+    direction,
+    mountX,
+    mountY,
+    mountZ,
+    localMaxX - buttonSize * 1.5,
+    localMaxX - buttonSize * 0.5,
+    buttonMinY,
+    buttonMaxY,
+    frameDepth + panelThickness * 0.1,
+    panelThickness,
+    glowColor
+  );
+
+  const indicatorHeight = Math.min(panelHeight * 0.12, 0.07);
+  const indicatorInsetY = localMaxY - indicatorHeight - frameInset;
+  const indicatorColor = mixColors(buttonColor, [1, 1, 1], 0.6);
+  addLocalBox(
+    vertices,
+    bounds,
+    direction,
+    mountX,
+    mountY,
+    mountZ,
+    localMinX + frameInset * 1.5,
+    localMaxX - frameInset * 1.5,
+    indicatorInsetY - indicatorHeight * 0.5,
+    indicatorInsetY + indicatorHeight * 0.5,
+    frameDepth + panelThickness * 0.05,
+    frameDepth + panelThickness * 0.25,
+    indicatorColor
+  );
+}
+
