@@ -445,6 +445,12 @@ export async function initializeGame({
 
     const elevatorControls = { raise: false, lower: false, autoReturn: false };
     const elevatorSpeed = 1.5;
+    const elevatorGateSpeed = 1.8;
+    let elevatorGateTarget = 0;
+    let elevatorGateProgress =
+      typeof roomSystem.getElevatorGateProgress === 'function'
+        ? roomSystem.getElevatorGateProgress()
+        : 0;
     let lastElevatorOffset =
       typeof roomSystem.getElevatorOffset === 'function' ? roomSystem.getElevatorOffset() : 0;
 
@@ -524,12 +530,14 @@ export async function initializeGame({
       if (event.code === 'KeyR') {
         if (pressed) {
           elevatorControls.autoReturn = false;
+          elevatorGateTarget = 0;
         }
         elevatorControls.raise = pressed;
         event.preventDefault();
       } else if (event.code === 'KeyF') {
         if (pressed) {
           elevatorControls.autoReturn = false;
+          elevatorGateTarget = 0;
         }
         elevatorControls.lower = pressed;
         event.preventDefault();
@@ -542,6 +550,7 @@ export async function initializeGame({
       elevatorControls.raise = false;
       elevatorControls.lower = false;
       elevatorControls.autoReturn = false;
+      elevatorGateTarget = 0;
     });
 
     const weaponForward = new Float32Array(3);
@@ -583,6 +592,7 @@ export async function initializeGame({
       if (!isPaused && typeof roomSystem.adjustElevatorOffset === 'function') {
         if (elevatorControls.raise || elevatorControls.lower) {
           elevatorControls.autoReturn = false;
+          elevatorGateTarget = 0;
         }
 
         let elevatorDelta = 0;
@@ -593,9 +603,11 @@ export async function initializeGame({
           const toOrigin = -elevatorOffset;
           if (!Number.isFinite(toOrigin) || Math.abs(toOrigin) < 1e-4) {
             elevatorControls.autoReturn = false;
+            elevatorGateTarget = 0;
           } else if (Math.abs(toOrigin) <= maxElevatorStep) {
             geometryChanged = roomSystem.setElevatorOffset(0) || geometryChanged;
             elevatorControls.autoReturn = false;
+            elevatorGateTarget = 0;
           } else {
             elevatorDelta = Math.sign(toOrigin) * maxElevatorStep;
           }
@@ -634,6 +646,30 @@ export async function initializeGame({
 
         if (Math.abs(elevatorDelta) > 1e-4) {
           geometryChanged = roomSystem.adjustElevatorOffset(elevatorDelta) || geometryChanged;
+        }
+      }
+
+      if (!isPaused) {
+        const currentGateProgress =
+          typeof roomSystem.getElevatorGateProgress === 'function'
+            ? roomSystem.getElevatorGateProgress()
+            : elevatorGateProgress;
+        const gateDelta = elevatorGateTarget - currentGateProgress;
+        if (Math.abs(gateDelta) > 1e-4) {
+          const maxGateStep = elevatorGateSpeed * deltaTime;
+          const gateStep =
+            Math.abs(gateDelta) <= maxGateStep
+              ? gateDelta
+              : Math.sign(gateDelta) * maxGateStep;
+          const nextGateProgress = currentGateProgress + gateStep;
+          elevatorGateProgress = nextGateProgress;
+
+          if (typeof roomSystem.setElevatorGateProgress === 'function') {
+            geometryChanged =
+              roomSystem.setElevatorGateProgress(nextGateProgress) || geometryChanged;
+          }
+        } else {
+          elevatorGateProgress = currentGateProgress;
         }
       }
 
@@ -991,6 +1027,7 @@ export async function initializeGame({
                   elevatorControls.autoReturn = true;
                   elevatorControls.raise = false;
                   elevatorControls.lower = false;
+                  elevatorGateTarget = 1;
                   overlayController?.showTemporaryUsePrompt?.(
                     'Returning elevator to origin',
                     promptColor,
