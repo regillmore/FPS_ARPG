@@ -62,6 +62,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   let centerLayerIndex = Math.floor(options.initialLayer ?? 0);
   let minActiveLayer = centerLayerIndex - verticalLayerPadding;
   let maxActiveLayer = centerLayerIndex + verticalLayerPadding;
+  let elevatorOffset = 0;
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
@@ -145,6 +146,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     evaluateCellForBarrel,
     evaluateCellForCamera,
     directionOffsets,
+    getElevatorOffset: () => elevatorOffset,
     updateVertexBuffer: (vertexArray) => {
       const buffer = device.createBuffer({
         size: vertexArray.byteLength,
@@ -261,6 +263,26 @@ export function createProceduralRoomSystem(device, options = {}) {
     return true;
   }
 
+  const elevatorTravelLimit = roomHeight * 0.9;
+
+  function setElevatorOffset(offset) {
+    const clampedOffset = Math.min(Math.max(offset, -elevatorTravelLimit), elevatorTravelLimit);
+    if (!Number.isFinite(clampedOffset) || Math.abs(clampedOffset - elevatorOffset) < 1e-4) {
+      return false;
+    }
+    elevatorOffset = clampedOffset;
+    buildGeometryForCenter(centerCellX, centerCellZ);
+    return true;
+  }
+
+  function adjustElevatorOffset(delta) {
+    if (!Number.isFinite(delta) || Math.abs(delta) < 1e-6) {
+      return false;
+    }
+    const target = elevatorOffset + delta;
+    return setElevatorOffset(target);
+  }
+
   function update(playerPosition) {
     const px = playerPosition?.[0] ?? 0;
     const py = playerPosition?.[1] ?? 0;
@@ -312,6 +334,9 @@ export function createProceduralRoomSystem(device, options = {}) {
       layerIndex: centerLayerIndex
     }),
     isPositionWithinGenerationRadius,
+    getElevatorOffset: () => elevatorOffset,
+    setElevatorOffset,
+    adjustElevatorOffset,
     consumeBarrelSpawnPoints,
     consumeCameraSpawnPoints,
     scheduleBarrelSpawnPoint,

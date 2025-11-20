@@ -441,6 +441,29 @@ export async function initializeGame({
       disableLightsRef: () => disableDynamicLights
     });
 
+    const elevatorControls = { raise: false, lower: false };
+    const elevatorSpeed = 1.5;
+
+    const handleElevatorControl = (event, pressed) => {
+      if (!event || typeof event.code !== 'string') {
+        return;
+      }
+      if (event.code === 'KeyR') {
+        elevatorControls.raise = pressed;
+        event.preventDefault();
+      } else if (event.code === 'KeyF') {
+        elevatorControls.lower = pressed;
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', (event) => handleElevatorControl(event, true));
+    window.addEventListener('keyup', (event) => handleElevatorControl(event, false));
+    window.addEventListener('blur', () => {
+      elevatorControls.raise = false;
+      elevatorControls.lower = false;
+    });
+
     const weaponForward = new Float32Array(3);
     const weaponRight = new Float32Array(3);
     const weaponUp = new Float32Array(3);
@@ -472,7 +495,21 @@ export async function initializeGame({
         controller.update(deltaTime);
       }
 
-      const geometryChanged = roomSystem.update(controller.position);
+      let geometryChanged = false;
+      if (!isPaused && typeof roomSystem.adjustElevatorOffset === 'function') {
+        let elevatorDelta = 0;
+        if (elevatorControls.raise) {
+          elevatorDelta += elevatorSpeed * deltaTime;
+        }
+        if (elevatorControls.lower) {
+          elevatorDelta -= elevatorSpeed * deltaTime;
+        }
+        if (Math.abs(elevatorDelta) > 1e-4) {
+          geometryChanged = roomSystem.adjustElevatorOffset(elevatorDelta) || geometryChanged;
+        }
+      }
+
+      geometryChanged = roomSystem.update(controller.position) || geometryChanged;
       if (geometryChanged) {
         roomVertexBuffer = roomSystem.getVertexBuffer();
         roomVertexCount = roomSystem.getVertexCount();

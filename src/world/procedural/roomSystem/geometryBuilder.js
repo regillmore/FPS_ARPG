@@ -65,7 +65,8 @@ export function createRoomGeometryBuilder({
   evaluateCellForBarrel,
   evaluateCellForCamera,
   directionOffsets,
-  updateVertexBuffer
+  updateVertexBuffer,
+  getElevatorOffset
 }) {
   function resetBounds() {
     bounds.minX = Infinity;
@@ -518,6 +519,8 @@ export function createRoomGeometryBuilder({
 
           if (isOrigin) {
             if (layerIndex === 0) {
+              const elevatorOffset = typeof getElevatorOffset === 'function' ? getElevatorOffset() : 0;
+              const elevatorBaseY = baseY + elevatorOffset;
               buildElevatorCar({
                 vertices,
                 colliders,
@@ -526,7 +529,7 @@ export function createRoomGeometryBuilder({
                 maxX,
                 minZ,
                 maxZ,
-                baseY,
+                baseY: elevatorBaseY,
                 roomHeight,
                 wallThickness,
                 profile
