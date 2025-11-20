@@ -443,6 +443,77 @@ export async function initializeGame({
 
     const elevatorControls = { raise: false, lower: false, autoReturn: false };
     const elevatorSpeed = 1.5;
+    let lastElevatorOffset =
+      typeof roomSystem.getElevatorOffset === 'function' ? roomSystem.getElevatorOffset() : 0;
+
+    function movePlayerWithElevator(delta) {
+      if (!Number.isFinite(delta) || Math.abs(delta) < 1e-4) {
+        return;
+      }
+
+      const bounds =
+        typeof roomSystem.getElevatorBounds === 'function'
+          ? roomSystem.getElevatorBounds()
+          : null;
+
+      if (!bounds) {
+        return;
+      }
+
+      const px = controller.position[0];
+      const pz = controller.position[2];
+      const footY = controller.position[1] - PLAYER_COLLISION_HALF_HEIGHT;
+      const horizontalMargin = PLAYER_COLLISION_RADIUS * 0.75;
+      const surfaces = [
+        {
+          minX: bounds.minX,
+          maxX: bounds.maxX,
+          minZ: bounds.minZ,
+          maxZ: bounds.maxZ,
+          height: bounds.floorY
+        }
+      ];
+
+      if (
+        Number.isFinite(bounds.canopyMinX) &&
+        Number.isFinite(bounds.canopyMaxX) &&
+        Number.isFinite(bounds.canopyMinZ) &&
+        Number.isFinite(bounds.canopyMaxZ) &&
+        Number.isFinite(bounds.canopyMaxY)
+      ) {
+        surfaces.push({
+          minX: bounds.canopyMinX,
+          maxX: bounds.canopyMaxX,
+          minZ: bounds.canopyMinZ,
+          maxZ: bounds.canopyMaxZ,
+          height: bounds.canopyMaxY
+        });
+      }
+
+      const belowTolerance = Math.max(0.05, PLAYER_COLLISION_HALF_HEIGHT * 0.15);
+      const aboveTolerance = Math.max(belowTolerance, 0.25);
+
+      for (const surface of surfaces) {
+        if (!surface) {
+          continue;
+        }
+
+        const withinX =
+          px >= surface.minX - horizontalMargin && px <= surface.maxX + horizontalMargin;
+        const withinZ =
+          pz >= surface.minZ - horizontalMargin && pz <= surface.maxZ + horizontalMargin;
+        const nearSurface =
+          withinX &&
+          withinZ &&
+          footY >= surface.height - belowTolerance &&
+          footY <= surface.height + aboveTolerance;
+
+        if (nearSurface) {
+          controller.position[1] += delta;
+          break;
+        }
+      }
+    }
 
     const handleElevatorControl = (event, pressed) => {
       if (!event || typeof event.code !== 'string') {
@@ -503,14 +574,17 @@ export async function initializeGame({
       }
 
       let geometryChanged = false;
+      const previousElevatorOffset =
+        typeof roomSystem.getElevatorOffset === 'function'
+          ? roomSystem.getElevatorOffset()
+          : lastElevatorOffset;
       if (!isPaused && typeof roomSystem.adjustElevatorOffset === 'function') {
         if (elevatorControls.raise || elevatorControls.lower) {
           elevatorControls.autoReturn = false;
         }
 
         let elevatorDelta = 0;
-        const elevatorOffset =
-          typeof roomSystem.getElevatorOffset === 'function' ? roomSystem.getElevatorOffset() : 0;
+        const elevatorOffset = previousElevatorOffset;
 
         if (elevatorControls.autoReturn) {
           const toOrigin = -elevatorOffset;
@@ -538,6 +612,14 @@ export async function initializeGame({
           geometryChanged = roomSystem.adjustElevatorOffset(elevatorDelta) || geometryChanged;
         }
       }
+
+      const currentElevatorOffset =
+        typeof roomSystem.getElevatorOffset === 'function'
+          ? roomSystem.getElevatorOffset()
+          : previousElevatorOffset;
+      const elevatorMovement = currentElevatorOffset - previousElevatorOffset;
+      movePlayerWithElevator(elevatorMovement);
+      lastElevatorOffset = currentElevatorOffset;
 
       geometryChanged = roomSystem.update(controller.position) || geometryChanged;
       if (geometryChanged) {

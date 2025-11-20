@@ -13,7 +13,8 @@ export function buildElevatorCar({
   roomHeight,
   wallThickness,
   profile,
-  onPanelBuilt
+  onPanelBuilt,
+  onBoundsBuilt
 }) {
   const width = maxX - minX;
   const depth = maxZ - minZ;
@@ -32,6 +33,13 @@ export function buildElevatorCar({
   const platformHeight = Math.min(Math.max(roomHeight * 0.05, 0.05), 0.1);
   const platformColor = mixColors(profile.floorColor, profile.accentColor, 0.45);
   const trimMargin = 0.05;
+  const railMinY = baseY - trimMargin;
+  const railMaxY = Math.min(baseY + roomHeight - 0.25, railMinY + Math.max(roomHeight * 0.6, 1.2));
+  const postMinY = railMinY;
+  const postMaxY = Math.min(baseY + roomHeight - 0.15, railMaxY + Math.max(roomHeight * 0.2, 0.6));
+  const canopyInset = Math.min(elevatorSize * 0.08, wallThickness * 0.6);
+  const canopyMinY = Math.max(postMaxY + 0.05, baseY + roomHeight * 0.7);
+  const canopyMaxY = Math.min(canopyMinY + Math.min(roomHeight * 0.08, 0.2), baseY + roomHeight - 0.05);
   addBox(
     vertices,
     platformMinX + trimMargin / 2,
@@ -44,6 +52,22 @@ export function buildElevatorCar({
     bounds
   );
   addCollider(colliders, platformMinX, baseY - platformHeight - trimMargin, platformMinZ, platformMaxX, baseY, platformMaxZ);
+
+  if (typeof onBoundsBuilt === 'function') {
+    onBoundsBuilt({
+      minX: platformMinX,
+      maxX: platformMaxX,
+      minZ: platformMinZ,
+      maxZ: platformMaxZ,
+      floorY: baseY,
+      canopyMinX: platformMinX + canopyInset,
+      canopyMaxX: platformMaxX - canopyInset,
+      canopyMinZ: platformMinZ + canopyInset,
+      canopyMaxZ: platformMaxZ - canopyInset,
+      canopyMinY: canopyMinY,
+      canopyMaxY: canopyMaxY
+    });
+  }
 
   const trimHeight = Math.min(platformHeight * 0.5, 0.07);
   if (trimHeight > 1e-3) {
@@ -62,8 +86,6 @@ export function buildElevatorCar({
   }
 
   const railThickness = Math.min(Math.max(elevatorSize * 0.08, wallThickness * 0.5), wallThickness * 1.4);
-  const railMinY = baseY - trimMargin;
-  const railMaxY = Math.min(baseY + roomHeight - 0.25, railMinY + Math.max(roomHeight * 0.6, 1.2));
   const railColor = mixColors(profile.wallColor, profile.accentColor, 0.55);
 
   // East and west rails leave openings toward the doorways on the north/south axis.
@@ -94,8 +116,6 @@ export function buildElevatorCar({
 
   const postThickness = Math.min(Math.max(elevatorSize * 0.06, 0.08), railThickness);
   const postColor = mixColors(profile.wallColor, profile.ceilingColor, 0.55);
-  const postMinY = railMinY;
-  const postMaxY = Math.min(baseY + roomHeight - 0.15, railMaxY + Math.max(roomHeight * 0.2, 0.6));
   const postPositions = [
     [platformMinX, platformMinZ],
     [platformMinX, platformMaxZ - postThickness],
@@ -117,9 +137,6 @@ export function buildElevatorCar({
     addCollider(colliders, px - trimMargin, postMinY, pz - trimMargin, px + postThickness + trimMargin, postMaxY, pz + postThickness + trimMargin);
   }
 
-  const canopyMinY = Math.max(postMaxY + 0.05, baseY + roomHeight * 0.7);
-  const canopyMaxY = Math.min(canopyMinY + Math.min(roomHeight * 0.08, 0.2), baseY + roomHeight - 0.05);
-  const canopyInset = Math.min(elevatorSize * 0.08, wallThickness * 0.6);
   const canopyColor = mixColors(profile.ceilingColor, profile.accentColor, 0.55);
   addBox(
     vertices,
