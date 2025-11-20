@@ -63,6 +63,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   let minActiveLayer = centerLayerIndex - verticalLayerPadding;
   let maxActiveLayer = centerLayerIndex + verticalLayerPadding;
   let elevatorOffset = 0;
+  let elevatorGateProgress = 0;
   let elevatorPanel = null;
   let elevatorBounds = null;
 
@@ -149,6 +150,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     evaluateCellForCamera,
     directionOffsets,
     getLayerIndexForHeight,
+    getElevatorGateProgress: () => elevatorGateProgress,
     getElevatorOffset: () => elevatorOffset,
     setElevatorPanel: (panel) => {
       if (!panel) {
@@ -321,6 +323,21 @@ export function createProceduralRoomSystem(device, options = {}) {
     return setElevatorOffset(target);
   }
 
+  function setElevatorGateProgress(progress) {
+    if (!Number.isFinite(progress)) {
+      return false;
+    }
+
+    const clamped = Math.min(Math.max(progress, 0), 1);
+    if (Math.abs(clamped - elevatorGateProgress) < 1e-4) {
+      return false;
+    }
+
+    elevatorGateProgress = clamped;
+    buildGeometryForCenter(centerCellX, centerCellZ);
+    return true;
+  }
+
   function update(playerPosition) {
     const px = playerPosition?.[0] ?? 0;
     const py = playerPosition?.[1] ?? 0;
@@ -376,8 +393,10 @@ export function createProceduralRoomSystem(device, options = {}) {
     }),
     isPositionWithinGenerationRadius,
     getElevatorOffset: () => elevatorOffset,
+    getElevatorGateProgress: () => elevatorGateProgress,
     setElevatorOffset,
     adjustElevatorOffset,
+    setElevatorGateProgress,
     consumeBarrelSpawnPoints,
     consumeCameraSpawnPoints,
     scheduleBarrelSpawnPoint,

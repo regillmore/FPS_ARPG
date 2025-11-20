@@ -67,6 +67,7 @@ export function createRoomGeometryBuilder({
   directionOffsets,
   updateVertexBuffer,
   getLayerIndexForHeight,
+  getElevatorGateProgress,
   getElevatorOffset,
   setElevatorPanel,
   setElevatorBounds
@@ -235,6 +236,35 @@ export function createRoomGeometryBuilder({
     }
   }
 
+  function buildElevatorGates(vertices, colliders, bounds, elevatorCarBounds, profile, gateProgress) {
+    if (!elevatorCarBounds || !profile) {
+      return;
+    }
+
+    const progress = Math.min(Math.max(gateProgress ?? 0, 0), 1);
+    const gateThickness = Math.min(Math.max(wallThickness * 0.35, 0.05), wallThickness);
+    const gateDepth = Math.min(Math.max(wallThickness * 0.65, gateThickness), 0.16);
+    const gateMinX = elevatorCarBounds.canopyMinX ?? elevatorCarBounds.minX;
+    const gateMaxX = elevatorCarBounds.canopyMaxX ?? elevatorCarBounds.maxX;
+    const floorY = elevatorCarBounds.floorY ?? 0;
+    const openMinY = elevatorCarBounds.canopyMinY ?? floorY + roomHeight * 0.65;
+    const dropDistance = Math.max(openMinY - floorY - 0.05, roomHeight * 0.25);
+    const gateHeight = Math.min(Math.max(roomHeight * 0.45, dropDistance * 0.7), roomHeight * 0.9);
+    const gateMinY = Math.max(floorY + 0.05, openMinY - dropDistance * progress);
+    const gateMaxY = gateMinY + gateHeight;
+    const gateColor = mixColors(profile.wallColor, profile.accentColor, 0.65);
+
+    const northMinZ = elevatorCarBounds.minZ - gateDepth;
+    const northMaxZ = elevatorCarBounds.minZ;
+    const southMinZ = elevatorCarBounds.maxZ;
+    const southMaxZ = elevatorCarBounds.maxZ + gateDepth;
+
+    addBox(vertices, gateMinX, gateMinY, northMinZ, gateMaxX, gateMaxY, northMaxZ, gateColor, bounds);
+    addCollider(colliders, gateMinX, gateMinY, northMinZ, gateMaxX, gateMaxY, northMaxZ);
+    addBox(vertices, gateMinX, gateMinY, southMinZ, gateMaxX, gateMaxY, southMaxZ, gateColor, bounds);
+    addCollider(colliders, gateMinX, gateMinY, southMinZ, gateMaxX, gateMaxY, southMaxZ);
+  }
+
   function buildGeometryForCenter(cx, cz) {
     const vertices = [];
     decorativeLights.length = 0;
@@ -250,6 +280,8 @@ export function createRoomGeometryBuilder({
     const processedEdges = new Set();
     const { min: minActiveLayer, max: maxActiveLayer } = getActiveLayerRange();
     const elevatorOffset = typeof getElevatorOffset === 'function' ? getElevatorOffset() : 0;
+    const elevatorGateProgress =
+      typeof getElevatorGateProgress === 'function' ? getElevatorGateProgress() : 0;
     const elevatorLayerIndex =
       typeof getLayerIndexForHeight === 'function'
         ? getLayerIndexForHeight(elevatorOffset)
@@ -547,7 +579,21 @@ export function createRoomGeometryBuilder({
                   wallThickness,
                   profile,
                   onPanelBuilt: setElevatorPanel,
-                  onBoundsBuilt: setElevatorBounds
+                  onBoundsBuilt: (carBounds) => {
+                    if (typeof setElevatorBounds === 'function') {
+                      setElevatorBounds(carBounds);
+                    }
+                    if (carBounds) {
+                      buildElevatorGates(
+                        vertices,
+                        colliders,
+                        bounds,
+                        carBounds,
+                        profile,
+                        elevatorGateProgress
+                      );
+                    }
+                  }
                 });
               }
               edges.roomType = 'elevator';
