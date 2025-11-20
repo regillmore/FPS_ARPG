@@ -29,7 +29,8 @@ export function createOverlayController({ overlayElement }) {
   if (overlayElement) {
     overlayElement.innerHTML = `
       <div><strong>WebGPU FPS Prototype</strong></div>
-      <div>Click to capture the mouse, then use WASD to move and Space to jump. Gravity will pull you back to the ground. Press Esc to open the pause menu.</div>
+      <div>Click to capture the mouse, then use WASD to move, Shift to sprint, and Space to jump.</div>
+      <div>Press Esc to open the pause menu.</div>
       <div>Press ${PICKUP_USE_KEY} to interact with nearby pickups.</div>
       <div data-overlay-role="equipped-weapon"></div>
       <div data-overlay-role="use-prompt" style="display:none;"></div>
@@ -43,7 +44,7 @@ export function createOverlayController({ overlayElement }) {
       return;
     }
     if (label) {
-      overlayWeaponLine.textContent = `Equipped: ${label}`;
+      overlayWeaponLine.textContent = `Equipped (Left Mouse): ${label}`;
       overlayWeaponLine.style.display = '';
     } else {
       overlayWeaponLine.textContent = '';

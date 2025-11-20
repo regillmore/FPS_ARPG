@@ -1019,7 +1019,7 @@ export async function initializeGame({
                 const promptColor = floatColorToCss(reticleColor, 'rgb(200, 230, 255)');
                 hudController?.setReticleAccentOverride?.(reticleColor);
                 overlayController?.showPersistentUsePrompt?.(
-                  `Press ${PICKUP_USE_KEY} to return the elevator to the origin`,
+                  `Press ${PICKUP_USE_KEY} to return to the ground floor`,
                   promptColor
                 );
 
@@ -1029,7 +1029,7 @@ export async function initializeGame({
                   elevatorControls.lower = false;
                   elevatorGateTarget = 1;
                   overlayController?.showTemporaryUsePrompt?.(
-                    'Returning elevator to origin',
+                    'Returning elevator to ground floor',
                     promptColor,
                     PICKUP_PROMPT_SUCCESS_DURATION * 0.6
                   );
