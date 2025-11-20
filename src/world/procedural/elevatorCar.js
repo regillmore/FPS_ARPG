@@ -13,7 +13,8 @@ export function buildElevatorCar({
   roomHeight,
   wallThickness,
   profile,
-  onPanelBuilt
+  onPanelBuilt,
+  onBoundsBuilt
 }) {
   const width = maxX - minX;
   const depth = maxZ - minZ;
@@ -44,6 +45,16 @@ export function buildElevatorCar({
     bounds
   );
   addCollider(colliders, platformMinX, baseY - platformHeight - trimMargin, platformMinZ, platformMaxX, baseY, platformMaxZ);
+
+  if (typeof onBoundsBuilt === 'function') {
+    onBoundsBuilt({
+      minX: platformMinX,
+      maxX: platformMaxX,
+      minZ: platformMinZ,
+      maxZ: platformMaxZ,
+      floorY: baseY
+    });
+  }
 
   const trimHeight = Math.min(platformHeight * 0.5, 0.07);
   if (trimHeight > 1e-3) {

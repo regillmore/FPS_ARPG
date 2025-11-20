@@ -68,7 +68,8 @@ export function createRoomGeometryBuilder({
   updateVertexBuffer,
   getLayerIndexForHeight,
   getElevatorOffset,
-  setElevatorPanel
+  setElevatorPanel,
+  setElevatorBounds
 }) {
   function resetBounds() {
     bounds.minX = Infinity;
@@ -241,6 +242,9 @@ export function createRoomGeometryBuilder({
     colliders.length = 0;
     if (typeof setElevatorPanel === 'function') {
       setElevatorPanel(null);
+    }
+    if (typeof setElevatorBounds === 'function') {
+      setElevatorBounds(null);
     }
 
     const processedEdges = new Set();
@@ -542,7 +546,8 @@ export function createRoomGeometryBuilder({
                   roomHeight,
                   wallThickness,
                   profile,
-                  onPanelBuilt: setElevatorPanel
+                  onPanelBuilt: setElevatorPanel,
+                  onBoundsBuilt: setElevatorBounds
                 });
               }
               edges.roomType = 'elevator';
