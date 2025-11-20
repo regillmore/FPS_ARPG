@@ -146,6 +146,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     evaluateCellForBarrel,
     evaluateCellForCamera,
     directionOffsets,
+    getLayerIndexForHeight,
     getElevatorOffset: () => elevatorOffset,
     updateVertexBuffer: (vertexArray) => {
       const buffer = device.createBuffer({
