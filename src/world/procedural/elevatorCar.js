@@ -173,29 +173,91 @@ export function buildElevatorCar({
     bounds
   );
 
+  const indicatorHeight = indicatorMaxY - indicatorMinY;
+  const buttonHeight = Math.min(Math.max(indicatorHeight * 0.18, 0.08), indicatorHeight * 0.45);
+  const buttonMinY = indicatorMinY + indicatorHeight * 0.4;
+  const buttonMaxY = buttonMinY + buttonHeight;
+  const buttonInsetX = Math.min(indicatorDepth * 0.35, 0.035);
+  const buttonInsetZ = Math.min(indicatorWidth * 0.28, 0.09);
+
+  const buttonBounds = {
+    minX: indicatorMinX - buttonInsetX,
+    maxX: indicatorMaxX + buttonInsetX,
+    minY: buttonMinY,
+    maxY: buttonMaxY,
+    minZ: indicatorMinZ + buttonInsetZ,
+    maxZ: indicatorMaxZ - buttonInsetZ
+  };
+
+  const buttonDepth = buttonBounds.maxX - buttonBounds.minX;
+  const buttonBaseColor = mixColors(profile.accentColor, profile.wallColor, 0.15);
+  const buttonGlowColor = mixColors(profile.accentColor, [1, 0.93, 0.55], 0.7);
+  const buttonFaceMinX = buttonBounds.maxX - Math.min(buttonDepth * 0.45, 0.02);
+
+  addBox(
+    vertices,
+    buttonBounds.minX,
+    buttonBounds.minY,
+    buttonBounds.minZ,
+    buttonBounds.maxX,
+    buttonBounds.maxY,
+    buttonBounds.maxZ,
+    buttonBaseColor,
+    bounds
+  );
+
+  addBox(
+    vertices,
+    buttonFaceMinX,
+    buttonBounds.minY + buttonHeight * 0.08,
+    buttonBounds.minZ + buttonInsetZ * 0.08,
+    buttonBounds.maxX + Math.min(buttonDepth * 0.12, 0.01),
+    buttonBounds.maxY - buttonHeight * 0.08,
+    buttonBounds.maxZ - buttonInsetZ * 0.08,
+    buttonGlowColor,
+    bounds
+  );
+
+  const letterExtrude = Math.min(buttonDepth * 0.35, 0.012);
+  const letterMinY = buttonBounds.minY + buttonHeight * 0.14;
+  const letterMaxY = buttonBounds.maxY - buttonHeight * 0.14;
+  const letterMinZ = buttonBounds.minZ + (buttonBounds.maxZ - buttonBounds.minZ) * 0.18;
+  const letterMaxZ = buttonBounds.maxZ - (buttonBounds.maxZ - buttonBounds.minZ) * 0.18;
+  const stroke = Math.min((letterMaxY - letterMinY) * 0.18, (letterMaxZ - letterMinZ) * 0.22);
+  const letterMinX = buttonBounds.maxX - letterExtrude;
+  const letterMaxX = buttonBounds.maxX + Math.min(letterExtrude * 0.6, 0.005);
+
+  const gSegments = [
+    // Top bar
+    [letterMinX, letterMaxX, letterMaxY - stroke, letterMaxY, letterMinZ, letterMaxZ],
+    // Bottom bar
+    [letterMinX, letterMaxX, letterMinY, letterMinY + stroke, letterMinZ, letterMaxZ],
+    // Left bar
+    [letterMinX, letterMaxX, letterMinY, letterMaxY, letterMinZ, letterMinZ + stroke],
+    // Upper right bar
+    [letterMinX, letterMaxX, letterMinY + (letterMaxY - letterMinY) * 0.48, letterMaxY - stroke * 0.4, letterMaxZ - stroke, letterMaxZ],
+    // Middle bar
+    [
+      letterMinX,
+      letterMaxX,
+      letterMinY + (letterMaxY - letterMinY) * 0.46,
+      letterMinY + (letterMaxY - letterMinY) * 0.46 + stroke,
+      letterMinZ + stroke,
+      letterMaxZ - stroke * 0.7
+    ]
+  ];
+
+  for (const [minX, maxX, minY, maxY, minZ, maxZ] of gSegments) {
+    addBox(vertices, minX, minY, minZ, maxX, maxY, maxZ, buttonGlowColor, bounds);
+  }
+
   if (typeof onPanelBuilt === 'function') {
-    const indicatorHeight = indicatorMaxY - indicatorMinY;
-    const buttonHeight = Math.min(Math.max(indicatorHeight * 0.18, 0.08), indicatorHeight * 0.45);
-    const buttonMinY = indicatorMinY + indicatorHeight * 0.4;
-    const buttonMaxY = buttonMinY + buttonHeight;
-    const buttonInsetX = Math.min(indicatorDepth * 0.35, 0.035);
-    const buttonInsetZ = Math.min(indicatorWidth * 0.28, 0.09);
-
-    const buttonBounds = {
-      minX: indicatorMinX - buttonInsetX,
-      maxX: indicatorMaxX + buttonInsetX,
-      minY: buttonMinY,
-      maxY: buttonMaxY,
-      minZ: indicatorMinZ + buttonInsetZ,
-      maxZ: indicatorMaxZ - buttonInsetZ
-    };
-
     const center = [
       (buttonBounds.minX + buttonBounds.maxX) * 0.5,
       (buttonBounds.minY + buttonBounds.maxY) * 0.5,
       (buttonBounds.minZ + buttonBounds.maxZ) * 0.5
     ];
 
-    onPanelBuilt({ bounds: buttonBounds, center, color: indicatorColor });
+    onPanelBuilt({ bounds: buttonBounds, center, color: buttonGlowColor });
   }
 }

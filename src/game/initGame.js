@@ -1015,11 +1015,16 @@ export async function initializeGame({
               const hit = traceRayAABB(eye, viewDirection, ITEM_AIM_MAX_DISTANCE, elevatorPanel.bounds);
               if (hit) {
                 elevatorPromptActive = true;
-                const reticleColor = elevatorPanel.color ?? [0.75, 0.9, 1];
+                const baseReticleColor = elevatorPanel.color ?? [0.75, 0.9, 1];
+                const reticleColor = elevatorControls.autoReturn
+                  ? blendWithWhite(baseReticleColor, 0.25)
+                  : baseReticleColor;
                 const promptColor = floatColorToCss(reticleColor, 'rgb(200, 230, 255)');
                 hudController?.setReticleAccentOverride?.(reticleColor);
                 overlayController?.showPersistentUsePrompt?.(
-                  `Press ${PICKUP_USE_KEY} to return the elevator to the origin`,
+                  elevatorControls.autoReturn
+                    ? 'Elevator returning to the ground floor'
+                    : `Press ${PICKUP_USE_KEY} on the G button to return to the ground floor`,
                   promptColor
                 );
 
@@ -1029,7 +1034,7 @@ export async function initializeGame({
                   elevatorControls.lower = false;
                   elevatorGateTarget = 1;
                   overlayController?.showTemporaryUsePrompt?.(
-                    'Returning elevator to origin',
+                    'Returning elevator to the ground floor',
                     promptColor,
                     PICKUP_PROMPT_SUCCESS_DURATION * 0.6
                   );
