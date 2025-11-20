@@ -373,6 +373,9 @@ export function createProceduralRoomSystem(device, options = {}) {
       cellZ: centerCellZ,
       layerIndex: centerLayerIndex
     }),
+    getRoomSize: () => roomSize,
+    getHalfRoomSize: () => halfRoom,
+    getLevelHeight: () => levelHeight,
     isPositionWithinGenerationRadius,
     getElevatorOffset: () => elevatorOffset,
     setElevatorOffset,

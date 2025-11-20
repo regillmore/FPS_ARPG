@@ -606,6 +606,45 @@ export async function initializeGame({
           if (elevatorControls.lower) {
             elevatorDelta -= elevatorSpeed * deltaTime;
           }
+
+          if (!elevatorControls.raise && !elevatorControls.lower) {
+            const levelHeight =
+              typeof roomSystem.getLevelHeight === 'function'
+                ? roomSystem.getLevelHeight()
+                : null;
+            const halfRoom =
+              typeof roomSystem.getHalfRoomSize === 'function'
+                ? roomSystem.getHalfRoomSize()
+                : null;
+
+            const playerLayer =
+              typeof layerResolver === 'function' ? layerResolver(controller.position[1]) : null;
+            const elevatorLayer =
+              typeof layerResolver === 'function' ? layerResolver(elevatorOffset) : null;
+
+            const playerInElevatorCell =
+              Number.isFinite(halfRoom) &&
+              Math.abs(controller.position[0]) <= halfRoom &&
+              Math.abs(controller.position[2]) <= halfRoom;
+
+            if (
+              playerInElevatorCell &&
+              Number.isFinite(levelHeight) &&
+              Number.isFinite(playerLayer) &&
+              Number.isFinite(elevatorLayer) &&
+              playerLayer !== elevatorLayer
+            ) {
+              const targetOffset = playerLayer * levelHeight;
+              const neededDelta = targetOffset - elevatorOffset;
+              const maxStep = elevatorSpeed * deltaTime;
+
+              if (Math.abs(neededDelta) <= maxStep) {
+                geometryChanged = roomSystem.setElevatorOffset(targetOffset) || geometryChanged;
+              } else {
+                elevatorDelta += Math.sign(neededDelta) * maxStep;
+              }
+            }
+          }
         }
 
         if (Math.abs(elevatorDelta) > 1e-4) {
