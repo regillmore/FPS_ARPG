@@ -34,15 +34,15 @@ export function buildElevatorCar({
   addBox(
     vertices,
     platformMinX + trimMargin / 2,
-    baseY - platformHeight,
+    baseY - platformHeight - trimMargin,
     platformMinZ + trimMargin / 2,
     platformMaxX + trimMargin / 2,
-    baseY + 0.01,
+    baseY,
     platformMaxZ + trimMargin / 2,
     platformColor,
     bounds
   );
-  addCollider(colliders, platformMinX, baseY - platformHeight, platformMinZ, platformMaxX, baseY, platformMaxZ);
+  addCollider(colliders, platformMinX, baseY - platformHeight - trimMargin, platformMinZ, platformMaxX, baseY, platformMaxZ);
 
   const trimHeight = Math.min(platformHeight * 0.5, 0.07);
   if (trimHeight > 1e-3) {
@@ -50,10 +50,10 @@ export function buildElevatorCar({
     addBox(
       vertices,
       platformMinX - trimMargin,
-      baseY - trimHeight,
+      baseY - trimHeight - trimMargin,
       platformMinZ - trimMargin,
       platformMaxX + trimMargin,
-      baseY,
+      baseY - trimMargin,
       platformMaxZ + trimMargin,
       trimColor,
       bounds
@@ -61,7 +61,7 @@ export function buildElevatorCar({
   }
 
   const railThickness = Math.min(Math.max(elevatorSize * 0.08, wallThickness * 0.5), wallThickness * 1.4);
-  const railMinY = baseY;
+  const railMinY = baseY - trimMargin;
   const railMaxY = Math.min(baseY + roomHeight - 0.25, railMinY + Math.max(roomHeight * 0.6, 1.2));
   const railColor = mixColors(profile.wallColor, profile.accentColor, 0.55);
 
@@ -113,7 +113,7 @@ export function buildElevatorCar({
       postColor,
       bounds
     );
-    addCollider(colliders, px, postMinY, pz, px + postThickness, postMaxY, pz + postThickness);
+    addCollider(colliders, px - trimMargin, postMinY, pz - trimMargin, px + postThickness + trimMargin, postMaxY, pz + postThickness + trimMargin);
   }
 
   const canopyMinY = Math.max(postMaxY + 0.05, baseY + roomHeight * 0.7);
@@ -131,6 +131,7 @@ export function buildElevatorCar({
     canopyColor,
     bounds
   );
+  addCollider(colliders, platformMinX + canopyInset, canopyMinY, platformMinZ + canopyInset, platformMaxX - canopyInset, canopyMaxY, platformMaxZ - canopyInset);
 
   const indicatorWidth = Math.min(wallThickness * 1.1, elevatorSize * 0.18);
   const indicatorDepth = Math.min(railThickness * 0.85, 0.14);
