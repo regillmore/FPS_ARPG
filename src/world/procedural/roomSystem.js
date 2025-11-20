@@ -164,7 +164,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
   });
 
-  const { buildGeometryForCenter } = geometryBuilder;
+  const { buildGeometryForCenter, getElevatorPanel } = geometryBuilder;
 
   function getLayerIndexForHeight(height) {
     const value = Number.isFinite(height) ? height : 0;
@@ -333,6 +333,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     }),
     isPositionWithinGenerationRadius,
     getElevatorOffset: () => elevatorOffset,
+    getElevatorPanel,
     setElevatorOffset,
     adjustElevatorOffset,
     consumeBarrelSpawnPoints,

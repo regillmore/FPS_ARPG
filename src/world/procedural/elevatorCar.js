@@ -12,7 +12,8 @@ export function buildElevatorCar({
   baseY,
   roomHeight,
   wallThickness,
-  profile
+  profile,
+  decorativeLights
 }) {
   const width = maxX - minX;
   const depth = maxZ - minZ;
@@ -154,4 +155,69 @@ export function buildElevatorCar({
     indicatorColor,
     bounds
   );
+
+  const indicatorHeight = indicatorMaxY - indicatorMinY;
+  const buttonHeight = Math.min(Math.max(indicatorHeight * 0.32, 0.16), indicatorHeight * 0.6);
+  const buttonMinY = indicatorMinY + indicatorHeight * 0.32;
+  const buttonMaxY = Math.min(indicatorMaxY - indicatorHeight * 0.12, buttonMinY + buttonHeight);
+  const buttonInsetZ = Math.min(indicatorWidth * 0.1, 0.06);
+  const buttonMinZ = indicatorMinZ + buttonInsetZ;
+  const buttonMaxZ = indicatorMaxZ - buttonInsetZ;
+  const buttonDepth = Math.min(indicatorDepth * 0.75, 0.1);
+  const buttonMaxX = indicatorMaxX + Math.min(indicatorDepth * 0.65, 0.05);
+  const buttonMinX = buttonMaxX - buttonDepth;
+
+  const buttonPlateColor = mixColors(profile.wallColor, profile.accentColor, 0.45);
+  addBox(
+    vertices,
+    buttonMinX - buttonDepth * 0.35,
+    buttonMinY,
+    buttonMinZ,
+    buttonMaxX,
+    buttonMaxY,
+    buttonMaxZ,
+    buttonPlateColor,
+    bounds
+  );
+
+  const buttonColor = mixColors(profile.accentColor, [1, 0.85, 0.58], 0.6);
+  const buttonGlowColor = [buttonColor[0], buttonColor[1], buttonColor[2], 2.8];
+  addBox(
+    vertices,
+    buttonMinX,
+    buttonMinY + buttonHeight * 0.12,
+    buttonMinZ + buttonInsetZ * 0.25,
+    buttonMaxX,
+    buttonMaxY - buttonHeight * 0.12,
+    buttonMaxZ - buttonInsetZ * 0.25,
+    buttonGlowColor,
+    bounds
+  );
+
+  const buttonCenter = [
+    (buttonMinX + buttonMaxX) * 0.5,
+    (buttonMinY + buttonMaxY) * 0.5,
+    (buttonMinZ + buttonMaxZ) * 0.5
+  ];
+
+  if (Array.isArray(decorativeLights)) {
+    decorativeLights.push({
+      position: new Float32Array([buttonCenter[0], buttonCenter[1], buttonCenter[2], 1.0]),
+      color: new Float32Array([buttonColor[0], buttonColor[1], buttonColor[2], 2.4]),
+      direction: new Float32Array([-1, 0, 0, 0])
+    });
+  }
+
+  return {
+    buttonBounds: {
+      minX: buttonMinX,
+      maxX: buttonMaxX,
+      minY: buttonMinY,
+      maxY: buttonMaxY,
+      minZ: buttonMinZ,
+      maxZ: buttonMaxZ
+    },
+    buttonCenter,
+    buttonColor
+  };
 }

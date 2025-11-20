@@ -74,6 +74,9 @@ export async function initializeGame({
     let roomVertexBuffer = roomSystem.getVertexBuffer();
     let roomVertexCount = roomSystem.getVertexCount();
     const bounds = roomSystem.getBounds();
+    const elevatorButtonMaxDistance = 3.0;
+    const elevatorButtonMaxDistanceSq = elevatorButtonMaxDistance * elevatorButtonMaxDistance;
+    const elevatorButtonVerticalLimit = 1.6;
     const bulletHoleManager = createBulletHoleManager(device);
     let requeueProceduralEnemy = () => {};
 
@@ -496,6 +499,8 @@ export async function initializeGame({
       }
 
       let geometryChanged = false;
+      let useConsumed = false;
+      let interactionHandled = false;
       if (!isPaused && typeof roomSystem.adjustElevatorOffset === 'function') {
         let elevatorDelta = 0;
         if (elevatorControls.raise) {
@@ -823,12 +828,61 @@ export async function initializeGame({
         }
       }
 
+      if (!isPaused) {
+        const elevatorPanel =
+          typeof roomSystem.getElevatorPanel === 'function' ? roomSystem.getElevatorPanel() : null;
+        const buttonBounds = elevatorPanel?.buttonBounds ?? null;
+
+        if (buttonBounds) {
+          const buttonCenter =
+            elevatorPanel.buttonCenter ??
+            [
+              (buttonBounds.minX + buttonBounds.maxX) * 0.5,
+              (buttonBounds.minY + buttonBounds.maxY) * 0.5,
+              (buttonBounds.minZ + buttonBounds.maxZ) * 0.5
+            ];
+          const dx = controller.position[0] - buttonCenter[0];
+          const dz = controller.position[2] - buttonCenter[2];
+          const horizontalDistanceSq = dx * dx + dz * dz;
+          const verticalDistance = Math.abs(controller.position[1] - buttonCenter[1]);
+
+          if (
+            horizontalDistanceSq <= elevatorButtonMaxDistanceSq &&
+            verticalDistance <= elevatorButtonVerticalLimit
+          ) {
+            const hit = traceRayAABB(eye, viewDirection, ITEM_AIM_MAX_DISTANCE, buttonBounds);
+            if (hit) {
+              interactionHandled = true;
+              const buttonColor = elevatorPanel.buttonColor ?? [1, 0.86, 0.64];
+              hudController?.setReticleAccentOverride?.(buttonColor);
+              const buttonCssColor = floatColorToCss(buttonColor, 'rgb(255, 220, 180)');
+              overlayController?.showPersistentUsePrompt?.(
+                `Press ${PICKUP_USE_KEY} to recall elevator`,
+                buttonCssColor
+              );
+
+              if (usePressedThisFrame && !useConsumed) {
+                const updated = roomSystem.setElevatorOffset?.(0) || false;
+                geometryChanged = updated || geometryChanged;
+                useConsumed = true;
+                overlayController?.showTemporaryUsePrompt?.(
+                  updated ? 'Elevator returning to origin' : 'Elevator already at origin',
+                  buttonCssColor,
+                  PICKUP_PROMPT_SUCCESS_DURATION
+                );
+                overlayController?.showPersistentUsePrompt?.('', '');
+              }
+            }
+          }
+        }
+      }
+
       const worldItems = typeof worldItemManager.getItems === 'function' ? worldItemManager.getItems() : [];
 
       if (isPaused) {
         overlayController?.hideUsePrompt?.();
         hudController?.setReticleAccentOverride?.(null);
-      } else {
+      } else if (!interactionHandled) {
         let highlightedPickup = null;
         let closestPickupDistance = Infinity;
 
@@ -875,7 +929,8 @@ export async function initializeGame({
 
           hudController?.setReticleAccentOverride?.(highlightColor ?? highlightedPickup.accentColor);
 
-          if (usePressedThisFrame) {
+          if (usePressedThisFrame && !useConsumed) {
+            useConsumed = true;
             if (canPickup) {
               if (handleWorldItemPickup(highlightedPickup)) {
                 hudController?.setReticleAccentOverride?.(null);

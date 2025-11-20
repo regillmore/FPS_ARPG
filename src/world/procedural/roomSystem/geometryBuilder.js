@@ -69,6 +69,8 @@ export function createRoomGeometryBuilder({
   getLayerIndexForHeight,
   getElevatorOffset
 }) {
+  let elevatorPanel = null;
+
   function resetBounds() {
     bounds.minX = Infinity;
     bounds.maxX = -Infinity;
@@ -236,6 +238,7 @@ export function createRoomGeometryBuilder({
   function buildGeometryForCenter(cx, cz) {
     const vertices = [];
     decorativeLights.length = 0;
+    elevatorPanel = null;
     resetBounds();
     colliders.length = 0;
 
@@ -526,7 +529,7 @@ export function createRoomGeometryBuilder({
           if (isOrigin) {
             if (layerIndex === elevatorLayerIndex) {
               const elevatorBaseY = elevatorOffset;
-              buildElevatorCar({
+              const panel = buildElevatorCar({
                 vertices,
                 colliders,
                 bounds,
@@ -537,8 +540,12 @@ export function createRoomGeometryBuilder({
                 baseY: elevatorBaseY,
                 roomHeight,
                 wallThickness,
-                profile
+                profile,
+                decorativeLights
               });
+              if (panel) {
+                elevatorPanel = panel;
+              }
             }
             edges.roomType = 'elevator';
           } else if (hallwayOrientation && !hasVerticalOpeningFromAbove) {
@@ -654,5 +661,8 @@ export function createRoomGeometryBuilder({
     updateVertexBuffer(vertexArray);
   }
 
-  return { buildGeometryForCenter };
+  return {
+    buildGeometryForCenter,
+    getElevatorPanel: () => elevatorPanel
+  };
 }
