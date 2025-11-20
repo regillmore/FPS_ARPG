@@ -264,14 +264,11 @@ export function createProceduralRoomSystem(device, options = {}) {
     return true;
   }
 
-  const elevatorTravelLimit = roomHeight * 0.9;
-
   function setElevatorOffset(offset) {
-    const clampedOffset = Math.min(Math.max(offset, -elevatorTravelLimit), elevatorTravelLimit);
-    if (!Number.isFinite(clampedOffset) || Math.abs(clampedOffset - elevatorOffset) < 1e-4) {
+    if (!Number.isFinite(offset) || Math.abs(offset - elevatorOffset) < 1e-4) {
       return false;
     }
-    elevatorOffset = clampedOffset;
+    elevatorOffset = offset;
     buildGeometryForCenter(centerCellX, centerCellZ);
     return true;
   }
