@@ -366,6 +366,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     getMinimapSnapshot,
     getDecorativeLights: () => decorativeLights,
     getGenerationRadius: () => generationRadius,
+    getLevelHeight: () => levelHeight,
     getElevatorPanel: () => elevatorPanel,
     getElevatorBounds: () => elevatorBounds,
     getActiveCenter: () => ({

@@ -69,6 +69,10 @@ export async function initializeGame({
       typeof roomSystem.getLayerIndexForHeight === 'function'
         ? roomSystem.getLayerIndexForHeight
         : null;
+    const levelHeight =
+      typeof roomSystem.getLevelHeight === 'function'
+        ? roomSystem.getLevelHeight()
+        : null;
     const roomColliders = roomSystem.getColliders();
     const playerCollisionScratch = [];
     let roomVertexBuffer = roomSystem.getVertexBuffer();
@@ -613,12 +617,36 @@ export async function initializeGame({
         }
       }
 
-      const currentElevatorOffset =
+      let currentElevatorOffset =
         typeof roomSystem.getElevatorOffset === 'function'
           ? roomSystem.getElevatorOffset()
           : previousElevatorOffset;
       const elevatorMovement = currentElevatorOffset - previousElevatorOffset;
       movePlayerWithElevator(elevatorMovement);
+
+      const playerLayerIndex =
+        typeof layerResolver === 'function' ? layerResolver(controller.position[1]) : null;
+      const elevatorLayerIndex =
+        typeof layerResolver === 'function' ? layerResolver(currentElevatorOffset) : null;
+
+      if (
+        Number.isFinite(levelHeight) &&
+        Number.isFinite(playerLayerIndex) &&
+        Number.isFinite(elevatorLayerIndex) &&
+        playerLayerIndex !== elevatorLayerIndex
+      ) {
+        const targetElevatorOffset = playerLayerIndex * levelHeight;
+        if (Math.abs(targetElevatorOffset - currentElevatorOffset) > 1e-4) {
+          geometryChanged = roomSystem.setElevatorOffset(targetElevatorOffset) || geometryChanged;
+          const updatedElevatorOffset =
+            typeof roomSystem.getElevatorOffset === 'function'
+              ? roomSystem.getElevatorOffset()
+              : targetElevatorOffset;
+          movePlayerWithElevator(updatedElevatorOffset - currentElevatorOffset);
+          currentElevatorOffset = updatedElevatorOffset;
+        }
+      }
+
       lastElevatorOffset = currentElevatorOffset;
 
       geometryChanged = roomSystem.update(controller.position) || geometryChanged;
