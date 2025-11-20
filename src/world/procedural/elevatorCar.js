@@ -12,7 +12,8 @@ export function buildElevatorCar({
   baseY,
   roomHeight,
   wallThickness,
-  profile
+  profile,
+  onPanelBuilt
 }) {
   const width = maxX - minX;
   const depth = maxZ - minZ;
@@ -154,4 +155,30 @@ export function buildElevatorCar({
     indicatorColor,
     bounds
   );
+
+  if (typeof onPanelBuilt === 'function') {
+    const indicatorHeight = indicatorMaxY - indicatorMinY;
+    const buttonHeight = Math.min(Math.max(indicatorHeight * 0.18, 0.08), indicatorHeight * 0.45);
+    const buttonMinY = indicatorMinY + indicatorHeight * 0.4;
+    const buttonMaxY = buttonMinY + buttonHeight;
+    const buttonInsetX = Math.min(indicatorDepth * 0.35, 0.035);
+    const buttonInsetZ = Math.min(indicatorWidth * 0.28, 0.09);
+
+    const buttonBounds = {
+      minX: indicatorMinX - buttonInsetX,
+      maxX: indicatorMaxX + buttonInsetX,
+      minY: buttonMinY,
+      maxY: buttonMaxY,
+      minZ: indicatorMinZ + buttonInsetZ,
+      maxZ: indicatorMaxZ - buttonInsetZ
+    };
+
+    const center = [
+      (buttonBounds.minX + buttonBounds.maxX) * 0.5,
+      (buttonBounds.minY + buttonBounds.maxY) * 0.5,
+      (buttonBounds.minZ + buttonBounds.maxZ) * 0.5
+    ];
+
+    onPanelBuilt({ bounds: buttonBounds, center, color: indicatorColor });
+  }
 }

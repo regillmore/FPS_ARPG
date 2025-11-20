@@ -63,6 +63,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   let minActiveLayer = centerLayerIndex - verticalLayerPadding;
   let maxActiveLayer = centerLayerIndex + verticalLayerPadding;
   let elevatorOffset = 0;
+  let elevatorPanel = null;
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
@@ -148,6 +149,25 @@ export function createProceduralRoomSystem(device, options = {}) {
     directionOffsets,
     getLayerIndexForHeight,
     getElevatorOffset: () => elevatorOffset,
+    setElevatorPanel: (panel) => {
+      if (!panel) {
+        elevatorPanel = null;
+        return;
+      }
+      const bounds = panel.bounds ?? {};
+      elevatorPanel = {
+        center: panel.center ?? null,
+        color: panel.color ?? null,
+        bounds: {
+          minX: bounds.minX,
+          maxX: bounds.maxX,
+          minY: bounds.minY,
+          maxY: bounds.maxY,
+          minZ: bounds.minZ,
+          maxZ: bounds.maxZ
+        }
+      };
+    },
     updateVertexBuffer: (vertexArray) => {
       const buffer = device.createBuffer({
         size: vertexArray.byteLength,
@@ -326,6 +346,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     getMinimapSnapshot,
     getDecorativeLights: () => decorativeLights,
     getGenerationRadius: () => generationRadius,
+    getElevatorPanel: () => elevatorPanel,
     getActiveCenter: () => ({
       cellX: centerCellX,
       cellZ: centerCellZ,

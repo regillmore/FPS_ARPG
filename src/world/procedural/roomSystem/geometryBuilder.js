@@ -67,7 +67,8 @@ export function createRoomGeometryBuilder({
   directionOffsets,
   updateVertexBuffer,
   getLayerIndexForHeight,
-  getElevatorOffset
+  getElevatorOffset,
+  setElevatorPanel
 }) {
   function resetBounds() {
     bounds.minX = Infinity;
@@ -238,6 +239,9 @@ export function createRoomGeometryBuilder({
     decorativeLights.length = 0;
     resetBounds();
     colliders.length = 0;
+    if (typeof setElevatorPanel === 'function') {
+      setElevatorPanel(null);
+    }
 
     const processedEdges = new Set();
     const { min: minActiveLayer, max: maxActiveLayer } = getActiveLayerRange();
@@ -523,25 +527,26 @@ export function createRoomGeometryBuilder({
             }
           }
 
-          if (isOrigin) {
-            if (layerIndex === elevatorLayerIndex) {
-              const elevatorBaseY = elevatorOffset;
-              buildElevatorCar({
-                vertices,
-                colliders,
-                bounds,
-                minX,
-                maxX,
-                minZ,
-                maxZ,
-                baseY: elevatorBaseY,
-                roomHeight,
-                wallThickness,
-                profile
-              });
-            }
-            edges.roomType = 'elevator';
-          } else if (hallwayOrientation && !hasVerticalOpeningFromAbove) {
+            if (isOrigin) {
+              if (layerIndex === elevatorLayerIndex) {
+                const elevatorBaseY = elevatorOffset;
+                buildElevatorCar({
+                  vertices,
+                  colliders,
+                  bounds,
+                  minX,
+                  maxX,
+                  minZ,
+                  maxZ,
+                  baseY: elevatorBaseY,
+                  roomHeight,
+                  wallThickness,
+                  profile,
+                  onPanelBuilt: setElevatorPanel
+                });
+              }
+              edges.roomType = 'elevator';
+            } else if (hallwayOrientation && !hasVerticalOpeningFromAbove) {
             addHallwayBridge(
               vertices,
               hallwayOrientation,
