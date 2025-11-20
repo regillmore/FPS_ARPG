@@ -52,7 +52,13 @@ export function buildElevatorCar({
       maxX: platformMaxX,
       minZ: platformMinZ,
       maxZ: platformMaxZ,
-      floorY: baseY
+      floorY: baseY,
+      canopyMinX: platformMinX + canopyInset,
+      canopyMaxX: platformMaxX - canopyInset,
+      canopyMinZ: platformMinZ + canopyInset,
+      canopyMaxZ: platformMaxZ - canopyInset,
+      canopyMinY: canopyMinY,
+      canopyMaxY: canopyMaxY
     });
   }
 

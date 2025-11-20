@@ -193,7 +193,13 @@ export function createProceduralRoomSystem(device, options = {}) {
         maxX: bounds.maxX,
         minZ: bounds.minZ,
         maxZ: bounds.maxZ,
-        floorY: bounds.floorY
+        floorY: bounds.floorY,
+        canopyMinX: bounds.canopyMinX,
+        canopyMaxX: bounds.canopyMaxX,
+        canopyMinZ: bounds.canopyMinZ,
+        canopyMaxZ: bounds.canopyMaxZ,
+        canopyMinY: bounds.canopyMinY,
+        canopyMaxY: bounds.canopyMaxY
       };
     }
   });

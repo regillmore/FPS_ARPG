@@ -464,15 +464,54 @@ export async function initializeGame({
       const pz = controller.position[2];
       const footY = controller.position[1] - PLAYER_COLLISION_HALF_HEIGHT;
       const horizontalMargin = PLAYER_COLLISION_RADIUS * 0.75;
-      const withinX = px >= bounds.minX - horizontalMargin && px <= bounds.maxX + horizontalMargin;
-      const withinZ = pz >= bounds.minZ - horizontalMargin && pz <= bounds.maxZ + horizontalMargin;
+      const surfaces = [
+        {
+          minX: bounds.minX,
+          maxX: bounds.maxX,
+          minZ: bounds.minZ,
+          maxZ: bounds.maxZ,
+          height: bounds.floorY
+        }
+      ];
+
+      if (
+        Number.isFinite(bounds.canopyMinX) &&
+        Number.isFinite(bounds.canopyMaxX) &&
+        Number.isFinite(bounds.canopyMinZ) &&
+        Number.isFinite(bounds.canopyMaxZ) &&
+        Number.isFinite(bounds.canopyMaxY)
+      ) {
+        surfaces.push({
+          minX: bounds.canopyMinX,
+          maxX: bounds.canopyMaxX,
+          minZ: bounds.canopyMinZ,
+          maxZ: bounds.canopyMaxZ,
+          height: bounds.canopyMaxY
+        });
+      }
+
       const belowTolerance = Math.max(0.05, PLAYER_COLLISION_HALF_HEIGHT * 0.15);
       const aboveTolerance = Math.max(belowTolerance, 0.25);
-      const nearFloor =
-        footY >= bounds.floorY - belowTolerance && footY <= bounds.floorY + aboveTolerance;
 
-      if (withinX && withinZ && nearFloor) {
-        controller.position[1] += delta;
+      for (const surface of surfaces) {
+        if (!surface) {
+          continue;
+        }
+
+        const withinX =
+          px >= surface.minX - horizontalMargin && px <= surface.maxX + horizontalMargin;
+        const withinZ =
+          pz >= surface.minZ - horizontalMargin && pz <= surface.maxZ + horizontalMargin;
+        const nearSurface =
+          withinX &&
+          withinZ &&
+          footY >= surface.height - belowTolerance &&
+          footY <= surface.height + aboveTolerance;
+
+        if (nearSurface) {
+          controller.position[1] += delta;
+          break;
+        }
       }
     }
 
