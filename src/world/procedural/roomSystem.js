@@ -363,6 +363,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     getGeometry: () => ({ vertexBuffer, vertexCount, bounds }),
     getSeed: () => worldSeed,
     getLayerIndexForHeight,
+    getLevelHeight: () => levelHeight,
     getMinimapSnapshot,
     getDecorativeLights: () => decorativeLights,
     getGenerationRadius: () => generationRadius,

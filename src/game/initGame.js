@@ -69,6 +69,8 @@ export async function initializeGame({
       typeof roomSystem.getLayerIndexForHeight === 'function'
         ? roomSystem.getLayerIndexForHeight
         : null;
+    const levelHeight =
+      typeof roomSystem.getLevelHeight === 'function' ? roomSystem.getLevelHeight() : null;
     const roomColliders = roomSystem.getColliders();
     const playerCollisionScratch = [];
     let roomVertexBuffer = roomSystem.getVertexBuffer();
@@ -585,26 +587,48 @@ export async function initializeGame({
 
         let elevatorDelta = 0;
         const elevatorOffset = previousElevatorOffset;
+        const maxElevatorStep = elevatorSpeed * deltaTime;
 
         if (elevatorControls.autoReturn) {
           const toOrigin = -elevatorOffset;
-          const maxStep = elevatorSpeed * deltaTime;
           if (!Number.isFinite(toOrigin) || Math.abs(toOrigin) < 1e-4) {
             elevatorControls.autoReturn = false;
-          } else if (Math.abs(toOrigin) <= maxStep) {
+          } else if (Math.abs(toOrigin) <= maxElevatorStep) {
             geometryChanged = roomSystem.setElevatorOffset(0) || geometryChanged;
             elevatorControls.autoReturn = false;
           } else {
-            elevatorDelta = Math.sign(toOrigin) * maxStep;
+            elevatorDelta = Math.sign(toOrigin) * maxElevatorStep;
           }
-        }
+        } else {
+          const elevatorIdle =
+            !elevatorControls.raise && !elevatorControls.lower &&
+            layerResolver &&
+            Number.isFinite(levelHeight);
 
-        if (!elevatorControls.autoReturn) {
-          if (elevatorControls.raise) {
-            elevatorDelta += elevatorSpeed * deltaTime;
+          if (elevatorIdle) {
+            const playerLayer = layerResolver(
+              controller.position[1] - PLAYER_COLLISION_HALF_HEIGHT
+            );
+
+            if (Number.isFinite(playerLayer)) {
+              const targetOffset = playerLayer * levelHeight;
+              const toPlayerFloor = targetOffset - elevatorOffset;
+
+              if (Math.abs(toPlayerFloor) <= maxElevatorStep && Math.abs(toPlayerFloor) > 1e-4) {
+                geometryChanged = roomSystem.setElevatorOffset(targetOffset) || geometryChanged;
+              } else if (Math.abs(toPlayerFloor) > maxElevatorStep) {
+                elevatorDelta = Math.sign(toPlayerFloor) * maxElevatorStep;
+              }
+            }
           }
-          if (elevatorControls.lower) {
-            elevatorDelta -= elevatorSpeed * deltaTime;
+
+          if (Math.abs(elevatorDelta) < 1e-4) {
+            if (elevatorControls.raise) {
+              elevatorDelta += elevatorSpeed * deltaTime;
+            }
+            if (elevatorControls.lower) {
+              elevatorDelta -= elevatorSpeed * deltaTime;
+            }
           }
         }
 
