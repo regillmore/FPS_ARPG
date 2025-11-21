@@ -704,6 +704,7 @@ export function createRoomGeometryBuilder({
               centerX: chestCenterX,
               centerZ: chestCenterZ,
               baseY,
+              facing: 'north',
               wallColor: profile.wallColor,
               accentColor: profile.accentColor
             });

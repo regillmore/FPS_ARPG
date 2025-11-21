@@ -8,6 +8,7 @@ export function addStorageChest({
   centerX,
   centerZ,
   baseY,
+  facing = 'south',
   wallColor,
   accentColor
 }) {
@@ -59,8 +60,11 @@ export function addStorageChest({
   const handleDepth = Math.min(bodyHalfDepth * 0.45, 0.2);
   const handleMinX = centerX - handleWidth * 0.5;
   const handleMaxX = centerX + handleWidth * 0.5;
-  const handleMinZ = bodyMaxZ - handleDepth * 0.6;
-  const handleMaxZ = handleMinZ + handleDepth;
+  const facingSouth = facing !== 'north';
+  const handleMaxZ = facingSouth
+    ? bodyMaxZ + handleDepth * 0.4
+    : bodyMinZ + handleDepth * 0.6;
+  const handleMinZ = handleMaxZ - handleDepth;
   const handleMinY = bodyMinY + bodyHeight * 0.35;
   const handleMaxY = handleMinY + handleHeight;
   addBox(vertices, handleMinX, handleMinY, handleMinZ, handleMaxX, handleMaxY, handleMaxZ, trimColor, bounds);
