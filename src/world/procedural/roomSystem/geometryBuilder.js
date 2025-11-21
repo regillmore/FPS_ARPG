@@ -689,11 +689,11 @@ export function createRoomGeometryBuilder({
             );
           }
 
-          if (isOrigin && layerIndex === elevatorLayerIndex) {
-            const chestInsetFromWall = Math.max(wallThickness + 0.35, 0.8);
-            const chestHalfWidth = 0.7;
-            const chestHalfDepth = 0.5;
-            const doorClearance = Math.max(doubleDoorWidth * 0.5 + chestHalfWidth + 0.4, 1.4);
+          if (isOrigin && layerIndex === 0) {
+            const chestInsetFromWall = wallThickness * 0.75;
+            const chestHalfWidth = 0.3;
+            const chestHalfDepth = 0.25;
+            const doorClearance = doubleDoorWidth * 0.6;
             const chestCenterX = Math.min(maxX - chestInsetFromWall - chestHalfWidth, centerX + doorClearance);
             const chestCenterZ = maxZ - chestInsetFromWall - chestHalfDepth;
 

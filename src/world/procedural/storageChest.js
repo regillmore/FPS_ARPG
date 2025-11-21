@@ -16,10 +16,10 @@ export function addStorageChest({
     return;
   }
 
-  const bodyHalfWidth = 0.7;
-  const bodyHalfDepth = 0.5;
-  const bodyHeight = 0.78;
-  const lidHeight = 0.24;
+  const bodyHalfWidth = 0.3;
+  const bodyHalfDepth = 0.25;
+  const bodyHeight = 0.4;
+  const lidHeight = 0.1;
   const lidGap = 0.02;
 
   const bodyColor = mixColors(wallColor, accentColor, 0.25);
