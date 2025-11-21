@@ -51,10 +51,14 @@ export function buildDoorwayAlongX(
   bounds,
   thickness,
   colliders,
-  baseY = 0
+  baseY = 0,
+  openingCenterBias = 0
 ) {
-  const openingCenter = (minZ + maxZ) * 0.5;
   const halfOpening = Math.min(doorWidth * 0.5, (maxZ - minZ) * 0.45);
+  const halfSpan = (maxZ - minZ) * 0.5;
+  const maxBias = Math.max(0, halfSpan - halfOpening);
+  const clampedBias = Math.max(-maxBias, Math.min(openingCenterBias, maxBias));
+  const openingCenter = (minZ + maxZ) * 0.5 + clampedBias;
   const openingMin = openingCenter - halfOpening;
   const openingMax = openingCenter + halfOpening;
   const halfThickness = thickness * 0.5;
@@ -151,10 +155,14 @@ export function buildDoorwayAlongZ(
   bounds,
   thickness,
   colliders,
-  baseY = 0
+  baseY = 0,
+  openingCenterBias = 0
 ) {
-  const openingCenter = (minX + maxX) * 0.5;
   const halfOpening = Math.min(doorWidth * 0.5, (maxX - minX) * 0.45);
+  const halfSpan = (maxX - minX) * 0.5;
+  const maxBias = Math.max(0, halfSpan - halfOpening);
+  const clampedBias = Math.max(-maxBias, Math.min(openingCenterBias, maxBias));
+  const openingCenter = (minX + maxX) * 0.5 + clampedBias;
   const openingMin = openingCenter - halfOpening;
   const openingMax = openingCenter + halfOpening;
   const halfThickness = thickness * 0.5;
