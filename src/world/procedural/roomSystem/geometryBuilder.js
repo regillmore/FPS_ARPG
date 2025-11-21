@@ -17,6 +17,19 @@ function isOriginCell(x, z) {
   return x === 0 && z === 0;
 }
 
+function calculateSingleDoorwayBias(spanLength, doorWidth, directionRandom) {
+  const halfSpan = spanLength * 0.5;
+  const halfOpening = Math.min(doorWidth * 0.5, spanLength * 0.45);
+  const availableBias = Math.max(0, halfSpan - halfOpening);
+  if (availableBias < 1e-5) {
+    return 0;
+  }
+
+  const direction = directionRandom < 0.5 ? -1 : 1;
+  const targetBias = direction * halfSpan * 0.7;
+  return Math.max(-availableBias, Math.min(targetBias, availableBias));
+}
+
 function getForcedOriginEdgeState(ax, az, bx, bz) {
   const originInvolved = isOriginCell(ax, az) || isOriginCell(bx, bz);
   if (!originInvolved || (ax === bx && az === bz)) {
@@ -361,6 +374,13 @@ export function createRoomGeometryBuilder({
                   : false;
               const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
               const localDoorHeight = clampedDoorHeight;
+              const openingBias = isDoubleDoor
+                ? 0
+                : calculateSingleDoorwayBias(
+                    edgeMaxZ - edgeMinZ,
+                    localDoorWidth,
+                    randomFloatForEdge(gx, gz, nx, nz, 43, getLayerSeed(layerIndex))
+                  );
               const baseY = layerIndex * levelHeight;
               if (type === 'solid') {
                 buildSolidWallAlongX(
@@ -389,7 +409,8 @@ export function createRoomGeometryBuilder({
                   bounds,
                   wallThickness,
                   colliders,
-                  baseY
+                  baseY,
+                  openingBias
                 );
               }
             }
@@ -413,6 +434,13 @@ export function createRoomGeometryBuilder({
                   : false;
               const localDoorWidth = isDoubleDoor ? doubleDoorWidth : singleDoorWidth;
               const localDoorHeight = clampedDoorHeight;
+              const openingBias = isDoubleDoor
+                ? 0
+                : calculateSingleDoorwayBias(
+                    edgeMaxX - edgeMinX,
+                    localDoorWidth,
+                    randomFloatForEdge(gx, gz, nx, nz, 43, getLayerSeed(layerIndex))
+                  );
               const baseY = layerIndex * levelHeight;
               if (type === 'solid') {
                 buildSolidWallAlongZ(
@@ -441,7 +469,8 @@ export function createRoomGeometryBuilder({
                   bounds,
                   wallThickness,
                   colliders,
-                  baseY
+                  baseY,
+                  openingBias
                 );
               }
             }
