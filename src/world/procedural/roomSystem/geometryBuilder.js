@@ -699,15 +699,18 @@ export function createRoomGeometryBuilder({
             const chestInsetFromWall = wallThickness * 0.75;
             const chestHalfWidth = 0.3;
             const chestHalfDepth = 0.25;
+            const bodyHeight = 0.4;
+            const lidHeight = 0.1;
+            const lidGap = 0.02;
             const doorClearance = doubleDoorWidth * 0.6;
             const chestCenterX = Math.min(maxX - chestInsetFromWall - chestHalfWidth, centerX + doorClearance);
             const chestCenterZ = maxZ - chestInsetFromWall - chestHalfDepth;
 
-          addStorageChest({
-            vertices,
-            colliders,
-            bounds,
-            centerX: chestCenterX,
+            addStorageChest({
+              vertices,
+              colliders,
+              bounds,
+              centerX: chestCenterX,
               centerZ: chestCenterZ,
               baseY,
               facing: 'north',
