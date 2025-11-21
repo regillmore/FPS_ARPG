@@ -33,6 +33,7 @@ function createNoopPauseMenuControls() {
   return {
     setController() {},
     setPaused() {},
+    setStorageChestAccess() {},
     isPaused: () => false
   };
 }
@@ -48,6 +49,12 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   const pauseContent = pauseMenu.querySelector('.pause-menu__content');
   const pauseContainer = pauseMenu.querySelector('.pause-menu__container');
   const itemSlots = Array.from(pauseMenu.querySelectorAll('.item-slot'));
+  const storageSection = pauseMenu.querySelector('[data-inventory-role="storage-section"]');
+  const storageStatus = pauseMenu.querySelector('[data-inventory-role="storage-status"]');
+  const storageChip = pauseMenu.querySelector('[data-inventory-role="storage-chip"]');
+  const storageSlots = storageSection
+    ? Array.from(storageSection.querySelectorAll('.item-slot[data-slot-kind="storage"]'))
+    : [];
   const bestiaryElements = {
     list: pauseMenu.querySelector('[data-bestiary-role="encounter-list"]'),
     emptyState: pauseMenu.querySelector('[data-bestiary-role="empty-state"]'),
@@ -110,6 +117,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   let hideItemDetail;
   let activeItemSlot = null;
   let hidePopoverTimeout;
+  let storageAccessible = false;
 
   function resolveStatElements(statId) {
     const card = pauseMenu.querySelector(`.stat-card[data-stat="${statId}"]`);
@@ -718,6 +726,9 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       return parsed;
     };
 
+    const isSlotInteractive = (slot) =>
+      slot?.dataset.slotKind !== 'storage' || storageAccessible;
+
     function formatItemTypeLabel(value) {
       return value
         .split(/[-_\s]+/)
@@ -743,7 +754,42 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         return;
       }
       delete slot.dataset.bonuses;
-      if (slot.dataset.slotKind !== 'gear') {
+      const slotKind = slot.dataset.slotKind || '';
+
+      if (slotKind === 'storage') {
+        const placeholderLabel = slot.dataset.emptyLabel || 'Empty Storage Slot';
+        const description = storageAccessible
+          ? 'This storage slot is empty.'
+          : 'Link with a nearby storage chest to move items here.';
+        slot.innerHTML = `<span class="item-slot__placeholder">${placeholderLabel}</span>`;
+        slot.dataset.emptyLabel = placeholderLabel;
+        slot.dataset.description = description;
+        slot.dataset.itemTag = 'Storage';
+        delete slot.dataset.itemType;
+        delete slot.dataset.weaponId;
+        delete slot.dataset.itemName;
+        delete slot.dataset.itemAbbr;
+        delete slot.dataset.rarity;
+        delete slot.dataset.itemId;
+        return;
+      }
+
+      if (slotKind === 'inventory') {
+        const placeholderLabel = slot.dataset.emptyLabel || 'Empty Pack Slot';
+        slot.innerHTML = `<span class="item-slot__placeholder">${placeholderLabel}</span>`;
+        slot.dataset.emptyLabel = placeholderLabel;
+        slot.dataset.description = 'This pack slot is empty.';
+        delete slot.dataset.itemType;
+        delete slot.dataset.weaponId;
+        delete slot.dataset.itemName;
+        delete slot.dataset.itemAbbr;
+        delete slot.dataset.rarity;
+        delete slot.dataset.itemId;
+        delete slot.dataset.itemTag;
+        return;
+      }
+
+      if (slotKind !== 'gear') {
         delete slot.dataset.emptyLabel;
         return;
       }
@@ -765,6 +811,33 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       delete slot.dataset.itemAbbr;
     }
 
+    const updateStorageLockUi = ({ available, distance } = {}) => {
+      storageAccessible = Boolean(available);
+      const distanceLabel =
+        Number.isFinite(distance) && distance < Infinity ? `${distance.toFixed(1)}m` : '';
+
+      if (storageSection) {
+        storageSection.classList.toggle('inventory-section--locked', !storageAccessible);
+      }
+      if (storageChip) {
+        storageChip.textContent = storageAccessible ? 'Linked' : 'Locked';
+        storageChip.dataset.state = storageAccessible ? 'active' : 'inactive';
+      }
+      if (storageStatus) {
+        storageStatus.textContent = storageAccessible
+          ? `Storage chest linked${distanceLabel ? ` (${distanceLabel})` : ''}. Drag items to transfer gear.`
+          : 'Move close to the origin room chest to access stored gear.';
+      }
+
+      for (const slot of storageSlots) {
+        slot.setAttribute('tabindex', storageAccessible ? '0' : '-1');
+        slot.classList.toggle('is-locked', !storageAccessible);
+        if (slot.dataset.slot === 'empty') {
+          refreshEmptySlotLabel(slot);
+        }
+      }
+    };
+
     const canSlotAcceptItem = (slot, itemType) => {
       if (!slot) {
         return false;
@@ -782,12 +855,16 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
 
     for (const slot of itemSlots) {
       refreshEmptySlotLabel(slot);
-      slot.setAttribute('tabindex', '0');
+      const initialTabIndex =
+        slot.dataset.slotKind === 'storage' && !storageAccessible ? '-1' : '0';
+      slot.setAttribute('tabindex', initialTabIndex);
       slot.addEventListener('mouseenter', () => showItemDetail(slot));
       slot.addEventListener('focus', () => showItemDetail(slot));
       slot.addEventListener('mouseleave', () => hideItemDetail());
       slot.addEventListener('blur', () => hideItemDetail());
     }
+
+    updateStorageLockUi({ available: storageAccessible });
 
     let draggingSlot = null;
     let dragPreview;
@@ -844,6 +921,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
           isEmptyState &&
           originKind &&
           originKind !== slotKind &&
+          (slotKind === 'inventory' || slotKind === 'storage') &&
           name !== 'data-slot'
         ) {
           continue;
@@ -855,14 +933,9 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         isEmptyState &&
         originKind &&
         originKind !== slotKind &&
-        slotKind === 'inventory'
+        (slotKind === 'inventory' || slotKind === 'storage')
       ) {
-        slot.innerHTML = '<span class="item-slot__placeholder">Empty Pack Slot</span>';
-        slot.dataset.description = 'This pack slot is empty.';
-        delete slot.dataset.bonuses;
-        delete slot.dataset.itemName;
-        delete slot.dataset.itemAbbr;
-        delete slot.dataset.itemTag;
+        refreshEmptySlotLabel(slot);
       } else {
         slot.innerHTML = state.html;
       }
@@ -904,10 +977,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       delete slot.dataset.itemName;
       delete slot.dataset.itemAbbr;
       delete slot.dataset.itemTag;
-      if (slotKind === 'inventory') {
-        slot.innerHTML = '<span class="item-slot__placeholder">Empty Pack Slot</span>';
-        slot.dataset.description = 'This pack slot is empty.';
-      } else {
+      if (slotKind !== 'inventory' && slotKind !== 'storage') {
         slot.innerHTML = '';
       }
       refreshEmptySlotLabel(slot);
@@ -934,6 +1004,9 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
 
     const isValidDropTarget = (candidate) => {
       if (!candidate || candidate === draggingSlot) {
+        return false;
+      }
+      if (!isSlotInteractive(candidate)) {
         return false;
       }
       if (!canSlotAcceptItem(candidate, draggingItemType)) {
@@ -1008,7 +1081,11 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         applySlotState(draggingSlot, dropState);
         setDropTarget(null);
         handled = true;
-      } else if (draggingSlot.dataset.slotKind === 'inventory' || draggingSlot.dataset.slotKind === 'gear') {
+      } else if (
+        draggingSlot.dataset.slotKind === 'inventory' ||
+        draggingSlot.dataset.slotKind === 'gear' ||
+        draggingSlot.dataset.slotKind === 'storage'
+      ) {
         const droppedOutside = event
           ? !isPointInsidePauseContainer(event.clientX, event.clientY)
           : false;
@@ -1076,6 +1153,9 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
 
     const handlePointerDown = (event) => {
       const slot = event.currentTarget;
+      if (!isSlotInteractive(slot)) {
+        return;
+      }
       if (event.button !== 0 || event.pointerType === 'touch') {
         return;
       }
@@ -1221,6 +1301,9 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     setPaused,
     setExperience(state) {
       setExperienceState(state);
+    },
+    setStorageChestAccess(state = {}) {
+      updateStorageLockUi(state);
     },
     isPaused: () => paused,
     getDiagnosticsState: () => ({ ...diagnosticsState }),

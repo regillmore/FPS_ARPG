@@ -71,8 +71,13 @@ export function createRoomGeometryBuilder({
   getElevatorGateProgress,
   getElevatorOffset,
   setElevatorPanel,
-  setElevatorBounds
+  setElevatorBounds,
+  recordStorageChest,
+  resetStorageChests
 }) {
+  const recordChest = typeof recordStorageChest === 'function' ? recordStorageChest : () => {};
+  const clearRecordedChests = typeof resetStorageChests === 'function' ? resetStorageChests : () => {};
+
   function resetBounds() {
     bounds.minX = Infinity;
     bounds.maxX = -Infinity;
@@ -268,6 +273,7 @@ export function createRoomGeometryBuilder({
 
   function buildGeometryForCenter(cx, cz) {
     const vertices = [];
+    clearRecordedChests();
     decorativeLights.length = 0;
     resetBounds();
     colliders.length = 0;
@@ -697,16 +703,38 @@ export function createRoomGeometryBuilder({
             const chestCenterX = Math.min(maxX - chestInsetFromWall - chestHalfWidth, centerX + doorClearance);
             const chestCenterZ = maxZ - chestInsetFromWall - chestHalfDepth;
 
-            addStorageChest({
-              vertices,
-              colliders,
-              bounds,
-              centerX: chestCenterX,
+          addStorageChest({
+            vertices,
+            colliders,
+            bounds,
+            centerX: chestCenterX,
               centerZ: chestCenterZ,
               baseY,
               facing: 'north',
               wallColor: profile.wallColor,
               accentColor: profile.accentColor
+            });
+
+            const bodyMinX = chestCenterX - chestHalfWidth;
+            const bodyMaxX = chestCenterX + chestHalfWidth;
+            const bodyMinZ = chestCenterZ - chestHalfDepth;
+            const bodyMaxZ = chestCenterZ + chestHalfDepth;
+            const bodyMinY = baseY + 0.02;
+            const bodyMaxY = bodyMinY + bodyHeight + lidGap + lidHeight;
+            recordChest({
+              center: [
+                (bodyMinX + bodyMaxX) * 0.5,
+                (bodyMinY + bodyMaxY) * 0.5,
+                (bodyMinZ + bodyMaxZ) * 0.5
+              ],
+              bounds: {
+                minX: bodyMinX,
+                maxX: bodyMaxX,
+                minY: bodyMinY,
+                maxY: bodyMaxY,
+                minZ: bodyMinZ,
+                maxZ: bodyMaxZ
+              }
             });
           }
         }

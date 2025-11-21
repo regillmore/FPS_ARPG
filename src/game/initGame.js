@@ -17,6 +17,8 @@ import {
   ITEM_AIM_MAX_DISTANCE,
   ITEM_INTERACTION_DISTANCE_SQ,
   ITEM_INTERACTION_VERTICAL_LIMIT,
+  STORAGE_CHEST_INTERACTION_DISTANCE_SQ,
+  STORAGE_CHEST_VERTICAL_LIMIT,
   MAX_AIM_DISTANCE,
   PICKUP_PROMPT_BLOCKED_COLOR,
   PICKUP_PROMPT_FAILURE_COLOR,
@@ -39,6 +41,8 @@ import {
   createLightGatherer,
   writeUniformData
 } from './rendering/renderUtils.js';
+
+const STORAGE_PROMPT_COLOR = 'rgb(184, 224, 255)';
 
 export async function initializeGame({
   canvas,
@@ -232,6 +236,84 @@ export async function initializeGame({
 
     const controller = new FirstPersonController(canvas);
     pauseControls?.setController?.(controller);
+
+    const computeHorizontalDistanceSqToBounds = (position, bounds) => {
+      const px = position?.[0];
+      const pz = position?.[2];
+      if (!Number.isFinite(px) || !Number.isFinite(pz) || !bounds) {
+        return Infinity;
+      }
+      const dx =
+        px < bounds.minX ? bounds.minX - px : px > bounds.maxX ? px - bounds.maxX : 0;
+      const dz =
+        pz < bounds.minZ ? bounds.minZ - pz : pz > bounds.maxZ ? pz - bounds.maxZ : 0;
+      return dx * dx + dz * dz;
+    };
+
+    let nearestStorageChest = null;
+    let storageChestNearby = false;
+    let storageChestDistance = Infinity;
+
+    const updateStorageChestProximity = () => {
+      const chests =
+        typeof roomSystem.getStorageChests === 'function'
+          ? roomSystem.getStorageChests()
+          : [];
+      let candidate = null;
+      let candidateDistSq = Infinity;
+
+      for (const chest of chests) {
+        const chestBounds = chest?.bounds ?? null;
+        if (!chestBounds) {
+          continue;
+        }
+
+        const horizontalDistanceSq = computeHorizontalDistanceSqToBounds(
+          controller.position,
+          chestBounds
+        );
+        if (horizontalDistanceSq > STORAGE_CHEST_INTERACTION_DISTANCE_SQ) {
+          continue;
+        }
+
+        const py = controller.position?.[1];
+        const verticalDistance = !Number.isFinite(py)
+          ? Infinity
+          : py < chestBounds.minY
+            ? chestBounds.minY - py
+            : py > chestBounds.maxY
+              ? py - chestBounds.maxY
+              : 0;
+
+        if (verticalDistance > STORAGE_CHEST_VERTICAL_LIMIT) {
+          continue;
+        }
+
+        if (horizontalDistanceSq < candidateDistSq) {
+          candidateDistSq = horizontalDistanceSq;
+          candidate = chest;
+        }
+      }
+
+      const nextDistance = candidate ? Math.sqrt(candidateDistSq) : Infinity;
+      const nextAvailable = Boolean(candidate);
+
+      if (
+        pauseControls?.setStorageChestAccess &&
+        (nextAvailable !== storageChestNearby ||
+          Math.abs(nextDistance - storageChestDistance) > 1e-3)
+      ) {
+        pauseControls.setStorageChestAccess({
+          available: nextAvailable,
+          distance: nextDistance,
+          chest: candidate
+        });
+      }
+
+      nearestStorageChest = candidate;
+      storageChestNearby = nextAvailable;
+      storageChestDistance = nextDistance;
+    };
     const enemyUpdateContext = {
       playerPosition: controller.position,
       playerRadius: PLAYER_COLLISION_RADIUS,
@@ -684,6 +766,8 @@ export async function initializeGame({
       if (!isPaused) {
         controller.update(deltaTime);
       }
+
+      updateStorageChestProximity();
 
       let geometryChanged = false;
       const previousElevatorOffset =
@@ -1224,7 +1308,18 @@ export async function initializeGame({
             }
           } else {
             hudController?.setReticleAccentOverride?.(null);
-            overlayController?.showPersistentUsePrompt?.('', '');
+            if (storageChestNearby) {
+              const distanceLabel =
+                Number.isFinite(storageChestDistance) && storageChestDistance < Infinity
+                  ? ` (${storageChestDistance.toFixed(1)}m)`
+                  : '';
+              overlayController?.showPersistentUsePrompt?.(
+                `Storage chest in range${distanceLabel} — open the pause menu to transfer gear.`,
+                STORAGE_PROMPT_COLOR
+              );
+            } else {
+              overlayController?.showPersistentUsePrompt?.('', '');
+            }
           }
         }
       }
