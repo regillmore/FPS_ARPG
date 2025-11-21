@@ -17,7 +17,7 @@ function isOriginCell(x, z) {
   return x === 0 && z === 0;
 }
 
-function calculateSingleDoorwayBias(spanLength, doorWidth, directionRandom, magnitudeRandom) {
+function calculateSingleDoorwayBias(spanLength, doorWidth, directionRandom) {
   const halfSpan = spanLength * 0.5;
   const halfOpening = Math.min(doorWidth * 0.5, spanLength * 0.45);
   const availableBias = Math.max(0, halfSpan - halfOpening);
@@ -26,8 +26,8 @@ function calculateSingleDoorwayBias(spanLength, doorWidth, directionRandom, magn
   }
 
   const direction = directionRandom < 0.5 ? -1 : 1;
-  const magnitudeFactor = 0.6 + magnitudeRandom * 0.35;
-  return direction * availableBias * magnitudeFactor;
+  const targetBias = direction * halfSpan * 0.3;
+  return Math.max(-availableBias, Math.min(targetBias, availableBias));
 }
 
 function getForcedOriginEdgeState(ax, az, bx, bz) {
@@ -379,8 +379,7 @@ export function createRoomGeometryBuilder({
                 : calculateSingleDoorwayBias(
                     edgeMaxZ - edgeMinZ,
                     localDoorWidth,
-                    randomFloatForEdge(gx, gz, nx, nz, 43, getLayerSeed(layerIndex)),
-                    randomFloatForEdge(gx, gz, nx, nz, 44, getLayerSeed(layerIndex))
+                    randomFloatForEdge(gx, gz, nx, nz, 43, getLayerSeed(layerIndex))
                   );
               const baseY = layerIndex * levelHeight;
               if (type === 'solid') {
@@ -440,8 +439,7 @@ export function createRoomGeometryBuilder({
                 : calculateSingleDoorwayBias(
                     edgeMaxX - edgeMinX,
                     localDoorWidth,
-                    randomFloatForEdge(gx, gz, nx, nz, 43, getLayerSeed(layerIndex)),
-                    randomFloatForEdge(gx, gz, nx, nz, 44, getLayerSeed(layerIndex))
+                    randomFloatForEdge(gx, gz, nx, nz, 43, getLayerSeed(layerIndex))
                   );
               const baseY = layerIndex * levelHeight;
               if (type === 'solid') {
