@@ -26,7 +26,7 @@ function calculateSingleDoorwayBias(spanLength, doorWidth, directionRandom) {
   }
 
   const direction = directionRandom < 0.5 ? -1 : 1;
-  const targetBias = direction * halfSpan * 0.3;
+  const targetBias = direction * halfSpan * 0.7;
   return Math.max(-availableBias, Math.min(targetBias, availableBias));
 }
 
