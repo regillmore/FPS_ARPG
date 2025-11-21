@@ -11,6 +11,7 @@ import { buildElevatorCar } from '../elevatorCar.js';
 import { addCagedElectricWallLight } from '../decorations.js';
 import { randomFloatForEdge } from '../random.js';
 import { buildDoorwayAlongX, buildDoorwayAlongZ, buildSolidWallAlongX, buildSolidWallAlongZ } from '../walls.js';
+import { addStorageChest } from '../storageChest.js';
 
 function isOriginCell(x, z) {
   return x === 0 && z === 0;
@@ -686,6 +687,27 @@ export function createRoomGeometryBuilder({
               holeMinZ,
               holeMaxZ
             );
+          }
+
+          if (isOrigin && layerIndex === 0) {
+            const chestInsetFromWall = wallThickness * 0.75;
+            const chestHalfWidth = 0.3;
+            const chestHalfDepth = 0.25;
+            const doorClearance = doubleDoorWidth * 0.6;
+            const chestCenterX = Math.min(maxX - chestInsetFromWall - chestHalfWidth, centerX + doorClearance);
+            const chestCenterZ = maxZ - chestInsetFromWall - chestHalfDepth;
+
+            addStorageChest({
+              vertices,
+              colliders,
+              bounds,
+              centerX: chestCenterX,
+              centerZ: chestCenterZ,
+              baseY,
+              facing: 'north',
+              wallColor: profile.wallColor,
+              accentColor: profile.accentColor
+            });
           }
         }
       }
