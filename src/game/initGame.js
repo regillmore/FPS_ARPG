@@ -454,6 +454,17 @@ export async function initializeGame({
     let lastElevatorOffset =
       typeof roomSystem.getElevatorOffset === 'function' ? roomSystem.getElevatorOffset() : 0;
 
+    function translateItemVertically(item, delta) {
+      if (!item || !item.modelMatrix || !item.bounds || !item.center) {
+        return;
+      }
+
+      item.modelMatrix[13] += delta;
+      item.bounds.minY += delta;
+      item.bounds.maxY += delta;
+      item.center[1] += delta;
+    }
+
     function movePlayerWithElevator(delta) {
       if (!Number.isFinite(delta) || Math.abs(delta) < 1e-4) {
         return;
@@ -523,6 +534,93 @@ export async function initializeGame({
       }
     }
 
+    function moveWorldItemsWithElevator(delta, items) {
+      if (!Number.isFinite(delta) || Math.abs(delta) < 1e-4) {
+        return;
+      }
+
+      if (!Array.isArray(items) || items.length === 0) {
+        return;
+      }
+
+      const bounds =
+        typeof roomSystem.getElevatorBounds === 'function'
+          ? roomSystem.getElevatorBounds()
+          : null;
+
+      if (!bounds) {
+        return;
+      }
+
+      const surfaces = [
+        {
+          minX: bounds.minX,
+          maxX: bounds.maxX,
+          minZ: bounds.minZ,
+          maxZ: bounds.maxZ,
+          height: bounds.floorY
+        }
+      ];
+
+      if (
+        Number.isFinite(bounds.canopyMinX) &&
+        Number.isFinite(bounds.canopyMaxX) &&
+        Number.isFinite(bounds.canopyMinZ) &&
+        Number.isFinite(bounds.canopyMaxZ) &&
+        Number.isFinite(bounds.canopyMaxY)
+      ) {
+        surfaces.push({
+          minX: bounds.canopyMinX,
+          maxX: bounds.canopyMaxX,
+          minZ: bounds.canopyMinZ,
+          maxZ: bounds.canopyMaxZ,
+          height: bounds.canopyMaxY
+        });
+      }
+
+      const verticalTolerance = 0.35;
+
+      for (const item of items) {
+        if (!item || !item.bounds || !item.center) {
+          continue;
+        }
+
+        const cx = item.center[0];
+        const cz = item.center[2];
+        const horizontalMargin = Math.max(
+          (item.bounds.maxX - item.bounds.minX) * 0.5,
+          (item.bounds.maxZ - item.bounds.minZ) * 0.5,
+          0.12
+        );
+
+        for (const surface of surfaces) {
+          if (!surface) {
+            continue;
+          }
+
+          const withinX =
+            cx >= surface.minX - horizontalMargin && cx <= surface.maxX + horizontalMargin;
+          const withinZ =
+            cz >= surface.minZ - horizontalMargin && cz <= surface.maxZ + horizontalMargin;
+
+          if (!withinX || !withinZ) {
+            continue;
+          }
+
+          const verticalDistance = Math.min(
+            Math.abs(item.bounds.minY - surface.height),
+            Math.abs(item.bounds.maxY - surface.height),
+            Math.abs(item.center[1] - surface.height)
+          );
+
+          if (verticalDistance <= verticalTolerance) {
+            translateItemVertically(item, delta);
+            break;
+          }
+        }
+      }
+    }
+
     const handleElevatorControl = (event, pressed) => {
       if (!event || typeof event.code !== 'string') {
         return;
@@ -577,6 +675,9 @@ export async function initializeGame({
       const isPaused = pauseControls?.isPaused?.();
       const usePressedThisFrame =
         typeof controller.consumeUsePress === 'function' ? controller.consumeUsePress() : false;
+
+      const worldItems =
+        typeof worldItemManager.getItems === 'function' ? worldItemManager.getItems() : [];
 
       hudController?.setReticleVisible?.(!isPaused && Boolean(equippedWeaponDefinition));
 
@@ -679,6 +780,7 @@ export async function initializeGame({
           : previousElevatorOffset;
       const elevatorMovement = currentElevatorOffset - previousElevatorOffset;
       movePlayerWithElevator(elevatorMovement);
+      moveWorldItemsWithElevator(elevatorMovement, worldItems);
       lastElevatorOffset = currentElevatorOffset;
 
       geometryChanged = roomSystem.update(controller.position) || geometryChanged;
@@ -994,8 +1096,6 @@ export async function initializeGame({
           primaryFireCooldown = 1 / resolvedRateOfFire;
         }
       }
-
-      const worldItems = typeof worldItemManager.getItems === 'function' ? worldItemManager.getItems() : [];
 
       if (isPaused) {
         overlayController?.hideUsePrompt?.();
