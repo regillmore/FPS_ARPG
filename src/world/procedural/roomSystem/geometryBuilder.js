@@ -495,6 +495,12 @@ export function createRoomGeometryBuilder({
           const profile = profilePerLayer.get(layerIndex);
 
           const edges = getCellEdgesForLayer(layerIndex, gx, gz);
+          const isFullyEnclosed =
+            edges &&
+            edges.north === 'solid' &&
+            edges.south === 'solid' &&
+            edges.east === 'solid' &&
+            edges.west === 'solid';
           let hallwayOrientation = null;
           if (edges) {
             const entries = [
@@ -648,24 +654,26 @@ export function createRoomGeometryBuilder({
             edges.roomType = null;
           }
 
-          addFloorSlab(
-            vertices,
-            baseY,
-            floorThickness,
-            minX,
-            maxX,
-            minZ,
-            maxZ,
-            profile.floorColor,
-            profile.ceilingColor,
-            bounds,
-            openFloor,
-            holeMinX,
-            holeMaxX,
-            holeMinZ,
-            holeMaxZ,
-            colliders
-          );
+          if (!isFullyEnclosed) {
+            addFloorSlab(
+              vertices,
+              baseY,
+              floorThickness,
+              minX,
+              maxX,
+              minZ,
+              maxZ,
+              profile.floorColor,
+              profile.ceilingColor,
+              bounds,
+              openFloor,
+              holeMinX,
+              holeMaxX,
+              holeMinZ,
+              holeMaxZ,
+              colliders
+            );
+          }
 
           if (isTopLayer) {
             addHorizontalSection(
