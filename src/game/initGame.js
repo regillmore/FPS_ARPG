@@ -240,17 +240,22 @@ export async function initializeGame({
 
     const setActiveStorageChest = (chest) => {
       const nextId = chest?.id ?? '';
+
+      if (!nextId) {
+        if (activeStorageChestId) {
+          persistActiveStorageChest();
+          activeStorageChestId = '';
+        }
+        pauseControls?.setStorageChestState?.(null);
+        return;
+      }
+
       if (nextId === activeStorageChestId) {
         return;
       }
 
       persistActiveStorageChest();
       activeStorageChestId = nextId;
-
-      if (!nextId) {
-        pauseControls?.setStorageChestState?.(null);
-        return;
-      }
 
       const cached = storageChestInventories.get(nextId) ?? {
         id: nextId,
