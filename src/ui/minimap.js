@@ -16,6 +16,9 @@ const ENEMY_FILL = 'rgba(255, 92, 92, 0.95)';
 const ENEMY_STROKE = 'rgba(12, 18, 28, 0.9)';
 const PLAYER_FILL = 'rgba(200, 235, 255, 0.95)';
 const PLAYER_STROKE = 'rgba(12, 18, 28, 0.85)';
+const ORIGIN_WAYPOINT_FILL = 'rgba(255, 238, 190, 0.96)';
+const ORIGIN_WAYPOINT_STROKE = 'rgba(16, 24, 34, 0.9)';
+const ORIGIN_WAYPOINT_TEXT = 'rgba(18, 26, 36, 0.96)';
 const DOOR_GAP_RATIO = 0.34;
 const MIN_CLIP_MARGIN = 10;
 const DEFAULT_FLOOR_LABEL = 'G';
@@ -254,6 +257,71 @@ function drawEnemies(ctx, snapshot, transform, enemies, dpr) {
   }
 }
 
+function drawOriginElevatorWaypoint(ctx, transform, waypoint, dpr, centerX, centerY, clipRadius) {
+  if (!ctx || !transform || !waypoint) {
+    return;
+  }
+
+  const projected = transform.toCanvas(waypoint.x, waypoint.z);
+  if (!projected) {
+    return;
+  }
+
+  const dx = projected.x - centerX;
+  const dy = projected.y - centerY;
+  const distance = Math.hypot(dx, dy);
+  const unitX = distance > 1e-4 ? dx / distance : 0;
+  const unitY = distance > 1e-4 ? dy / distance : -1;
+  const perpX = -unitY;
+  const perpY = unitX;
+  const maxDistance = Math.max(clipRadius - 6 * dpr, clipRadius * 0.9);
+  const clampedDistance = Math.min(distance, maxDistance);
+  const markerX = centerX + unitX * clampedDistance;
+  const markerY = centerY + unitY * clampedDistance;
+
+  const markerRadius = Math.max(6.8 * dpr, 4.5);
+  const innerRadius = markerRadius * 0.55;
+
+  ctx.fillStyle = ORIGIN_WAYPOINT_FILL;
+  ctx.strokeStyle = ORIGIN_WAYPOINT_STROKE;
+  ctx.lineWidth = Math.max(1.3 * dpr, 1);
+
+  ctx.beginPath();
+  ctx.arc(markerX, markerY, markerRadius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(markerX, markerY, innerRadius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  if (distance - clampedDistance > 1e-3) {
+    const tipLength = markerRadius * 1.6;
+    const baseOffset = markerRadius * 0.7;
+    const wing = markerRadius * 0.85;
+
+    const tipX = markerX + unitX * tipLength;
+    const tipY = markerY + unitY * tipLength;
+    const baseX = markerX - unitX * baseOffset;
+    const baseY = markerY - unitY * baseOffset;
+
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(baseX + perpX * wing, baseY + perpY * wing);
+    ctx.lineTo(baseX - perpX * wing, baseY - perpY * wing);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = ORIGIN_WAYPOINT_TEXT;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const fontSize = Math.max(9 * dpr, 8);
+  ctx.font = `bold ${fontSize}px "Inter", "Arial", sans-serif`;
+  ctx.fillText('E', markerX, markerY);
+}
+
 function drawBalconyIcons(ctx, snapshot, transform, dpr) {
   if (!ctx || !snapshot || !transform) {
     return;
@@ -388,6 +456,7 @@ function drawMinimap(ctx, canvasSize, data) {
   const snapshot = data?.snapshot ?? null;
   const playerYaw = Number.isFinite(data?.playerYaw) ? data.playerYaw : 0;
   const enemies = Array.isArray(data?.enemies) ? data.enemies : [];
+  const originElevator = data?.originElevator ?? snapshot?.originElevator ?? null;
   const transform = snapshot
     ? createTransform(snapshot, {
         centerX,
@@ -401,6 +470,7 @@ function drawMinimap(ctx, canvasSize, data) {
   drawCells(ctx, snapshot, transform, dpr);
   drawEdges(ctx, snapshot, transform, dpr);
   drawBalconyIcons(ctx, snapshot, transform, dpr);
+  drawOriginElevatorWaypoint(ctx, transform, originElevator, dpr, centerX, centerY, clipRadius);
   drawEnemies(ctx, snapshot, transform, enemies, dpr);
   drawPlayer(ctx, playerYaw, dpr, centerX, centerY);
 
