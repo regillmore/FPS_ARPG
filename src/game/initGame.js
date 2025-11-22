@@ -408,6 +408,7 @@ export async function initializeGame({
     let disableDynamicLights = Boolean(initialDiagnostics?.disableLights);
     let disableEnemies = Boolean(initialDiagnostics?.disableEnemies);
     let showFramerate = Boolean(initialDiagnostics?.showFramerate);
+    let showUnvisitedMinimapRooms = Boolean(initialOptions?.showUnvisitedMinimapRooms);
     const resolveFramerateCap = (value) => {
       const numericValue = Number(value);
       if (!Number.isFinite(numericValue) || numericValue <= 0) {
@@ -433,6 +434,7 @@ export async function initializeGame({
 
     window.addEventListener('game-options-change', (event) => {
       applyFramerateTarget(event?.detail?.framerateCap);
+      showUnvisitedMinimapRooms = Boolean(event?.detail?.showUnvisitedMinimapRooms);
     });
 
     const ensureRenderableUniformResources = createEntityUniformManager(
@@ -1252,7 +1254,10 @@ export async function initializeGame({
       };
       const minimapSnapshot =
         typeof roomSystem.getMinimapSnapshot === 'function'
-          ? roomSystem.getMinimapSnapshot(controller.position, { radius: 4 })
+          ? roomSystem.getMinimapSnapshot(controller.position, {
+              radius: 4,
+              showUnvisitedRooms: showUnvisitedMinimapRooms
+            })
           : null;
 
       if (minimapSnapshot) {

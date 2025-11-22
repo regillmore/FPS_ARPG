@@ -80,12 +80,15 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   };
 
   const optionsState = {
-    framerateCap: 80
+    framerateCap: 80,
+    showUnvisitedMinimapRooms: false
   };
 
   const optionsElements = {
     framerateStatus: pauseMenu.querySelector('[data-options-role="framerate-cap-status"]'),
-    framerateOptions: Array.from(pauseMenu.querySelectorAll('[data-option-control="framerate-cap"]'))
+    framerateOptions: Array.from(pauseMenu.querySelectorAll('[data-option-control="framerate-cap"]')),
+    minimapFilterStatus: pauseMenu.querySelector('[data-options-role="minimap-filter-status"]'),
+    minimapFilterToggle: pauseMenu.querySelector('[data-option-control="show-unvisited-minimap-rooms"]')
   };
 
   for (const slot of itemSlots) {
@@ -243,6 +246,13 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     return 'Framerate runs uncapped.';
   }
 
+  function formatMinimapFilterStatusText(isRevealEnabled) {
+    if (isRevealEnabled) {
+      return 'The minimap shows all rooms, explored or not.';
+    }
+    return 'The minimap hides rooms you have not explored yet.';
+  }
+
   function updateOptionsUi() {
     if (optionsElements.framerateStatus) {
       optionsElements.framerateStatus.textContent = formatFramerateStatusText(optionsState.framerateCap);
@@ -253,6 +263,14 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         input.checked = optionValue === normalizeFramerateCap(optionsState.framerateCap);
       }
     }
+    if (optionsElements.minimapFilterStatus) {
+      optionsElements.minimapFilterStatus.textContent = formatMinimapFilterStatusText(
+        optionsState.showUnvisitedMinimapRooms
+      );
+    }
+    if (optionsElements.minimapFilterToggle) {
+      optionsElements.minimapFilterToggle.checked = Boolean(optionsState.showUnvisitedMinimapRooms);
+    }
   }
 
   function setFramerateCap(nextValue) {
@@ -262,6 +280,17 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       return;
     }
     optionsState.framerateCap = normalized;
+    updateOptionsUi();
+    emitOptionsChange();
+  }
+
+  function setShowUnvisitedMinimapRooms(nextValue) {
+    const enabled = Boolean(nextValue);
+    if (optionsState.showUnvisitedMinimapRooms === enabled) {
+      updateOptionsUi();
+      return;
+    }
+    optionsState.showUnvisitedMinimapRooms = enabled;
     updateOptionsUi();
     emitOptionsChange();
   }
@@ -1139,6 +1168,10 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       setFramerateCap(event.currentTarget.value);
     });
   }
+
+  optionsElements.minimapFilterToggle?.addEventListener('change', (event) => {
+    setShowUnvisitedMinimapRooms(event?.currentTarget?.checked);
+  });
 
   function setPaused(next) {
     if (paused === next) {

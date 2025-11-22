@@ -251,6 +251,7 @@ export function createProceduralRoomSystem(device, options = {}) {
 
     const resolvedRadius = Number.isFinite(options.radius) ? Math.floor(options.radius) : 3;
     const clampedRadius = Math.max(1, Math.min(resolvedRadius, generationRadius));
+    const showUnvisitedRooms = Boolean(options.showUnvisitedRooms);
     const layerIndex = getLayerIndexForHeight(py);
     const cellX = positionToCell(px, roomSize, halfRoom);
     const cellZ = positionToCell(pz, roomSize, halfRoom);
@@ -263,7 +264,7 @@ export function createProceduralRoomSystem(device, options = {}) {
         if (!edges) {
           continue;
         }
-        if (visited && !visited.has(getCellKey(gx, gz))) {
+        if (!showUnvisitedRooms && visited && !visited.has(getCellKey(gx, gz))) {
           continue;
         }
         const key = getCellKey(gx, gz);
