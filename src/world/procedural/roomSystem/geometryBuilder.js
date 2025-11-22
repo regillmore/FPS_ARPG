@@ -300,6 +300,55 @@ export function createRoomGeometryBuilder({
       typeof getLayerIndexForHeight === 'function'
         ? getLayerIndexForHeight(elevatorOffset)
         : 0;
+    const fullyEnclosedCache = new Map();
+    const layerProfilesCache = new Map();
+    const layerSeedCache = new Map();
+
+    function getLayerProfilesCached(layerIndex) {
+      if (!layerProfilesCache.has(layerIndex)) {
+        layerProfilesCache.set(layerIndex, getLayerProfiles(layerIndex));
+      }
+      return layerProfilesCache.get(layerIndex);
+    }
+
+    function getLayerSeedCached(layerIndex) {
+      if (!layerSeedCache.has(layerIndex)) {
+        layerSeedCache.set(layerIndex, getLayerSeed(layerIndex));
+      }
+      return layerSeedCache.get(layerIndex);
+    }
+
+    function isCellFullyEnclosedAtLayer(x, z, layerIndex) {
+      const cacheKey = `${layerIndex}:${x},${z}`;
+      if (fullyEnclosedCache.has(cacheKey)) {
+        return fullyEnclosedCache.get(cacheKey);
+      }
+
+      const profiles = getLayerProfilesCached(layerIndex);
+      const seed = getLayerSeedCached(layerIndex);
+      const neighborOffsets = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1]
+      ];
+
+      let enclosed = true;
+      for (let i = 0; i < neighborOffsets.length; i += 1) {
+        const [dx, dz] = neighborOffsets[i];
+        const nx = x + dx;
+        const nz = z + dz;
+        const forcedState = getForcedOriginEdgeState(x, z, nx, nz);
+        const edgeType = forcedState ?? determineEdgeType(x, z, nx, nz, profiles, seed);
+        if (edgeType !== 'solid') {
+          enclosed = false;
+          break;
+        }
+      }
+
+      fullyEnclosedCache.set(cacheKey, enclosed);
+      return enclosed;
+    }
 
     for (let gx = cx - generationRadius; gx <= cx + generationRadius; gx += 1) {
       for (let gz = cz - generationRadius; gz <= cz + generationRadius; gz += 1) {
@@ -363,6 +412,13 @@ export function createRoomGeometryBuilder({
               if (type === 'open') {
                 continue;
               }
+              const skipSolidWallBetweenEnclosedRooms =
+                type === 'solid' &&
+                isCellFullyEnclosedAtLayer(gx, gz, layerIndex) &&
+                isCellFullyEnclosedAtLayer(nx, nz, layerIndex);
+              if (skipSolidWallBetweenEnclosedRooms) {
+                continue;
+              }
               const profile = profilePerLayer.get(layerIndex);
               const neighborProfile = neighborProfiles.get(layerIndex);
               const wallColor = mixColors(profile.wallColor, neighborProfile.wallColor, 0.5);
@@ -421,6 +477,13 @@ export function createRoomGeometryBuilder({
             for (let layerIndex = minActiveLayer; layerIndex <= maxActiveLayer; layerIndex += 1) {
               const type = edgeTypes.get(layerIndex);
               if (type === 'open') {
+                continue;
+              }
+              const skipSolidWallBetweenEnclosedRooms =
+                type === 'solid' &&
+                isCellFullyEnclosedAtLayer(gx, gz, layerIndex) &&
+                isCellFullyEnclosedAtLayer(nx, nz, layerIndex);
+              if (skipSolidWallBetweenEnclosedRooms) {
                 continue;
               }
               const profile = profilePerLayer.get(layerIndex);
