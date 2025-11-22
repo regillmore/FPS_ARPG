@@ -426,6 +426,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       return;
     }
     storageChestSection.toggleAttribute('hidden', !isNearby);
+    pauseContainer?.classList.toggle('has-storage-chest', isNearby);
     if (!isNearby && activeItemSlot && storageChestSection.contains(activeItemSlot)) {
       hideItemDetail?.(true);
     }
