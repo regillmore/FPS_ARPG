@@ -157,8 +157,7 @@ export function createCellState(worldSeed) {
     }
 
     const hasProceduralOpening =
-      (doorwayCount === 1 && closedCount >= 3 && !openEdge && doubleDoorway) ||
-      closedCount === 4;
+      doorwayCount === 1 && closedCount >= 3 && !openEdge && doubleDoorway;
     const shouldOpen = isElevatorCell(x, z) || hasProceduralOpening;
     const openings = getVerticalOpeningStates(key);
     openings.set(layerIndex, shouldOpen);
