@@ -71,8 +71,6 @@ export function createElevatorController({
       return;
     }
 
-    controller.position[1] += delta;
-
     const bounds =
       typeof roomSystem.getElevatorBounds === 'function'
         ? roomSystem.getElevatorBounds()
