@@ -667,7 +667,7 @@ export function createRoomGeometryBuilder({
             layerIndex < maxActiveLayer && verticalOpeningStates
               ? verticalOpeningStates.get(layerIndex + 1) ?? false
               : false;
-          const hasVerticalOpeningFromAbove = Boolean(openCeiling);
+          let hasVerticalOpeningFromAbove = Boolean(openCeiling);
           const isTopLayer = layerIndex === maxActiveLayer;
           const profile = profilePerLayer.get(layerIndex);
 
@@ -678,6 +678,9 @@ export function createRoomGeometryBuilder({
             edges.south === 'solid' &&
             edges.east === 'solid' &&
             edges.west === 'solid';
+          if (isFullyEnclosed || edges?.roomType === 'balcony') {
+            hasVerticalOpeningFromAbove = true;
+          }
           let hallwayOrientation = null;
           if (edges) {
             const entries = [
