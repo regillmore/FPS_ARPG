@@ -453,6 +453,19 @@ export function createRoomGeometryBuilder({
       return enclosed;
     }
 
+    function shouldSkipSolidWallBetweenRooms(ax, az, bx, bz, layerIndex) {
+      const edgesA = getCellEdgesForLayer(layerIndex, ax, az);
+      const edgesB = getCellEdgesForLayer(layerIndex, bx, bz);
+      const enclosedA = isCellFullyEnclosedAtLayer(ax, az, layerIndex);
+      const enclosedB = isCellFullyEnclosedAtLayer(bx, bz, layerIndex);
+      const balconyA = edgesA?.roomType === 'balcony';
+      const balconyB = edgesB?.roomType === 'balcony';
+      const bothEnclosed = enclosedA && enclosedB;
+      const bothBalconies = balconyA && balconyB;
+      const mixedBalconyAndEnclosed = (enclosedA && balconyB) || (balconyA && enclosedB);
+      return bothEnclosed || bothBalconies || mixedBalconyAndEnclosed;
+    }
+
     for (let gx = cx - generationRadius; gx <= cx + generationRadius; gx += 1) {
       for (let gz = cz - generationRadius; gz <= cz + generationRadius; gz += 1) {
         const key = `${gx},${gz}`;
@@ -517,8 +530,7 @@ export function createRoomGeometryBuilder({
               }
               const skipSolidWallBetweenEnclosedRooms =
                 type === 'solid' &&
-                isCellFullyEnclosedAtLayer(gx, gz, layerIndex) &&
-                isCellFullyEnclosedAtLayer(nx, nz, layerIndex);
+                shouldSkipSolidWallBetweenRooms(gx, gz, nx, nz, layerIndex);
               if (skipSolidWallBetweenEnclosedRooms) {
                 continue;
               }
@@ -584,8 +596,7 @@ export function createRoomGeometryBuilder({
               }
               const skipSolidWallBetweenEnclosedRooms =
                 type === 'solid' &&
-                isCellFullyEnclosedAtLayer(gx, gz, layerIndex) &&
-                isCellFullyEnclosedAtLayer(nx, nz, layerIndex);
+                shouldSkipSolidWallBetweenRooms(gx, gz, nx, nz, layerIndex);
               if (skipSolidWallBetweenEnclosedRooms) {
                 continue;
               }
