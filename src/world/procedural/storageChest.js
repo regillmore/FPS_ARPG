@@ -10,7 +10,8 @@ export function addStorageChest({
   baseY,
   facing = 'south',
   wallColor,
-  accentColor
+  accentColor,
+  storageChests
 }) {
   if (!vertices || !bounds) {
     return;
@@ -71,12 +72,28 @@ export function addStorageChest({
 
   if (colliders) {
     colliders.push({
+      type: 'storageChest',
       minX: bodyMinX,
       maxX: bodyMaxX,
       minY: bodyMinY,
       maxY: lidMaxY,
       minZ: bodyMinZ,
       maxZ: bodyMaxZ
+    });
+  }
+
+  if (Array.isArray(storageChests)) {
+    const centerY = (bodyMinY + lidMaxY) * 0.5;
+    storageChests.push({
+      center: new Float32Array([centerX, centerY, centerZ]),
+      bounds: {
+        minX: bodyMinX,
+        maxX: bodyMaxX,
+        minY: bodyMinY,
+        maxY: lidMaxY,
+        minZ: bodyMinZ,
+        maxZ: bodyMaxZ
+      }
     });
   }
 }

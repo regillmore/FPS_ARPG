@@ -48,6 +48,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   const pauseContent = pauseMenu.querySelector('.pause-menu__content');
   const pauseContainer = pauseMenu.querySelector('.pause-menu__container');
   const itemSlots = Array.from(pauseMenu.querySelectorAll('.item-slot'));
+  const storageChestSection = pauseMenu.querySelector('[data-storage-chest-section]');
   const bestiaryElements = {
     list: pauseMenu.querySelector('[data-bestiary-role="encounter-list"]'),
     emptyState: pauseMenu.querySelector('[data-bestiary-role="empty-state"]'),
@@ -113,6 +114,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   let hideItemDetail;
   let activeItemSlot = null;
   let hidePopoverTimeout;
+  let storageChestNearby = storageChestSection ? !storageChestSection.hasAttribute('hidden') : false;
 
   function resolveStatElements(statId) {
     const card = pauseMenu.querySelector(`.stat-card[data-stat="${statId}"]`);
@@ -418,6 +420,19 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   }
 
   setActiveTab(activeTab);
+
+  function setStorageChestVisibility(isNearby) {
+    if (!storageChestSection) {
+      return;
+    }
+    storageChestSection.toggleAttribute('hidden', !isNearby);
+    pauseContainer?.classList.toggle('has-storage-chest', isNearby);
+    if (!isNearby && activeItemSlot && storageChestSection.contains(activeItemSlot)) {
+      hideItemDetail?.(true);
+    }
+  }
+
+  setStorageChestVisibility(storageChestNearby);
 
   function updateBestiaryEmptyState() {
     if (!bestiaryElements.emptyState) {
@@ -880,14 +895,20 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         slot.setAttribute(name, value);
       }
 
+      const isPackSlot = slotKind === 'inventory';
+      const isStorageSlot = slotKind === 'storage';
       if (
         isEmptyState &&
         originKind &&
         originKind !== slotKind &&
-        slotKind === 'inventory'
+        (isPackSlot || isStorageSlot)
       ) {
-        slot.innerHTML = '<span class="item-slot__placeholder">Empty Pack Slot</span>';
-        slot.dataset.description = 'This pack slot is empty.';
+        const placeholderLabel = isStorageSlot ? 'Empty Storage Slot' : 'Empty Pack Slot';
+        const description = isStorageSlot
+          ? 'This storage slot is empty.'
+          : 'This pack slot is empty.';
+        slot.innerHTML = `<span class="item-slot__placeholder">${placeholderLabel}</span>`;
+        slot.dataset.description = description;
         delete slot.dataset.bonuses;
         delete slot.dataset.itemName;
         delete slot.dataset.itemAbbr;
@@ -933,9 +954,13 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       delete slot.dataset.itemName;
       delete slot.dataset.itemAbbr;
       delete slot.dataset.itemTag;
-      if (slotKind === 'inventory') {
-        slot.innerHTML = '<span class="item-slot__placeholder">Empty Pack Slot</span>';
-        slot.dataset.description = 'This pack slot is empty.';
+      if (slotKind === 'inventory' || slotKind === 'storage') {
+        const placeholderLabel = slotKind === 'storage' ? 'Empty Storage Slot' : 'Empty Pack Slot';
+        const description = slotKind === 'storage'
+          ? 'This storage slot is empty.'
+          : 'This pack slot is empty.';
+        slot.innerHTML = `<span class="item-slot__placeholder">${placeholderLabel}</span>`;
+        slot.dataset.description = description;
       } else {
         slot.innerHTML = '';
       }
@@ -1037,7 +1062,11 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         applySlotState(draggingSlot, dropState);
         setDropTarget(null);
         handled = true;
-      } else if (draggingSlot.dataset.slotKind === 'inventory' || draggingSlot.dataset.slotKind === 'gear') {
+      } else if (
+        draggingSlot.dataset.slotKind === 'inventory' ||
+        draggingSlot.dataset.slotKind === 'gear' ||
+        draggingSlot.dataset.slotKind === 'storage'
+      ) {
         const droppedOutside = event
           ? !isPointInsidePauseContainer(event.clientX, event.clientY)
           : false;
@@ -1254,6 +1283,14 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     setPaused,
     setExperience(state) {
       setExperienceState(state);
+    },
+    setStorageChestNearby(next) {
+      const nextState = Boolean(next);
+      if (nextState === storageChestNearby) {
+        return;
+      }
+      storageChestNearby = nextState;
+      setStorageChestVisibility(storageChestNearby);
     },
     isPaused: () => paused,
     getDiagnosticsState: () => ({ ...diagnosticsState }),
