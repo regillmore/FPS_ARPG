@@ -294,7 +294,7 @@ canvas {
 }
 
 .pause-menu__container.has-storage-chest {
-  max-height: min(85vh, 760px);
+  max-height: min(95vh, 890px);
 }
 
 .pause-menu__header h2 {
