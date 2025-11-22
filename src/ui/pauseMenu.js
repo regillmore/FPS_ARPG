@@ -1280,6 +1280,11 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     setController(instance) {
       controller = instance;
     },
+    setActiveTab(tabId, options) {
+      if (typeof tabId === 'string') {
+        setActiveTab(tabId, options);
+      }
+    },
     setPaused,
     setExperience(state) {
       setExperienceState(state);
