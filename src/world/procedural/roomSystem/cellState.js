@@ -79,7 +79,8 @@ export function createCellState(worldSeed) {
       south: edges.south ?? null,
       east: edges.east ?? null,
       west: edges.west ?? null,
-      roomType: edges.roomType ?? null
+      roomType: edges.roomType ?? null,
+      balconyDirection: edges.balconyDirection ?? null
     };
   }
 
@@ -92,7 +93,14 @@ export function createCellState(worldSeed) {
     }
     let edges = perLayer.get(layerIndex);
     if (!edges) {
-      edges = { north: null, south: null, east: null, west: null, roomType: null };
+      edges = {
+        north: null,
+        south: null,
+        east: null,
+        west: null,
+        roomType: null,
+        balconyDirection: null
+      };
       perLayer.set(layerIndex, edges);
     }
     return edges;
@@ -120,6 +128,7 @@ export function createCellState(worldSeed) {
     let openEdge = false;
     let closedCount = 0;
     let doubleDoorway = false;
+    let doorwayDirection = null;
 
     if (edges) {
       const edgeStates = [edges.north, edges.south, edges.east, edges.west];
@@ -141,6 +150,7 @@ export function createCellState(worldSeed) {
           if (edges[direction] !== 'doorway') {
             continue;
           }
+          doorwayDirection = direction;
           const offset = directionOffsets[direction];
           if (!offset) {
             continue;
@@ -156,11 +166,17 @@ export function createCellState(worldSeed) {
       }
     }
 
-    const hasProceduralOpening =
-      doorwayCount === 1 && closedCount >= 3 && !openEdge && doubleDoorway;
-    const shouldOpen = isElevatorCell(x, z) || hasProceduralOpening;
+    const hasBalcony = doorwayCount === 1 && closedCount >= 3 && !openEdge && doubleDoorway;
+    const shouldOpen = isElevatorCell(x, z);
     const openings = getVerticalOpeningStates(key);
     openings.set(layerIndex, shouldOpen);
+
+    if (edges) {
+      edges.balconyDirection = hasBalcony ? doorwayDirection : null;
+      if (edges.roomType === 'balcony' && !hasBalcony) {
+        edges.roomType = null;
+      }
+    }
   }
 
   return {
