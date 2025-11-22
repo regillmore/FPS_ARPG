@@ -1267,6 +1267,7 @@ export async function initializeGame({
 
           minimapState = {
             snapshot: minimapSnapshot,
+            originElevator: minimapSnapshot.originElevator,
             enemies: minimapEnemies,
             playerYaw: controller.yaw
           };

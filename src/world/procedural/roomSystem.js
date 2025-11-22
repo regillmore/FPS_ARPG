@@ -250,6 +250,18 @@ export function createProceduralRoomSystem(device, options = {}) {
       }
     }
 
+    let originElevator = null;
+    if (elevatorBounds) {
+      const elevatorLayerIndex = getLayerIndexForHeight(elevatorOffset);
+      if (elevatorLayerIndex === layerIndex) {
+        const centerX = (Number(elevatorBounds.minX) + Number(elevatorBounds.maxX)) * 0.5;
+        const centerZ = (Number(elevatorBounds.minZ) + Number(elevatorBounds.maxZ)) * 0.5;
+        if (Number.isFinite(centerX) && Number.isFinite(centerZ)) {
+          originElevator = { x: centerX, z: centerZ };
+        }
+      }
+    }
+
     return {
       layerIndex,
       cell: { x: cellX, z: cellZ },
@@ -257,6 +269,7 @@ export function createProceduralRoomSystem(device, options = {}) {
       cellSize: roomSize,
       halfCellSize: halfRoom,
       playerPosition: [px, py, pz],
+      originElevator,
       cells
     };
   }
