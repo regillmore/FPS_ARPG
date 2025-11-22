@@ -5,6 +5,8 @@ const FLOOR_FILL = 'rgba(110, 150, 200, 0.08)';
 const PLAYER_CELL_FILL = 'rgba(160, 210, 255, 0.16)';
 const HALLWAY_BRIDGE_FILL = 'rgba(255, 190, 120, 0.25)';
 const ELEVATOR_FILL = 'rgba(255, 235, 170, 0.32)';
+const BALCONY_ICON_FILL = 'rgba(180, 230, 255, 0.95)';
+const BALCONY_ICON_STROKE = 'rgba(15, 25, 40, 0.9)';
 const GRID_STROKE = 'rgba(140, 175, 225, 0.18)';
 const WALL_COLOR = 'rgba(220, 230, 255, 0.9)';
 const DOOR_COLOR = 'rgba(135, 205, 255, 0.92)';
@@ -252,6 +254,74 @@ function drawEnemies(ctx, snapshot, transform, enemies, dpr) {
   }
 }
 
+function drawBalconyIcons(ctx, snapshot, transform, dpr) {
+  if (!ctx || !snapshot || !transform) {
+    return;
+  }
+  const cells = Array.isArray(snapshot.cells) ? snapshot.cells : [];
+  if (cells.length === 0) {
+    return;
+  }
+
+  const directionVectors = {
+    north: [0, -1],
+    south: [0, 1],
+    east: [1, 0],
+    west: [-1, 0]
+  };
+
+  for (const cell of cells) {
+    if (cell?.roomType !== 'balcony') {
+      continue;
+    }
+    const direction = cell?.edges?.balconyDirection ?? null;
+    const vector = directionVectors[direction] ?? directionVectors.south;
+    const canvasCenter = transform.toCanvas(cell.x * transform.cellSize, cell.z * transform.cellSize);
+
+    const pixelScale = transform.scale;
+    const dirX = -vector[0] * pixelScale;
+    const dirY = -vector[1] * pixelScale;
+    const magnitude = Math.hypot(dirX, dirY);
+    const unitX = magnitude > 1e-4 ? dirX / magnitude : 0;
+    const unitY = magnitude > 1e-4 ? dirY / magnitude : -1;
+    const perpX = -unitY;
+    const perpY = unitX;
+
+    const baseSize = Math.max(transform.cellSize * pixelScale * 0.22, 4.8 * dpr);
+    const tipLength = baseSize * 1.5;
+    const tailLength = baseSize * 0.55;
+    const wingOffset = baseSize * 0.85;
+
+    const tipX = canvasCenter.x + unitX * tipLength;
+    const tipY = canvasCenter.y + unitY * tipLength;
+    const leftX = canvasCenter.x - unitX * tailLength + perpX * wingOffset;
+    const leftY = canvasCenter.y - unitY * tailLength + perpY * wingOffset;
+    const rightX = canvasCenter.x - unitX * tailLength - perpX * wingOffset;
+    const rightY = canvasCenter.y - unitY * tailLength - perpY * wingOffset;
+    const tailX = canvasCenter.x - unitX * tailLength * 0.6;
+    const tailY = canvasCenter.y - unitY * tailLength * 0.6;
+
+    ctx.fillStyle = BALCONY_ICON_FILL;
+    ctx.strokeStyle = BALCONY_ICON_STROKE;
+    ctx.lineWidth = Math.max(1.2 * dpr, 1);
+
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(leftX, leftY);
+    ctx.lineTo(tailX, tailY);
+    ctx.lineTo(rightX, rightY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    const innerRadius = Math.max(baseSize * 0.35, 2.8 * dpr);
+    ctx.beginPath();
+    ctx.arc(canvasCenter.x, canvasCenter.y, innerRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
 function drawPlayer(ctx, playerYaw, dpr, centerX, centerY) {
   if (!ctx) {
     return;
@@ -330,6 +400,7 @@ function drawMinimap(ctx, canvasSize, data) {
 
   drawCells(ctx, snapshot, transform, dpr);
   drawEdges(ctx, snapshot, transform, dpr);
+  drawBalconyIcons(ctx, snapshot, transform, dpr);
   drawEnemies(ctx, snapshot, transform, enemies, dpr);
   drawPlayer(ctx, playerYaw, dpr, centerX, centerY);
 
