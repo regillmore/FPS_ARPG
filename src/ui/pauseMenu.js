@@ -48,6 +48,16 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   const pauseContent = pauseMenu.querySelector('.pause-menu__content');
   const pauseContainer = pauseMenu.querySelector('.pause-menu__container');
   const itemSlots = Array.from(pauseMenu.querySelectorAll('.item-slot'));
+  const inventoryPanel = pauseMenu.querySelector('#panel-inventory');
+  const inventoryElements = {
+    panel: inventoryPanel,
+    grids: pauseMenu.querySelector('[data-inventory-role="inventory-grids"]'),
+    contextLabel: pauseMenu.querySelector('[data-inventory-role="context-label"]'),
+    storageBadge: pauseMenu.querySelector('[data-inventory-role="storage-badge"]'),
+    storageSection: pauseMenu.querySelector('[data-inventory-role="storage-section"]'),
+    storageLabel: pauseMenu.querySelector('[data-inventory-role="storage-label"]'),
+    storageHelper: pauseMenu.querySelector('[data-inventory-role="storage-helper"]')
+  };
   const bestiaryElements = {
     list: pauseMenu.querySelector('[data-bestiary-role="encounter-list"]'),
     emptyState: pauseMenu.querySelector('[data-bestiary-role="empty-state"]'),
@@ -178,6 +188,50 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     } else {
       element.textContent = '';
       element.hidden = true;
+    }
+  }
+
+  const defaultStorageLabel = 'Storage Chest';
+  let storageContext = {
+    nearby: false,
+    label: defaultStorageLabel,
+    helper: inventoryElements.storageHelper?.textContent ?? ''
+  };
+
+  function setInventoryContext({ isNearStorage = false, storageLabel = defaultStorageLabel, helperText } = {}) {
+    storageContext = {
+      nearby: Boolean(isNearStorage),
+      label: storageLabel || defaultStorageLabel,
+      helper: helperText ?? storageContext.helper
+    };
+
+    const hasStorage = storageContext.nearby;
+    if (inventoryElements.panel) {
+      inventoryElements.panel.dataset.inventoryContext = hasStorage ? 'storage' : 'pack';
+    }
+    if (inventoryElements.grids) {
+      inventoryElements.grids.dataset.inventoryContext = hasStorage ? 'storage' : 'pack';
+    }
+    if (inventoryElements.storageSection) {
+      inventoryElements.storageSection.hidden = !hasStorage;
+    }
+    if (inventoryElements.storageBadge) {
+      inventoryElements.storageBadge.hidden = !hasStorage;
+      inventoryElements.storageBadge.textContent = storageContext.label
+        ? `${storageContext.label} in range`
+        : 'Storage chest in range';
+    }
+    if (inventoryElements.storageLabel) {
+      inventoryElements.storageLabel.textContent = storageContext.label;
+    }
+    if (inventoryElements.storageHelper) {
+      inventoryElements.storageHelper.textContent = storageContext.helper || '';
+      inventoryElements.storageHelper.hidden = !storageContext.helper;
+    }
+    if (inventoryElements.contextLabel) {
+      inventoryElements.contextLabel.textContent = hasStorage
+        ? 'Pack inventory linked to nearby storage.'
+        : 'Pack inventory is ready for quick swaps.';
     }
   }
 
@@ -763,6 +817,33 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       return allowed.map((type) => formatItemTypeLabel(type)).join(' / ');
     }
 
+    const setSlotEmptyContent = (slot) => {
+      if (!slot) {
+        return;
+      }
+      const slotKind = slot.dataset.slotKind || '';
+      slot.dataset.slot = 'empty';
+      delete slot.dataset.description;
+      delete slot.dataset.bonuses;
+      delete slot.dataset.itemType;
+      delete slot.dataset.rarity;
+      delete slot.dataset.itemId;
+      delete slot.dataset.weaponId;
+      delete slot.dataset.itemName;
+      delete slot.dataset.itemAbbr;
+      delete slot.dataset.itemTag;
+
+      if (slotKind === 'inventory') {
+        slot.innerHTML = '<span class="item-slot__placeholder">Empty Pack Slot</span>';
+        slot.dataset.description = 'This pack slot is empty.';
+      } else if (slotKind === 'storage') {
+        slot.innerHTML = '<span class="item-slot__placeholder">Empty Storage Slot</span>';
+        slot.dataset.description = 'This storage slot is empty.';
+      } else {
+        slot.innerHTML = '';
+      }
+    };
+
     function refreshEmptySlotLabel(slot) {
       if (!slot) {
         return;
@@ -880,18 +961,8 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         slot.setAttribute(name, value);
       }
 
-      if (
-        isEmptyState &&
-        originKind &&
-        originKind !== slotKind &&
-        slotKind === 'inventory'
-      ) {
-        slot.innerHTML = '<span class="item-slot__placeholder">Empty Pack Slot</span>';
-        slot.dataset.description = 'This pack slot is empty.';
-        delete slot.dataset.bonuses;
-        delete slot.dataset.itemName;
-        delete slot.dataset.itemAbbr;
-        delete slot.dataset.itemTag;
+      if (isEmptyState) {
+        setSlotEmptyContent(slot);
       } else {
         slot.innerHTML = state.html;
       }
@@ -922,23 +993,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       if (!slot || slot.dataset.slot === 'empty') {
         return null;
       }
-      const slotKind = slot.dataset.slotKind || '';
-      slot.dataset.slot = 'empty';
-      delete slot.dataset.description;
-      delete slot.dataset.bonuses;
-      delete slot.dataset.itemType;
-      delete slot.dataset.rarity;
-      delete slot.dataset.itemId;
-      delete slot.dataset.weaponId;
-      delete slot.dataset.itemName;
-      delete slot.dataset.itemAbbr;
-      delete slot.dataset.itemTag;
-      if (slotKind === 'inventory') {
-        slot.innerHTML = '<span class="item-slot__placeholder">Empty Pack Slot</span>';
-        slot.dataset.description = 'This pack slot is empty.';
-      } else {
-        slot.innerHTML = '';
-      }
+      setSlotEmptyContent(slot);
       refreshEmptySlotLabel(slot);
       requestPlayerStatsUpdate();
       emitSlotChange(slot);
@@ -1037,7 +1092,11 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         applySlotState(draggingSlot, dropState);
         setDropTarget(null);
         handled = true;
-      } else if (draggingSlot.dataset.slotKind === 'inventory' || draggingSlot.dataset.slotKind === 'gear') {
+      } else if (
+        draggingSlot.dataset.slotKind === 'inventory' ||
+        draggingSlot.dataset.slotKind === 'gear' ||
+        draggingSlot.dataset.slotKind === 'storage'
+      ) {
         const droppedOutside = event
           ? !isPointInsidePauseContainer(event.clientX, event.clientY)
           : false;
@@ -1141,6 +1200,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   updateExperienceCard(experienceState);
   updateDiagnosticsUi();
   updateOptionsUi();
+  setInventoryContext({ isNearStorage: false });
 
   diagnosticsElements.disableLightsToggle?.addEventListener('change', (event) => {
     diagnosticsState.disableLights = Boolean(event.currentTarget?.checked);
@@ -1158,6 +1218,10 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     diagnosticsState.showFramerate = Boolean(event.currentTarget?.checked);
     updateDiagnosticsUi();
     emitDiagnosticsChange();
+  });
+
+  window.addEventListener('player-storage-proximity', (event) => {
+    setInventoryContext(event?.detail ?? {});
   });
 
   for (const input of optionsElements.framerateOptions) {
@@ -1254,6 +1318,9 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     setPaused,
     setExperience(state) {
       setExperienceState(state);
+    },
+    setInventoryContext(context) {
+      setInventoryContext(context);
     },
     isPaused: () => paused,
     getDiagnosticsState: () => ({ ...diagnosticsState }),

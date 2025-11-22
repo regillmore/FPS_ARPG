@@ -175,10 +175,17 @@
               </div>
             </div>
           </div>
-          <div class="inventory-layout">
-            <div class="inventory-section">
+          <div class="inventory-context" data-inventory-role="context">
+            <p class="inventory-context__status" data-inventory-role="context-label">
+              Pack inventory is ready for quick swaps.
+            </p>
+            <span class="inventory-badge" data-inventory-role="storage-badge" hidden>Storage chest in range</span>
+          </div>
+          <div class="inventory-layout inventory-layout--grids" data-inventory-role="inventory-grids" data-inventory-context="pack">
+            <div class="inventory-section inventory-section--pack">
               <h4>Pack Inventory</h4>
-              <div class="inventory-grid">
+              <p class="inventory-section__helper">Items you carry into the field.</p>
+              <div class="inventory-grid" data-inventory-role="pack-grid">
                 <div
                   class="item-slot"
                   data-slot-kind="inventory"
@@ -261,6 +268,71 @@
                 </div>
                 <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
                   <span class="item-slot__placeholder">Empty Pack Slot</span>
+                </div>
+              </div>
+            </div>
+            <div class="inventory-section inventory-section--storage" data-inventory-role="storage-section" hidden>
+              <div class="inventory-section__header">
+                <h4>Nearby Storage</h4>
+                <span class="inventory-badge inventory-badge--subtle" data-inventory-role="storage-label">Storage Chest</span>
+              </div>
+              <p class="inventory-section__helper" data-inventory-role="storage-helper">Transfer items when a storage chest is within reach.</p>
+              <div class="inventory-grid inventory-grid--storage" data-inventory-role="storage-grid">
+                <div
+                  class="item-slot"
+                  data-slot-kind="storage"
+                  data-item-type="artifact"
+                  data-rarity="epic"
+                  data-description="Anchors a reserve copy of your pack that can be recalled once per encounter."
+                  data-bonuses="Recall Charges:1;Cooldown:120s"
+                  data-item-name="Vault Beacon"
+                  data-item-abbr="VB"
+                >
+                  <span class="item-slot__tag">Artifact</span>
+                  <strong>Vault Beacon</strong>
+                </div>
+                <div
+                  class="item-slot"
+                  data-slot-kind="storage"
+                  data-item-type="grenade"
+                  data-rarity="uncommon"
+                  data-description="A concussive charge left behind for later encounters."
+                  data-bonuses="Stagger:+65%"
+                  data-item-name="Stowed Flashburst"
+                  data-item-abbr="SF"
+                >
+                  <span class="item-slot__tag">Grenade</span>
+                  <strong>Stowed Flashburst</strong>
+                </div>
+                <div class="item-slot" data-slot-kind="storage" data-slot="empty" data-description="This storage slot is empty.">
+                  <span class="item-slot__placeholder">Empty Storage Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="storage" data-slot="empty" data-description="This storage slot is empty.">
+                  <span class="item-slot__placeholder">Empty Storage Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="storage" data-slot="empty" data-description="This storage slot is empty.">
+                  <span class="item-slot__placeholder">Empty Storage Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="storage" data-slot="empty" data-description="This storage slot is empty.">
+                  <span class="item-slot__placeholder">Empty Storage Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="storage" data-slot="empty" data-description="This storage slot is empty.">
+                  <span class="item-slot__placeholder">Empty Storage Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="storage" data-slot="empty" data-description="This storage slot is empty.">
+                  <span class="item-slot__placeholder">Empty Storage Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="storage" data-slot="empty" data-description="This storage slot is empty.">
+                  <span class="item-slot__placeholder">Empty Storage Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="storage" data-slot="empty" data-description="This storage slot is empty.">
+                  <span class="item-slot__placeholder">Empty Storage Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="storage" data-slot="empty" data-description="This storage slot is empty.">
+                  <span class="item-slot__placeholder">Empty Storage Slot</span>
+                </div>
+                <div class="item-slot" data-slot-kind="storage" data-slot="empty" data-description="This storage slot is empty.">
+                  <span class="item-slot__placeholder">Empty Storage Slot</span>
                 </div>
               </div>
             </div>
