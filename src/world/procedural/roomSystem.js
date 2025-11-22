@@ -260,14 +260,20 @@ export function createProceduralRoomSystem(device, options = {}) {
 
     let originElevator = null;
     const elevatorLayerIndex = getLayerIndexForHeight(elevatorOffset);
-    if (elevatorBounds && elevatorLayerIndex === layerIndex) {
+    if (elevatorBounds) {
       const centerX = (Number(elevatorBounds.minX) + Number(elevatorBounds.maxX)) * 0.5;
       const centerZ = (Number(elevatorBounds.minZ) + Number(elevatorBounds.maxZ)) * 0.5;
       if (Number.isFinite(centerX) && Number.isFinite(centerZ)) {
-        originElevator = { x: centerX, z: centerZ };
+        originElevator = { x: centerX, z: centerZ, layerIndex: elevatorLayerIndex };
       }
-    } else if (persistentOriginElevator?.layerIndex === layerIndex) {
-      originElevator = { x: persistentOriginElevator.x, z: persistentOriginElevator.z };
+    }
+
+    if (!originElevator && persistentOriginElevator) {
+      originElevator = {
+        x: persistentOriginElevator.x,
+        z: persistentOriginElevator.z,
+        layerIndex: persistentOriginElevator.layerIndex
+      };
     }
 
     return {
