@@ -414,6 +414,28 @@
               </fieldset>
               <p class="diagnostics-card__note">Caps are approximate and depend on browser support for timing APIs.</p>
             </article>
+            <article class="diagnostics-card">
+              <header class="diagnostics-card__header">
+                <p class="diagnostics-card__eyebrow">Minimap Fog of War</p>
+                <strong class="diagnostics-card__status" data-options-role="minimap-filter-status">
+                  The minimap hides rooms you have not explored yet.
+                </strong>
+              </header>
+              <p>
+                Toggle the fog of war on the minimap. Reveal every grid room immediately or keep the view limited to
+                cells you've already explored.
+              </p>
+              <label class="diagnostics-toggle">
+                <input type="checkbox" data-option-control="show-unvisited-minimap-rooms" />
+                <span class="diagnostics-toggle__control">
+                  <span class="diagnostics-toggle__track" aria-hidden="true">
+                    <span class="diagnostics-toggle__thumb"></span>
+                  </span>
+                  <span class="diagnostics-toggle__label">Show unexplored rooms</span>
+                </span>
+              </label>
+              <p class="diagnostics-card__note">When enabled, hidden rooms remain visible but still require travel to enter.</p>
+            </article>
           </div>
         </section>
         <section class="pause-menu__panel" role="tabpanel" id="panel-achievements" aria-labelledby="tab-achievements" data-tab="achievements" hidden>
