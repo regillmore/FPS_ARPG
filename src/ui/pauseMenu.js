@@ -48,6 +48,12 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   const pauseContent = pauseMenu.querySelector('.pause-menu__content');
   const pauseContainer = pauseMenu.querySelector('.pause-menu__container');
   const itemSlots = Array.from(pauseMenu.querySelectorAll('.item-slot'));
+  const storageChestSection = pauseMenu.querySelector('[data-storage-chest-section]');
+  const storageChestLabel = pauseMenu.querySelector('[data-storage-chest-label]');
+  const storageChestDefaultLabel = storageChestLabel?.textContent || '';
+  const storageChestSlots = Array.from(
+    pauseMenu.querySelectorAll('.item-slot[data-slot-kind="chest"]')
+  );
   const bestiaryElements = {
     list: pauseMenu.querySelector('[data-bestiary-role="encounter-list"]'),
     emptyState: pauseMenu.querySelector('[data-bestiary-role="empty-state"]'),
@@ -218,6 +224,10 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         : 'The framerate overlay is hidden.';
     }
   }
+
+  let setStorageChestState = () => {};
+  let getStorageChestState = () => null;
+  let getDefaultStorageChestSlots = () => [];
 
   function emitOptionsChange() {
     if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
@@ -892,6 +902,13 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
         delete slot.dataset.itemName;
         delete slot.dataset.itemAbbr;
         delete slot.dataset.itemTag;
+      } else if (isEmptyState && originKind && originKind !== slotKind && slotKind === 'chest') {
+        slot.innerHTML = '<span class="item-slot__placeholder">Empty Storage Slot</span>';
+        slot.dataset.description = 'This storage slot is empty.';
+        delete slot.dataset.bonuses;
+        delete slot.dataset.itemName;
+        delete slot.dataset.itemAbbr;
+        delete slot.dataset.itemTag;
       } else {
         slot.innerHTML = state.html;
       }
@@ -1119,6 +1136,59 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       slot.addEventListener('pointerdown', handlePointerDown);
     }
 
+    const cloneSlotState = (state) => {
+      if (!state) {
+        return null;
+      }
+      return {
+        html: state.html,
+        slotKind: state.slotKind,
+        dataAttributes: { ...state.dataAttributes }
+      };
+    };
+
+    const storageChestDefaults = storageChestSlots.map((slot) => getSlotState(slot));
+    let activeStorageChestId = '';
+
+    setStorageChestState = (state) => {
+      activeStorageChestId = state?.id ?? '';
+      if (!storageChestSection) {
+        return;
+      }
+      if (!activeStorageChestId) {
+        storageChestSection.hidden = true;
+        storageChestSlots.forEach((slot, index) => applySlotState(slot, storageChestDefaults[index]));
+        if (storageChestLabel) {
+          storageChestLabel.textContent =
+            storageChestDefaultLabel || 'Move within range of a storage chest to manage its contents.';
+        }
+        return;
+      }
+
+      storageChestSection.hidden = false;
+      if (storageChestLabel) {
+        storageChestLabel.textContent = state?.name ?? 'Storage Chest';
+      }
+
+      storageChestSlots.forEach((slot, index) => {
+        const slotState = state?.slots?.[index] ?? storageChestDefaults[index];
+        applySlotState(slot, slotState);
+      });
+    };
+
+    getStorageChestState = () => {
+      if (!activeStorageChestId) {
+        return null;
+      }
+      return {
+        id: activeStorageChestId,
+        name: storageChestLabel?.textContent || 'Storage Chest',
+        slots: storageChestSlots.map((slot) => getSlotState(slot))
+      };
+    };
+
+    getDefaultStorageChestSlots = () => storageChestDefaults.map((state) => cloneSlotState(state));
+
     itemPopover.addEventListener('mouseenter', cancelScheduledHide);
     itemPopover.addEventListener('mouseleave', () => hideItemDetail());
 
@@ -1257,6 +1327,9 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     },
     isPaused: () => paused,
     getDiagnosticsState: () => ({ ...diagnosticsState }),
-    getOptionsState: () => ({ ...optionsState })
+    getOptionsState: () => ({ ...optionsState }),
+    setStorageChestState,
+    getStorageChestState,
+    getDefaultStorageChestSlots
   };
 }

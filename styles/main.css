@@ -741,6 +741,12 @@ canvas {
   color: rgba(200, 214, 255, 0.95);
 }
 
+.inventory-subtitle {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.9rem;
+  color: rgba(214, 220, 255, 0.7);
+}
+
 .inventory-grid,
 .gear-grid {
   display: grid;

@@ -78,6 +78,8 @@ export function createRoomGeometryBuilder({
   updateCellVerticalOpeningForLayer,
   evaluateCellForBarrel,
   evaluateCellForCamera,
+  resetStorageChests,
+  registerStorageChest,
   directionOffsets,
   updateVertexBuffer,
   getLayerIndexForHeight,
@@ -387,6 +389,9 @@ export function createRoomGeometryBuilder({
     decorativeLights.length = 0;
     resetBounds();
     colliders.length = 0;
+    if (typeof resetStorageChests === 'function') {
+      resetStorageChests();
+    }
     if (typeof setElevatorPanel === 'function') {
       setElevatorPanel(null);
     }
@@ -941,7 +946,7 @@ export function createRoomGeometryBuilder({
             const chestCenterX = Math.min(maxX - chestInsetFromWall - chestHalfWidth, centerX + doorClearance);
             const chestCenterZ = maxZ - chestInsetFromWall - chestHalfDepth;
 
-            addStorageChest({
+            const chestDetails = addStorageChest({
               vertices,
               colliders,
               bounds,
@@ -952,6 +957,16 @@ export function createRoomGeometryBuilder({
               wallColor: profile.wallColor,
               accentColor: profile.accentColor
             });
+
+            const chestId = `storage-chest-${layerIndex}-${gx}-${gz}`;
+            if (chestDetails && typeof registerStorageChest === 'function') {
+              registerStorageChest({
+                id: chestId,
+                name: 'Storage Chest',
+                center: chestDetails.center,
+                bounds: chestDetails.bounds
+              });
+            }
           }
         }
       }

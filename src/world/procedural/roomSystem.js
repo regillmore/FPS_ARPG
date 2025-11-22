@@ -92,6 +92,7 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   const colliders = [];
   const decorativeLights = [];
+  const storageChests = [];
 
   const cellState = createCellState(worldSeed);
   const {
@@ -150,6 +151,28 @@ export function createProceduralRoomSystem(device, options = {}) {
     updateCellVerticalOpeningForLayer,
     evaluateCellForBarrel,
     evaluateCellForCamera,
+    resetStorageChests: () => {
+      storageChests.length = 0;
+    },
+    registerStorageChest: (chest) => {
+      if (!chest?.id) {
+        return;
+      }
+      const bounds = chest.bounds ?? {};
+      storageChests.push({
+        id: chest.id,
+        name: chest.name ?? 'Storage Chest',
+        center: chest.center ? [...chest.center] : null,
+        bounds: {
+          minX: bounds.minX,
+          maxX: bounds.maxX,
+          minY: bounds.minY,
+          maxY: bounds.maxY,
+          minZ: bounds.minZ,
+          maxZ: bounds.maxZ
+        }
+      });
+    },
     directionOffsets,
     getLayerIndexForHeight,
     getElevatorGateProgress: () => elevatorGateProgress,
@@ -436,6 +459,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     getLevelHeight: () => levelHeight,
     getMinimapSnapshot,
     getDecorativeLights: () => decorativeLights,
+    getStorageChests: () => [...storageChests],
     getGenerationRadius: () => generationRadius,
     getElevatorPanel: () => elevatorPanel,
     getElevatorBounds: () => elevatorBounds,

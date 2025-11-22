@@ -199,6 +199,74 @@ export async function initializeGame({
       findFirstEmptyInventorySlot
     } = inventoryManager ?? {};
 
+    const storageChestInventories = new Map();
+    let activeStorageChestId = '';
+
+    const cloneSlotState = (state) => {
+      if (!state) {
+        return null;
+      }
+      return {
+        html: state.html,
+        slotKind: state.slotKind,
+        dataAttributes: { ...state.dataAttributes }
+      };
+    };
+
+    const getEmptyStorageChestSlots = () => {
+      const defaults = pauseControls?.getDefaultStorageChestSlots?.();
+      if (Array.isArray(defaults) && defaults.length > 0) {
+        return defaults.map((slot) => cloneSlotState(slot)).filter(Boolean);
+      }
+      return Array.from({ length: 16 }, () => ({
+        html: '<span class="item-slot__placeholder">Empty Storage Slot</span>',
+        slotKind: 'chest',
+        dataAttributes: {
+          'data-slot': 'empty',
+          'data-description': 'This storage slot is empty.'
+        }
+      }));
+    };
+
+    const persistActiveStorageChest = () => {
+      if (!activeStorageChestId) {
+        return;
+      }
+      const currentState = pauseControls?.getStorageChestState?.();
+      if (currentState?.id) {
+        storageChestInventories.set(currentState.id, currentState);
+      }
+    };
+
+    const setActiveStorageChest = (chest) => {
+      const nextId = chest?.id ?? '';
+      if (nextId === activeStorageChestId) {
+        return;
+      }
+
+      persistActiveStorageChest();
+      activeStorageChestId = nextId;
+
+      if (!nextId) {
+        pauseControls?.setStorageChestState?.(null);
+        return;
+      }
+
+      const cached = storageChestInventories.get(nextId) ?? {
+        id: nextId,
+        name: chest?.name ?? 'Storage Chest',
+        slots: getEmptyStorageChestSlots()
+      };
+      if (!cached.name && chest?.name) {
+        cached.name = chest.name;
+      }
+      if (!cached.slots || cached.slots.length === 0) {
+        cached.slots = getEmptyStorageChestSlots();
+      }
+
+      pauseControls?.setStorageChestState?.(cached);
+    };
+
     const fallbackWeapon = getWeapon('pea-shooter');
 
     const handleWorldItemPickup = (item) => {
@@ -1118,6 +1186,41 @@ export async function initializeGame({
         const elevatorPanel =
           typeof roomSystem.getElevatorPanel === 'function' ? roomSystem.getElevatorPanel() : null;
         let elevatorPromptActive = false;
+
+        const storageChests =
+          typeof roomSystem.getStorageChests === 'function'
+            ? roomSystem.getStorageChests()
+            : [];
+        let nearbyStorageChest = null;
+        let closestStorageChestDistance = Infinity;
+
+        if (Array.isArray(storageChests) && storageChests.length > 0) {
+          for (const chest of storageChests) {
+            const center = chest?.center;
+            if (!center) {
+              continue;
+            }
+
+            const dx = controller.position[0] - center[0];
+            const dz = controller.position[2] - center[2];
+            const horizontalDistanceSq = dx * dx + dz * dz;
+            if (horizontalDistanceSq > ITEM_INTERACTION_DISTANCE_SQ) {
+              continue;
+            }
+
+            const verticalDistance = Math.abs(controller.position[1] - center[1]);
+            if (verticalDistance > ITEM_INTERACTION_VERTICAL_LIMIT) {
+              continue;
+            }
+
+            if (horizontalDistanceSq < closestStorageChestDistance) {
+              closestStorageChestDistance = horizontalDistanceSq;
+              nearbyStorageChest = chest;
+            }
+          }
+        }
+
+        setActiveStorageChest(nearbyStorageChest);
 
         if (elevatorPanel?.bounds && elevatorPanel.center) {
           const dx = controller.position[0] - elevatorPanel.center[0];

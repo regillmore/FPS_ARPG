@@ -69,14 +69,27 @@ export function addStorageChest({
   const handleMaxY = handleMinY + handleHeight;
   addBox(vertices, handleMinX, handleMinY, handleMinZ, handleMaxX, handleMaxY, handleMaxZ, trimColor, bounds);
 
+  const chestBounds = {
+    minX: bodyMinX,
+    maxX: bodyMaxX,
+    minY: bodyMinY,
+    maxY: lidMaxY,
+    minZ: bodyMinZ,
+    maxZ: bodyMaxZ
+  };
+
+  const chestCenter = [centerX, (bodyMinY + lidMaxY) * 0.5, centerZ];
+
   if (colliders) {
     colliders.push({
-      minX: bodyMinX,
-      maxX: bodyMaxX,
-      minY: bodyMinY,
-      maxY: lidMaxY,
-      minZ: bodyMinZ,
-      maxZ: bodyMaxZ
+      minX: chestBounds.minX,
+      maxX: chestBounds.maxX,
+      minY: chestBounds.minY,
+      maxY: chestBounds.maxY,
+      minZ: chestBounds.minZ,
+      maxZ: chestBounds.maxZ
     });
   }
+
+  return { bounds: chestBounds, center: chestCenter };
 }
