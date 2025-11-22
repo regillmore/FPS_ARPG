@@ -667,17 +667,23 @@ export function createRoomGeometryBuilder({
             layerIndex < maxActiveLayer && verticalOpeningStates
               ? verticalOpeningStates.get(layerIndex + 1) ?? false
               : false;
-          const hasVerticalOpeningFromAbove = Boolean(openCeiling);
+          let hasVerticalOpeningFromAbove = Boolean(openCeiling);
           const isTopLayer = layerIndex === maxActiveLayer;
           const profile = profilePerLayer.get(layerIndex);
 
           const edges = getCellEdgesForLayer(layerIndex, gx, gz);
+          const isBalcony = edges?.roomType === 'balcony';
           const isFullyEnclosed =
             edges &&
             edges.north === 'solid' &&
             edges.south === 'solid' &&
             edges.east === 'solid' &&
             edges.west === 'solid';
+          if (isFullyEnclosed) {
+            hasVerticalOpeningFromAbove = true;
+          }
+          const hasVerticalOpeningOrBalconyFromAbove =
+            hasVerticalOpeningFromAbove || isBalcony;
           let hallwayOrientation = null;
           if (edges) {
             const entries = [
@@ -811,7 +817,7 @@ export function createRoomGeometryBuilder({
                 });
               }
               edges.roomType = 'elevator';
-            } else if (hallwayOrientation && !hasVerticalOpeningFromAbove) {
+            } else if (hallwayOrientation && !hasVerticalOpeningOrBalconyFromAbove) {
               addHallwayBridge(
                 vertices,
                 hallwayOrientation,
