@@ -91,6 +91,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   let centerCellZ = 0;
 
   const colliders = [];
+  const storageChests = [];
   const decorativeLights = [];
 
   const cellState = createCellState(worldSeed);
@@ -128,6 +129,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   const geometryBuilder = createRoomGeometryBuilder({
     bounds,
     colliders,
+    storageChests,
     decorativeLights,
     roomSize,
     roomHeight,
@@ -430,6 +432,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     getVertexCount: () => vertexCount,
     getBounds: () => bounds,
     getColliders: () => colliders,
+    getStorageChests: () => storageChests,
     getGeometry: () => ({ vertexBuffer, vertexCount, bounds }),
     getSeed: () => worldSeed,
     getLayerIndexForHeight,

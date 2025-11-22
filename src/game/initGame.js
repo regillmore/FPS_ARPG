@@ -72,6 +72,8 @@ export async function initializeGame({
     const levelHeight =
       typeof roomSystem.getLevelHeight === 'function' ? roomSystem.getLevelHeight() : null;
     const roomColliders = roomSystem.getColliders();
+    const storageChests =
+      typeof roomSystem.getStorageChests === 'function' ? roomSystem.getStorageChests() : [];
     const playerCollisionScratch = [];
     let roomVertexBuffer = roomSystem.getVertexBuffer();
     let roomVertexCount = roomSystem.getVertexCount();
@@ -240,6 +242,47 @@ export async function initializeGame({
       playerLayerIndex: layerResolver ? layerResolver(controller.position[1]) : null
     };
 
+    const updateStorageChestProximity = () => {
+      if (!Array.isArray(storageChests) || !controller) {
+        return false;
+      }
+
+      let closestChest = null;
+      let closestDistanceSq = ITEM_INTERACTION_DISTANCE_SQ;
+
+      for (const chest of storageChests) {
+        const center = chest?.center;
+        if (!center) {
+          continue;
+        }
+
+        const dx = controller.position[0] - center[0];
+        const dz = controller.position[2] - center[2];
+        const horizontalDistanceSq = dx * dx + dz * dz;
+        if (horizontalDistanceSq > ITEM_INTERACTION_DISTANCE_SQ) {
+          continue;
+        }
+
+        const verticalDistance = Math.abs(controller.position[1] - center[1]);
+        if (verticalDistance > ITEM_INTERACTION_VERTICAL_LIMIT) {
+          continue;
+        }
+
+        if (horizontalDistanceSq < closestDistanceSq) {
+          closestDistanceSq = horizontalDistanceSq;
+          closestChest = chest;
+        }
+      }
+
+      const nextNearby = Boolean(closestChest);
+      if (nextNearby !== storageChestNearby) {
+        storageChestNearby = nextNearby;
+        pauseControls?.setStorageChestNearby?.(storageChestNearby);
+      }
+
+      return nextNearby;
+    };
+
     const handleInventoryDrop = (detail) => {
       if (!detail || !controller) {
         return;
@@ -293,6 +336,7 @@ export async function initializeGame({
     let weaponGeometry = null;
     let equippedWeaponDefinition = null;
     let primaryFireCooldown = 0;
+    let storageChestNearby = false;
 
     const setEquippedWeaponDefinition = (weaponDefinition) => {
       if (equippedWeaponDefinition === weaponDefinition) {
@@ -680,6 +724,8 @@ export async function initializeGame({
 
       const worldItems =
         typeof worldItemManager.getItems === 'function' ? worldItemManager.getItems() : [];
+
+      updateStorageChestProximity();
 
       hudController?.setReticleVisible?.(!isPaused && Boolean(equippedWeaponDefinition));
 

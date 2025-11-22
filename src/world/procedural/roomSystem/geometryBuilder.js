@@ -56,6 +56,7 @@ function isOriginHallwayDoorway(ax, az, bx, bz) {
 export function createRoomGeometryBuilder({
   bounds,
   colliders,
+  storageChests,
   decorativeLights,
   roomSize,
   roomHeight,
@@ -945,6 +946,7 @@ export function createRoomGeometryBuilder({
               vertices,
               colliders,
               bounds,
+              storageChests,
               centerX: chestCenterX,
               centerZ: chestCenterZ,
               baseY,
