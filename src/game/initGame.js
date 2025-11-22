@@ -698,6 +698,7 @@ export async function initializeGame({
 
         let elevatorDelta = 0;
         const elevatorOffset = previousElevatorOffset;
+        let elevatorPosition = elevatorOffset;
         const maxElevatorStep = elevatorSpeed * deltaTime;
 
         if (elevatorControls.autoReturn) {
@@ -725,10 +726,21 @@ export async function initializeGame({
 
             if (Number.isFinite(playerLayer)) {
               const targetOffset = playerLayer * levelHeight;
-              const toPlayerFloor = targetOffset - elevatorOffset;
+              const maxIdleFloorDistance = levelHeight * 5;
+              let toPlayerFloor = targetOffset - elevatorPosition;
+
+              if (Math.abs(toPlayerFloor) > maxIdleFloorDistance) {
+                const skippedOffset =
+                  targetOffset - Math.sign(toPlayerFloor) * maxIdleFloorDistance;
+                geometryChanged =
+                  roomSystem.setElevatorOffset(skippedOffset) || geometryChanged;
+                elevatorPosition = skippedOffset;
+                toPlayerFloor = targetOffset - elevatorPosition;
+              }
 
               if (Math.abs(toPlayerFloor) <= maxElevatorStep && Math.abs(toPlayerFloor) > 1e-4) {
                 geometryChanged = roomSystem.setElevatorOffset(targetOffset) || geometryChanged;
+                elevatorPosition = targetOffset;
               } else if (Math.abs(toPlayerFloor) > maxElevatorStep) {
                 elevatorDelta = Math.sign(toPlayerFloor) * maxElevatorStep;
               }
