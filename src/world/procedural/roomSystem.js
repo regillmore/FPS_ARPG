@@ -67,6 +67,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   let elevatorPanel = null;
   let elevatorBounds = null;
   let persistentOriginElevator = null;
+  const visitedCells = new Map();
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
@@ -216,6 +217,24 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   const { buildGeometryForCenter } = geometryBuilder;
 
+  function getVisitedCellsForLayer(layerIndex) {
+    let layerVisited = visitedCells.get(layerIndex);
+    if (!layerVisited) {
+      layerVisited = new Set();
+      visitedCells.set(layerIndex, layerVisited);
+    }
+    return layerVisited;
+  }
+
+  function markCellVisited(layerIndex, x, z) {
+    const edges = getExistingCellEdgesForLayer(layerIndex, x, z);
+    if (!edges) {
+      return;
+    }
+    const key = getCellKey(x, z);
+    getVisitedCellsForLayer(layerIndex).add(key);
+  }
+
   function getLayerIndexForHeight(height) {
     const value = Number.isFinite(height) ? height : 0;
     return positionToLayer(value, levelHeight, floorThickness);
@@ -237,10 +256,14 @@ export function createProceduralRoomSystem(device, options = {}) {
     const cellZ = positionToCell(pz, roomSize, halfRoom);
 
     const cells = [];
+    const visited = visitedCells.get(layerIndex);
     for (let gx = cellX - clampedRadius; gx <= cellX + clampedRadius; gx += 1) {
       for (let gz = cellZ - clampedRadius; gz <= cellZ + clampedRadius; gz += 1) {
         const edges = getExistingCellEdgesForLayer(layerIndex, gx, gz);
         if (!edges) {
+          continue;
+        }
+        if (visited && !visited.has(getCellKey(gx, gz))) {
           continue;
         }
         const key = getCellKey(gx, gz);
@@ -384,6 +407,7 @@ export function createProceduralRoomSystem(device, options = {}) {
       desiredMaxLayer !== maxActiveLayer;
 
     if (!needsRebuild) {
+      markCellVisited(layerIndex, cellX, cellZ);
       return false;
     }
 
@@ -393,6 +417,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     minActiveLayer = desiredMinLayer;
     maxActiveLayer = desiredMaxLayer;
     buildGeometryForCenter(cellX, cellZ);
+    markCellVisited(layerIndex, cellX, cellZ);
     return true;
   }
 
