@@ -66,6 +66,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   let elevatorGateProgress = 0;
   let elevatorPanel = null;
   let elevatorBounds = null;
+  let persistentOriginElevator = null;
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
@@ -203,6 +204,13 @@ export function createProceduralRoomSystem(device, options = {}) {
         canopyMinY: bounds.canopyMinY,
         canopyMaxY: bounds.canopyMaxY
       };
+
+      const centerX = (Number(bounds.minX) + Number(bounds.maxX)) * 0.5;
+      const centerZ = (Number(bounds.minZ) + Number(bounds.maxZ)) * 0.5;
+      const layerIndex = getLayerIndexForHeight(elevatorOffset);
+      if (Number.isFinite(centerX) && Number.isFinite(centerZ) && Number.isFinite(layerIndex)) {
+        persistentOriginElevator = { x: centerX, z: centerZ, layerIndex };
+      }
     }
   });
 
@@ -251,15 +259,15 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
 
     let originElevator = null;
-    if (elevatorBounds) {
-      const elevatorLayerIndex = getLayerIndexForHeight(elevatorOffset);
-      if (elevatorLayerIndex === layerIndex) {
-        const centerX = (Number(elevatorBounds.minX) + Number(elevatorBounds.maxX)) * 0.5;
-        const centerZ = (Number(elevatorBounds.minZ) + Number(elevatorBounds.maxZ)) * 0.5;
-        if (Number.isFinite(centerX) && Number.isFinite(centerZ)) {
-          originElevator = { x: centerX, z: centerZ };
-        }
+    const elevatorLayerIndex = getLayerIndexForHeight(elevatorOffset);
+    if (elevatorBounds && elevatorLayerIndex === layerIndex) {
+      const centerX = (Number(elevatorBounds.minX) + Number(elevatorBounds.maxX)) * 0.5;
+      const centerZ = (Number(elevatorBounds.minZ) + Number(elevatorBounds.maxZ)) * 0.5;
+      if (Number.isFinite(centerX) && Number.isFinite(centerZ)) {
+        originElevator = { x: centerX, z: centerZ };
       }
+    } else if (persistentOriginElevator?.layerIndex === layerIndex) {
+      originElevator = { x: persistentOriginElevator.x, z: persistentOriginElevator.z };
     }
 
     return {
