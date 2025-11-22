@@ -10,8 +10,6 @@ const BALCONY_ICON_STROKE = 'rgba(15, 25, 40, 0.9)';
 const GRID_STROKE = 'rgba(140, 175, 225, 0.18)';
 const WALL_COLOR = 'rgba(220, 230, 255, 0.9)';
 const DOOR_COLOR = 'rgba(135, 205, 255, 0.92)';
-const VERTICAL_OPENING_FILL = 'rgba(240, 210, 120, 0.58)';
-const VERTICAL_OPENING_STROKE = 'rgba(255, 245, 205, 0.9)';
 const ENEMY_FILL = 'rgba(255, 92, 92, 0.95)';
 const ENEMY_STROKE = 'rgba(12, 18, 28, 0.9)';
 const PLAYER_FILL = 'rgba(200, 235, 255, 0.95)';
@@ -64,7 +62,7 @@ function createTransform(snapshot, space) {
   const halfCell = Number.isFinite(snapshot.halfCellSize)
     ? snapshot.halfCellSize
     : cellSize * 0.5;
-  const radiusCells = Math.max(Number(snapshot.radius) || 0, 0);
+  const radiusCells = Math.max(Number(snapshot.radius) - 1 || 0, 0);
   const coverage = Math.max(radiusCells + 0.5, 1) * cellSize;
   const effectiveRadius = Math.max(space.radius - space.margin, space.radius * 0.3);
   if (!(coverage > 0) || !(effectiveRadius > 0)) {
@@ -109,7 +107,6 @@ function drawCells(ctx, snapshot, transform, dpr) {
     if (cx === null || cz === null) {
       continue;
     }
-    const hasVerticalOpening = Boolean(cell?.verticalOpening);
     const isHallwayBridge = cell?.roomType === 'hallwayBridge';
     const isElevator = cell?.roomType === 'elevator';
     const minX = cx * transform.cellSize - transform.halfCell;
@@ -142,26 +139,6 @@ function drawCells(ctx, snapshot, transform, dpr) {
     ctx.lineWidth = Math.max(1 * dpr, 0.8);
     ctx.strokeStyle = GRID_STROKE;
     ctx.stroke();
-
-    if (hasVerticalOpening) {
-      const center = transform.toCanvas((minX + maxX) * 0.5, (minZ + maxZ) * 0.5);
-      const cellWidth = Math.abs(topRight.x - topLeft.x);
-      const cellHeight = Math.abs(bottomLeft.y - topLeft.y);
-      const markerHalfWidth = Math.max(cellWidth * 0.22, 2.2 * dpr);
-      const markerHalfHeight = Math.max(cellHeight * 0.22, 2.2 * dpr);
-
-      ctx.beginPath();
-      ctx.moveTo(center.x, center.y - markerHalfHeight);
-      ctx.lineTo(center.x + markerHalfWidth, center.y);
-      ctx.lineTo(center.x, center.y + markerHalfHeight);
-      ctx.lineTo(center.x - markerHalfWidth, center.y);
-      ctx.closePath();
-      ctx.fillStyle = VERTICAL_OPENING_FILL;
-      ctx.fill();
-      ctx.lineWidth = Math.max(1 * dpr, 0.9);
-      ctx.strokeStyle = VERTICAL_OPENING_STROKE;
-      ctx.stroke();
-    }
   }
 }
 
