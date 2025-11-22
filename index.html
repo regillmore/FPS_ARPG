@@ -23,7 +23,6 @@
         <button class="pause-menu__tab is-active" role="tab" id="tab-stats" aria-selected="true" aria-controls="panel-stats" data-tab="stats">Player Stats</button>
         <button class="pause-menu__tab" role="tab" id="tab-inventory" aria-selected="false" aria-controls="panel-inventory" data-tab="inventory" tabindex="-1">Inventory</button>
         <button class="pause-menu__tab" role="tab" id="tab-bestiary" aria-selected="false" aria-controls="panel-bestiary" data-tab="bestiary" tabindex="-1">Bestiary</button>
-        <button class="pause-menu__tab" role="tab" id="tab-diagnostics" aria-selected="false" aria-controls="panel-diagnostics" data-tab="diagnostics" tabindex="-1">Diagnostics</button>
         <button class="pause-menu__tab" role="tab" id="tab-options" aria-selected="false" aria-controls="panel-options" data-tab="options" tabindex="-1">Options</button>
         <button class="pause-menu__tab" role="tab" id="tab-achievements" aria-selected="false" aria-controls="panel-achievements" data-tab="achievements" tabindex="-1">Achievements</button>
       </div>
@@ -301,14 +300,17 @@
         <section
           class="pause-menu__panel"
           role="tabpanel"
-          id="panel-diagnostics"
-          aria-labelledby="tab-diagnostics"
-          data-tab="diagnostics"
+          id="panel-options"
+          aria-labelledby="tab-options"
+          data-tab="options"
           hidden
         >
-          <h3>Game Diagnostics</h3>
-          <p>Inspect live rendering data and temporarily toggle expensive systems while the game is paused.</p>
-          <div class="diagnostics-grid">
+          <h3>Gameplay Options</h3>
+          <p>
+            Toggle debug helpers and tune real-time systems without leaving the field. These options only affect your
+            current session.
+          </p>
+          <div class="options-grid">
             <article class="diagnostics-card">
               <header class="diagnostics-card__header">
                 <p class="diagnostics-card__eyebrow">Lighting Pipeline</p>
@@ -361,7 +363,7 @@
                 </strong>
               </header>
               <p>
-                Toggle the heads-up performance readout to verify renderer timing without leaving the Diagnostics tab.
+                Toggle the heads-up performance readout to verify renderer timing without leaving the Options tab.
               </p>
               <label class="diagnostics-toggle">
                 <input type="checkbox" data-diagnostic-control="show-framerate" />
@@ -374,19 +376,6 @@
               </label>
               <p class="diagnostics-card__note">The overlay updates continuously when enabled.</p>
             </article>
-          </div>
-        </section>
-        <section
-          class="pause-menu__panel"
-          role="tabpanel"
-          id="panel-options"
-          aria-labelledby="tab-options"
-          data-tab="options"
-          hidden
-        >
-          <h3>Gameplay Options</h3>
-          <p>Adjust real-time systems without leaving the field. These options only affect your current session.</p>
-          <div class="options-grid">
             <article class="diagnostics-card">
               <header class="diagnostics-card__header">
                 <p class="diagnostics-card__eyebrow">Framerate Target</p>
