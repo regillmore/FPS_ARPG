@@ -260,6 +260,7 @@ export function createRoomGeometryBuilder({
     baseY,
     roomHeight,
     wallThickness,
+    colliders,
     doubleDoorWidth,
     floorColor,
     wallColor,
@@ -270,10 +271,21 @@ export function createRoomGeometryBuilder({
       return;
     }
 
+    const orientedDirection =
+      direction === 'north'
+        ? 'south'
+        : direction === 'south'
+          ? 'north'
+          : direction === 'east'
+            ? 'west'
+            : direction === 'west'
+              ? 'east'
+              : direction;
+
     const spanX = maxX - minX;
     const spanZ = maxZ - minZ;
-    const crossSpan = direction === 'north' || direction === 'south' ? spanX : spanZ;
-    const depthSpan = direction === 'north' || direction === 'south' ? spanZ : spanX;
+    const crossSpan = orientedDirection === 'north' || orientedDirection === 'south' ? spanX : spanZ;
+    const depthSpan = orientedDirection === 'north' || orientedDirection === 'south' ? spanZ : spanX;
     const deckDepth = Math.min(Math.max(depthSpan * 0.35, doubleDoorWidth * 0.75), depthSpan * 0.55);
     const deckWidth = Math.min(Math.max(doubleDoorWidth * 1.5, doubleDoorWidth), crossSpan - wallThickness * 0.4);
     if (deckDepth <= 1e-4 || deckWidth <= 1e-4) {
@@ -295,22 +307,22 @@ export function createRoomGeometryBuilder({
     let deckMinZ = minZ;
     let deckMaxZ = maxZ;
 
-    if (direction === 'north') {
+    if (orientedDirection === 'north') {
       deckMinZ = minZ;
       deckMaxZ = Math.min(maxZ, minZ + deckDepth);
       deckMinX = Math.max(minX + wallThickness * 0.5, centerX - deckWidth * 0.5);
       deckMaxX = Math.min(maxX - wallThickness * 0.5, centerX + deckWidth * 0.5);
-    } else if (direction === 'south') {
+    } else if (orientedDirection === 'south') {
       deckMinZ = Math.max(minZ, maxZ - deckDepth);
       deckMaxZ = maxZ;
       deckMinX = Math.max(minX + wallThickness * 0.5, centerX - deckWidth * 0.5);
       deckMaxX = Math.min(maxX - wallThickness * 0.5, centerX + deckWidth * 0.5);
-    } else if (direction === 'east') {
+    } else if (orientedDirection === 'east') {
       deckMinX = Math.max(minX, maxX - deckDepth);
       deckMaxX = maxX;
       deckMinZ = Math.max(minZ + wallThickness * 0.5, centerZ - deckWidth * 0.5);
       deckMaxZ = Math.min(maxZ - wallThickness * 0.5, centerZ + deckWidth * 0.5);
-    } else if (direction === 'west') {
+    } else if (orientedDirection === 'west') {
       deckMinX = minX;
       deckMaxX = Math.min(maxX, minX + deckDepth);
       deckMinZ = Math.max(minZ + wallThickness * 0.5, centerZ - deckWidth * 0.5);
@@ -322,21 +334,22 @@ export function createRoomGeometryBuilder({
     }
 
     addBox(vertices, deckMinX, deckMinY, deckMinZ, deckMaxX, deckMaxY, deckMaxZ, deckColor, bounds);
+    addCollider(colliders, deckMinX, deckMinY, deckMinZ, deckMaxX, deckMaxY, deckMaxZ);
 
     if (railHeight > 1e-4 && railThickness > 1e-4) {
       const railMinY = deckMaxY;
       const railMaxY = Math.min(deckMaxY + railHeight, baseY + roomHeight - 0.1);
 
       const sides = [];
-      if (direction === 'north' || direction === 'south') {
+      if (orientedDirection === 'north' || orientedDirection === 'south') {
         sides.push([deckMinX, railMinY, deckMinZ, Math.min(deckMinX + railThickness, deckMaxX), railMaxY, deckMaxZ]);
         sides.push([Math.max(deckMaxX - railThickness, deckMinX), railMinY, deckMinZ, deckMaxX, railMaxY, deckMaxZ]);
-        const wallAlignedZ = direction === 'north' ? deckMinZ : Math.max(deckMaxZ - railThickness, deckMinZ);
+        const wallAlignedZ = orientedDirection === 'north' ? deckMinZ : Math.max(deckMaxZ - railThickness, deckMinZ);
         sides.push([deckMinX, railMinY, wallAlignedZ, deckMaxX, railMaxY, Math.min(wallAlignedZ + railThickness, deckMaxZ)]);
       } else {
         sides.push([deckMinX, railMinY, deckMinZ, deckMaxX, railMaxY, Math.min(deckMinZ + railThickness, deckMaxZ)]);
         sides.push([deckMinX, railMinY, Math.max(deckMaxZ - railThickness, deckMinZ), deckMaxX, railMaxY, deckMaxZ]);
-        const wallAlignedX = direction === 'west' ? deckMinX : Math.max(deckMaxX - railThickness, deckMinX);
+        const wallAlignedX = orientedDirection === 'west' ? deckMinX : Math.max(deckMaxX - railThickness, deckMinX);
         sides.push([wallAlignedX, railMinY, deckMinZ, Math.min(wallAlignedX + railThickness, deckMaxX), railMaxY, deckMaxZ]);
       }
 
@@ -346,6 +359,7 @@ export function createRoomGeometryBuilder({
           continue;
         }
         addBox(vertices, sx0, sy0, sz0, sx1, sy1, sz1, railColor, bounds);
+        addCollider(colliders, sx0, sy0, sz0, sx1, sy1, sz1);
       }
     }
   }
@@ -825,6 +839,7 @@ export function createRoomGeometryBuilder({
                 baseY,
                 roomHeight,
                 wallThickness,
+                colliders,
                 doubleDoorWidth,
                 profile.floorColor,
                 profile.wallColor,
@@ -840,7 +855,7 @@ export function createRoomGeometryBuilder({
               edges.roomType = null;
             }
 
-          if (!isFullyEnclosed) {
+          if (!isFullyEnclosed && edges?.roomType !== 'balcony') {
             addFloorSlab(
               vertices,
               baseY,
