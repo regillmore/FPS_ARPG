@@ -276,10 +276,19 @@ export async function initializeGame({
       }
 
       const nextNearby = Boolean(closestChest);
+      const nextPrimaryColor = isColorArray(closestChest?.primaryColor)
+        ? closestChest.primaryColor
+        : null;
+
       closestStorageChest = closestChest;
-      if (nextNearby !== storageChestNearby) {
+      closestStorageChestColor = nextPrimaryColor;
+
+      const colorChanged = !areColorsEqual(nextPrimaryColor, lastStorageChestPrimaryColor);
+
+      if (nextNearby !== storageChestNearby || colorChanged) {
         storageChestNearby = nextNearby;
-        pauseControls?.setStorageChestNearby?.(storageChestNearby);
+        lastStorageChestPrimaryColor = nextPrimaryColor ? [...nextPrimaryColor] : null;
+        pauseControls?.setStorageChestNearby?.(storageChestNearby, nextPrimaryColor);
       }
 
       return nextNearby;
@@ -340,6 +349,22 @@ export async function initializeGame({
     let primaryFireCooldown = 0;
     let storageChestNearby = false;
     let closestStorageChest = null;
+    let closestStorageChestColor = null;
+    let lastStorageChestPrimaryColor = null;
+
+    const isColorArray = (value) =>
+      (Array.isArray(value) || ArrayBuffer.isView(value)) && typeof value.length === 'number';
+
+    const areColorsEqual = (a, b) => {
+      if (!isColorArray(a) || !isColorArray(b) || a.length < 3 || b.length < 3) {
+        return !a && !b;
+      }
+      return (
+        Math.abs((a[0] || 0) - (b[0] || 0)) < 1e-5 &&
+        Math.abs((a[1] || 0) - (b[1] || 0)) < 1e-5 &&
+        Math.abs((a[2] || 0) - (b[2] || 0)) < 1e-5
+      );
+    };
 
     const setEquippedWeaponDefinition = (weaponDefinition) => {
       if (equippedWeaponDefinition === weaponDefinition) {
@@ -916,7 +941,7 @@ export async function initializeGame({
             );
             if (hit) {
               storageChestPromptActive = true;
-              const accentColor = [0.65, 0.85, 1];
+              const accentColor = closestStorageChestColor ?? [0.65, 0.85, 1];
               const promptColor = floatColorToCss(accentColor, 'rgb(200, 230, 255)');
               hudController?.setReticleAccentOverride?.(accentColor);
               overlayController?.showPersistentUsePrompt?.(

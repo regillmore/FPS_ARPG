@@ -28,3 +28,16 @@ export function floatColorToCss(color, fallback = '') {
   const b = clampByte(color[2]);
   return `rgb(${r}, ${g}, ${b})`;
 }
+
+export function floatColorToRgba(color, alpha = 1, fallback = '') {
+  if (!Array.isArray(color) || color.length < 3) {
+    return fallback;
+  }
+
+  const clampByte = (value) => Math.round(Math.min(Math.max(Number(value) || 0, 0), 1) * 255);
+  const r = clampByte(color[0]);
+  const g = clampByte(color[1]);
+  const b = clampByte(color[2]);
+  const resolvedAlpha = Math.min(Math.max(Number(alpha) || 0, 0), 1);
+  return `rgba(${r}, ${g}, ${b}, ${resolvedAlpha})`;
+}

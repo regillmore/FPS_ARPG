@@ -1,4 +1,5 @@
 import { computePlayerStatsFromEquipment, STAT_EPSILON } from '../game/stats.js';
+import { floatColorToCss, floatColorToRgba } from '../game/ui/colorUtils.js';
 
 const BESTIARY_ENTRY_DEFINITIONS = Object.freeze({
   barrel: {
@@ -41,6 +42,8 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   if (!pauseMenu) {
     return createNoopPauseMenuControls();
   }
+
+  const STORAGE_CHEST_COLOR_FALLBACK = [0.54, 0.71, 1];
 
   const tabButtons = Array.from(pauseMenu.querySelectorAll('[role="tab"]'));
   const tabPanels = Array.from(pauseMenu.querySelectorAll('[role="tabpanel"]'));
@@ -115,6 +118,7 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   let activeItemSlot = null;
   let hidePopoverTimeout;
   let storageChestNearby = storageChestSection ? !storageChestSection.hasAttribute('hidden') : false;
+  let storageChestColor = null;
 
   function resolveStatElements(statId) {
     const card = pauseMenu.querySelector(`.stat-card[data-stat="${statId}"]`);
@@ -181,6 +185,51 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       element.textContent = '';
       element.hidden = true;
     }
+  }
+
+  function normalizeStorageChestColor(color) {
+    if ((!Array.isArray(color) && !ArrayBuffer.isView(color)) || color.length < 3) {
+      return null;
+    }
+    const [r, g, b] = color;
+    if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+      return null;
+    }
+    return [r, g, b];
+  }
+
+  function storageColorsMatch(a, b) {
+    if (!a || !b) {
+      return !a && !b;
+    }
+    return (
+      Math.abs((a[0] || 0) - (b[0] || 0)) < 1e-4 &&
+      Math.abs((a[1] || 0) - (b[1] || 0)) < 1e-4 &&
+      Math.abs((a[2] || 0) - (b[2] || 0)) < 1e-4
+    );
+  }
+
+  function applyStorageChestColor(color) {
+    if (!storageChestSection) {
+      return;
+    }
+    const resolvedColor = normalizeStorageChestColor(color) ?? STORAGE_CHEST_COLOR_FALLBACK;
+    storageChestSection.style.setProperty(
+      '--storage-chest-color',
+      floatColorToRgba(resolvedColor, 0.45, 'rgba(138, 180, 255, 0.45)')
+    );
+    storageChestSection.style.setProperty(
+      '--storage-chest-color-soft',
+      floatColorToRgba(resolvedColor, 0.2, 'rgba(138, 180, 255, 0.2)')
+    );
+    storageChestSection.style.setProperty(
+      '--storage-chest-color-strong',
+      floatColorToRgba(resolvedColor, 0.6, 'rgba(138, 180, 255, 0.6)')
+    );
+    storageChestSection.style.setProperty(
+      '--storage-chest-color-vivid',
+      floatColorToCss(resolvedColor, 'rgb(178, 212, 255)')
+    );
   }
 
   function emitDiagnosticsChange() {
@@ -420,6 +469,8 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   }
 
   setActiveTab(activeTab);
+
+  applyStorageChestColor(storageChestColor);
 
   function setStorageChestVisibility(isNearby) {
     if (!storageChestSection) {
@@ -1289,12 +1340,16 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     setExperience(state) {
       setExperienceState(state);
     },
-    setStorageChestNearby(next) {
+    setStorageChestNearby(next, primaryColor) {
       const nextState = Boolean(next);
-      if (nextState === storageChestNearby) {
+      const resolvedColor = normalizeStorageChestColor(primaryColor);
+      const colorChanged = !storageColorsMatch(storageChestColor, resolvedColor);
+      if (nextState === storageChestNearby && !colorChanged) {
         return;
       }
       storageChestNearby = nextState;
+      storageChestColor = resolvedColor;
+      applyStorageChestColor(storageChestColor);
       setStorageChestVisibility(storageChestNearby);
     },
     isPaused: () => paused,
