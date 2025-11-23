@@ -135,7 +135,7 @@ function createLeaves(anchor, geometry, leafWidth) {
     leaves.push({
       hinge,
       forwardDirection,
-      swingSign: anchor.normalSign,
+      swingSign: anchor.normalSign * forwardDirection,
       modelMatrix: new Float32Array(16),
       vertexBuffer: geometry.vertexBuffer,
       vertexCount: geometry.vertexCount,
@@ -151,12 +151,12 @@ function updateLeafTransform(leaf, anchor, openAmount) {
   const up = [0, anchor.height, 0];
   const rightBase =
     anchor.orientation === 'x'
-      ? [anchor.thickness * anchor.normalSign, 0, 0]
-      : [0, 0, anchor.thickness * anchor.normalSign];
+      ? [anchor.thickness, 0, 0]
+      : [0, 0, anchor.thickness];
   const forwardBase =
     anchor.orientation === 'x'
-      ? [0, 0, leaf.leafWidth * leaf.forwardDirection]
-      : [leaf.leafWidth * leaf.forwardDirection, 0, 0];
+      ? [0, 0, leaf.leafWidth]
+      : [leaf.leafWidth, 0, 0];
   const offset =
     anchor.orientation === 'x'
       ? [0, anchor.height * 0.5, (leaf.leafWidth * 0.5) * leaf.forwardDirection]
