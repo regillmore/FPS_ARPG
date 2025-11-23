@@ -615,7 +615,8 @@ export function createRoomGeometryBuilder({
                     width: opening.openingMax - opening.openingMin,
                     height: localDoorHeight,
                     thickness: doorThickness,
-                    color: mixColors(wallColor, accentColor, 0.35)
+                    color: mixColors(wallColor, accentColor, 0.35),
+                    layerIndex
                   });
                 }
               }
@@ -711,7 +712,8 @@ export function createRoomGeometryBuilder({
                     width: opening.openingMax - opening.openingMin,
                     height: localDoorHeight,
                     thickness: doorThickness,
-                    color: mixColors(wallColor, accentColor, 0.35)
+                    color: mixColors(wallColor, accentColor, 0.35),
+                    layerIndex
                   });
                 }
               }

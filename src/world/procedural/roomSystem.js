@@ -369,6 +369,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     const hinge = new Float32Array([doorData.hinge?.[0] ?? 0, doorData.hinge?.[1] ?? 0, doorData.hinge?.[2] ?? 0]);
     const widthDir = normalizeDirection2D(doorData.widthDir);
     const forwardDir = normalizeDirection2D(doorData.forwardDir);
+    const layerIndex = Number.isFinite(doorData.layerIndex) ? Math.floor(doorData.layerIndex) : null;
     const door = {
       hinge,
       widthDir: new Float32Array(widthDir),
@@ -380,6 +381,8 @@ export function createProceduralRoomSystem(device, options = {}) {
       vertexBuffer: geometry.vertexBuffer,
       vertexCount: geometry.vertexCount,
       modelMatrix: new Float32Array(16),
+      layerIndex,
+      needsMatrixUpdate: true,
       currentAngle: 0,
       targetAngle: 0
     };
@@ -407,14 +410,27 @@ export function createProceduralRoomSystem(device, options = {}) {
     const px = Number(playerPosition?.[0]) || 0;
     const py = Number(playerPosition?.[1]) || 0;
     const pz = Number(playerPosition?.[2]) || 0;
+    const playerLayerIndex = getLayerIndexForHeight(py);
     const openRadiusBase = Math.max(roomSize * 0.18, 1.6);
     const swingSpeed = 4.5;
     const maxSwingAngle = Math.PI * 0.55;
 
     for (const door of doors) {
+      if (
+        Number.isFinite(door.layerIndex) &&
+        Number.isFinite(playerLayerIndex) &&
+        Math.abs(door.layerIndex - playerLayerIndex) > 1
+      ) {
+        continue;
+      }
+
       const hinge = door.hinge;
       const dx = px - hinge[0];
       const dz = pz - hinge[2];
+      const maxHorizontalDistance = openRadiusBase + door.width * 0.35 + 1.2;
+      if (dx * dx + dz * dz > maxHorizontalDistance * maxHorizontalDistance) {
+        continue;
+      }
       const sideSignRaw = dx * door.forwardDir[0] + dz * door.forwardDir[2];
       const sideSign = sideSignRaw >= 0 ? 1 : -1;
       const alongWidth = Math.max(0, Math.min(door.width, dx * door.widthDir[0] + dz * door.widthDir[2]));
@@ -427,7 +443,8 @@ export function createProceduralRoomSystem(device, options = {}) {
       const openRadius = openRadiusBase + door.width * 0.35;
       const openness = Math.max(0, 1 - distance / openRadius);
       const targetAngle = -sideSign * maxSwingAngle * openness;
-      const delta = targetAngle - door.currentAngle;
+      const previousAngle = door.currentAngle;
+      const delta = targetAngle - previousAngle;
       const maxStep = swingSpeed * deltaTime;
       if (deltaTime <= 0 || !Number.isFinite(maxStep)) {
         door.currentAngle = targetAngle;
@@ -438,7 +455,10 @@ export function createProceduralRoomSystem(device, options = {}) {
         door.currentAngle += clampedStep;
       }
       door.targetAngle = targetAngle;
-      updateDoorModelMatrix(door);
+      if (door.needsMatrixUpdate || Math.abs(previousAngle - door.currentAngle) > 1e-5) {
+        updateDoorModelMatrix(door);
+        door.needsMatrixUpdate = false;
+      }
     }
   }
 
