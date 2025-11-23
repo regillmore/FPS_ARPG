@@ -95,28 +95,6 @@ function createDoorLeafGeometry(device, color) {
   };
 }
 
-function buildCollider(anchor) {
-  const halfThickness = anchor.thickness * 0.5;
-  if (anchor.orientation === 'x') {
-    return {
-      minX: anchor.wallPosition - halfThickness,
-      maxX: anchor.wallPosition + halfThickness,
-      minY: anchor.baseY,
-      maxY: anchor.baseY + anchor.height,
-      minZ: anchor.openingMin,
-      maxZ: anchor.openingMax
-    };
-  }
-  return {
-    minX: anchor.openingMin,
-    maxX: anchor.openingMax,
-    minY: anchor.baseY,
-    maxY: anchor.baseY + anchor.height,
-    minZ: anchor.wallPosition - halfThickness,
-    maxZ: anchor.wallPosition + halfThickness
-  };
-}
-
 function createLeaves(anchor, geometry, leafWidth) {
   const leaves = [];
   const hingeA = anchor.openingMin;
@@ -144,6 +122,37 @@ function createLeaves(anchor, geometry, leafWidth) {
   }
 
   return leaves;
+}
+
+function buildLeafBounds(anchor, leaf) {
+  const halfThickness = anchor.thickness * 0.5;
+  const leafHalfWidth = leaf.leafWidth * 0.5;
+
+  if (anchor.orientation === 'x') {
+    const minZ = leaf.forwardDirection >= 0 ? leaf.hinge[2] : leaf.hinge[2] - leaf.leafWidth;
+    const maxZ = leaf.forwardDirection >= 0 ? leaf.hinge[2] + leaf.leafWidth : leaf.hinge[2];
+    return {
+      minX: anchor.wallPosition - halfThickness,
+      maxX: anchor.wallPosition + halfThickness,
+      minY: anchor.baseY,
+      maxY: anchor.baseY + anchor.height,
+      minZ,
+      maxZ,
+      center: [anchor.wallPosition, anchor.baseY + anchor.height * 0.5, (minZ + maxZ) * 0.5]
+    };
+  }
+
+  const minX = leaf.forwardDirection >= 0 ? leaf.hinge[0] : leaf.hinge[0] - leaf.leafWidth;
+  const maxX = leaf.forwardDirection >= 0 ? leaf.hinge[0] + leaf.leafWidth : leaf.hinge[0];
+  return {
+    minX,
+    maxX,
+    minY: anchor.baseY,
+    maxY: anchor.baseY + anchor.height,
+    minZ: anchor.wallPosition - halfThickness,
+    maxZ: anchor.wallPosition + halfThickness,
+    center: [(minX + maxX) * 0.5, anchor.baseY + anchor.height * 0.5, anchor.wallPosition]
+  };
 }
 
 function updateLeafTransform(leaf, anchor, openAmount) {
@@ -193,32 +202,35 @@ export function createDoorManager(device) {
     return geometry;
   };
 
-  function rebuildDoorFromAnchor(anchor, previous) {
+  function rebuildDoorFromAnchor(anchor, existingMap) {
     const geometry = getGeometryForColor(anchor.color ?? DEFAULT_DOOR_COLOR);
     const leafWidth = anchor.isDoubleDoor ? anchor.width * 0.5 : anchor.width;
     const leaves = createLeaves(anchor, geometry, leafWidth);
-    const collider = buildCollider(anchor);
-    const openAmount = clamp01(previous?.openAmount ?? 0);
-    const state = previous?.state ?? 'closed';
 
-    const door = {
-      id: anchor.id,
-      anchor,
-      leaves,
-      collider,
-      interactionBounds: collider,
-      center: anchor.center
-        ? [anchor.center[0], anchor.center[1], anchor.center[2]]
-        : [anchor.wallPosition, anchor.baseY + anchor.height * 0.5, anchor.wallPosition],
-      openAmount,
-      state: state === 'open' && openAmount <= 0.01 ? 'closed' : state,
-      pendingOpen: previous?.pendingOpen ?? false,
-      color: anchor.color ?? DEFAULT_DOOR_COLOR,
-      leafWidth
-    };
+    return leaves.map((leaf, index) => {
+      const { center, ...collider } = buildLeafBounds(anchor, leaf);
+      const id = anchor.isDoubleDoor ? `${anchor.id}:${index}` : anchor.id;
+      const previous = existingMap.get(id);
+      const openAmount = clamp01(previous?.openAmount ?? 0);
+      const state = previous?.state ?? 'closed';
 
-    updateDoorTransforms(door);
-    return door;
+      const door = {
+        id,
+        anchor,
+        leaves: [leaf],
+        collider,
+        interactionBounds: collider,
+        center,
+        openAmount,
+        state: state === 'open' && openAmount <= 0.01 ? 'closed' : state,
+        pendingOpen: previous?.pendingOpen ?? false,
+        color: anchor.color ?? DEFAULT_DOOR_COLOR,
+        leafWidth
+      };
+
+      updateDoorTransforms(door);
+      return door;
+    });
   }
 
   function updateDoorTransforms(door) {
@@ -239,8 +251,10 @@ export function createDoorManager(device) {
       if (!anchor || !anchor.id) {
         continue;
       }
-      const previous = existingMap.get(anchor.id);
-      next.push(rebuildDoorFromAnchor(anchor, previous));
+      const rebuilt = rebuildDoorFromAnchor(anchor, existingMap);
+      if (Array.isArray(rebuilt)) {
+        next.push(...rebuilt);
+      }
     }
 
     doors.length = 0;
