@@ -23,13 +23,6 @@ const directionOffsets = {
   west: [-1, 0]
 };
 
-const cornerAdjacency = Object.freeze({
-  north: Object.freeze(['east', 'west']),
-  south: Object.freeze(['east', 'west']),
-  east: Object.freeze(['north', 'south']),
-  west: Object.freeze(['north', 'south'])
-});
-
 export function createProceduralRoomSystem(device, options = {}) {
   const roomSize = options.roomSize ?? DEFAULT_ROOM_SIZE;
   const roomHeight = options.roomHeight ?? DEFAULT_ROOM_HEIGHT;
@@ -114,17 +107,13 @@ export function createProceduralRoomSystem(device, options = {}) {
     roomHeight,
     wallThickness,
     halfRoom,
-    levelHeight,
-    cornerAdjacency
+    levelHeight
   });
 
   const {
     scheduleBarrelSpawnPoint,
-    scheduleCameraSpawnPoint,
     consumeBarrelSpawnPoints,
-    consumeCameraSpawnPoints,
-    evaluateCellForBarrel,
-    evaluateCellForCamera
+    evaluateCellForBarrel
   } = spawnManager;
 
   const geometryBuilder = createRoomGeometryBuilder({
@@ -153,7 +142,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     getExistingVerticalOpeningStates,
     updateCellVerticalOpeningForLayer,
     evaluateCellForBarrel,
-    evaluateCellForCamera,
     directionOffsets,
     getLayerIndexForHeight,
     getElevatorGateProgress: () => elevatorGateProgress,
@@ -457,9 +445,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     adjustElevatorOffset,
     setElevatorGateProgress,
     consumeBarrelSpawnPoints,
-    consumeCameraSpawnPoints,
     scheduleBarrelSpawnPoint,
-    scheduleCameraSpawnPoint,
     dispose: () => {
       if (vertexBuffer) {
         vertexBuffer.destroy();

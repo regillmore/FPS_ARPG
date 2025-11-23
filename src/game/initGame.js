@@ -148,7 +148,6 @@ export async function initializeGame({
     const proceduralSpawner = createProceduralSpawner({
       roomSystem,
       enemyManager,
-      layerResolver,
       eventTarget: window
     });
     requeueProceduralEnemy = proceduralSpawner.requeueProceduralEnemy;
@@ -188,10 +187,10 @@ export async function initializeGame({
     doorManager.syncDoors(roomSystem.getDoors?.() ?? []);
     //enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
 
-    const { spawnProceduralBarrels, spawnProceduralCameras } = proceduralSpawner;
+    const { spawnProceduralBarrels } = proceduralSpawner;
 
     spawnProceduralBarrels();
-    spawnProceduralCameras();
+    // Security cameras removed
 
     worldItemManager.spawnPickup({
       id: 'pickup-field-medkit',
@@ -594,7 +593,7 @@ export async function initializeGame({
         roomVertexBuffer = roomSystem.getVertexBuffer();
         roomVertexCount = roomSystem.getVertexCount();
         spawnProceduralBarrels();
-        spawnProceduralCameras();
+        // Security cameras removed
         doorManager.syncDoors(roomSystem.getDoors?.() ?? []);
       }
 

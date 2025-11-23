@@ -91,7 +91,6 @@ export function createRoomGeometryBuilder({
   getExistingVerticalOpeningStates,
   updateCellVerticalOpeningForLayer,
   evaluateCellForBarrel,
-  evaluateCellForCamera,
   directionOffsets,
   updateVertexBuffer,
   getLayerIndexForHeight,
@@ -162,8 +161,6 @@ export function createRoomGeometryBuilder({
 
       evaluateCellForBarrel(ax, az, layerIndex);
       evaluateCellForBarrel(bx, bz, layerIndex);
-      evaluateCellForCamera(ax, az, layerIndex);
-      evaluateCellForCamera(bx, bz, layerIndex);
     }
   }
 
