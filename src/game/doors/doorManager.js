@@ -286,14 +286,19 @@ export function createDoorManager(device) {
     return true;
   }
 
-  function update(deltaTime, playerPosition) {
+  function update(deltaTime, playerPosition, activeLayerIndex) {
     const px = playerPosition?.[0] ?? 0;
     const py = playerPosition?.[1] ?? 0;
     const pz = playerPosition?.[2] ?? 0;
     const closeDistanceSq = 30.0;
+    const hasLayerConstraint = Number.isFinite(activeLayerIndex);
 
     for (const door of doors) {
       if (!door || !door.center) {
+        continue;
+      }
+
+      if (hasLayerConstraint && door.anchor?.layerIndex !== activeLayerIndex) {
         continue;
       }
 
