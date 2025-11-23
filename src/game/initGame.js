@@ -75,6 +75,7 @@ export async function initializeGame({
     const roomColliders = roomSystem.getColliders();
     const storageChests =
       typeof roomSystem.getStorageChests === 'function' ? roomSystem.getStorageChests() : [];
+    const doors = typeof roomSystem.getDoors === 'function' ? roomSystem.getDoors() : [];
     const playerCollisionScratch = [];
     let roomVertexBuffer = roomSystem.getVertexBuffer();
     let roomVertexCount = roomSystem.getVertexCount();
@@ -630,6 +631,10 @@ export async function initializeGame({
         });
       }
 
+      if (typeof roomSystem.updateDoors === 'function') {
+        roomSystem.updateDoors(deltaTime, controller.position);
+      }
+
       resize();
 
       const aspect = canvas.width / canvas.height;
@@ -1138,6 +1143,25 @@ export async function initializeGame({
       pass.setBindGroup(0, worldUniformBindGroup);
       pass.setVertexBuffer(0, roomVertexBuffer);
       pass.draw(roomVertexCount, 1, 0, 0);
+
+      if (Array.isArray(doors) && doors.length > 0) {
+        for (const door of doors) {
+          if (!door || !door.vertexBuffer || !door.vertexCount) {
+            continue;
+          }
+          ensureRenderableUniformResources(door);
+          if (!door.uniformBuffer || !door.uniformBindGroup || !door.uniformData) {
+            continue;
+          }
+          writeUniformData(door.uniformData, viewProj, door.modelMatrix ?? IDENTITY_MATRIX, activeLights);
+          device.queue.writeBuffer(door.uniformBuffer, 0, door.uniformData);
+          pass.setBindGroup(0, door.uniformBindGroup);
+          pass.setVertexBuffer(0, door.vertexBuffer);
+          pass.draw(door.vertexCount, 1, 0, 0);
+        }
+        pass.setBindGroup(0, worldUniformBindGroup);
+        pass.setVertexBuffer(0, roomVertexBuffer);
+      }
 
       if (Array.isArray(worldItems) && worldItems.length > 0) {
         for (const item of worldItems) {

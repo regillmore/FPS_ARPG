@@ -1,5 +1,18 @@
 import { addBox, addCollider } from './geometry.js';
 
+export function resolveDoorOpening(min, max, doorWidth, openingCenterBias = 0) {
+  const span = max - min;
+  const halfOpening = Math.min(doorWidth * 0.5, span * 0.45);
+  const halfSpan = span * 0.5;
+  const maxBias = Math.max(0, halfSpan - halfOpening);
+  const clampedBias = Math.max(-maxBias, Math.min(openingCenterBias, maxBias));
+  const openingCenter = (min + max) * 0.5 + clampedBias;
+  const openingMin = openingCenter - halfOpening;
+  const openingMax = openingCenter + halfOpening;
+
+  return { openingCenter, openingMin, openingMax };
+}
+
 export function buildSolidWallAlongX(
   vertices,
   wallX,
@@ -52,15 +65,12 @@ export function buildDoorwayAlongX(
   thickness,
   colliders,
   baseY = 0,
-  openingCenterBias = 0
-) {
-  const halfOpening = Math.min(doorWidth * 0.5, (maxZ - minZ) * 0.45);
-  const halfSpan = (maxZ - minZ) * 0.5;
-  const maxBias = Math.max(0, halfSpan - halfOpening);
-  const clampedBias = Math.max(-maxBias, Math.min(openingCenterBias, maxBias));
-  const openingCenter = (minZ + maxZ) * 0.5 + clampedBias;
-  const openingMin = openingCenter - halfOpening;
-  const openingMax = openingCenter + halfOpening;
+  openingCenterBias = 0,
+  openingOverride = null
+  ) {
+  const { openingMin, openingMax, openingCenter } =
+    openingOverride ?? resolveDoorOpening(minZ, maxZ, doorWidth, openingCenterBias);
+  const halfOpening = (openingMax - openingMin) * 0.5;
   const halfThickness = thickness * 0.5;
   const minX = wallX - halfThickness;
   const maxX = wallX + halfThickness;
@@ -156,15 +166,12 @@ export function buildDoorwayAlongZ(
   thickness,
   colliders,
   baseY = 0,
-  openingCenterBias = 0
-) {
-  const halfOpening = Math.min(doorWidth * 0.5, (maxX - minX) * 0.45);
-  const halfSpan = (maxX - minX) * 0.5;
-  const maxBias = Math.max(0, halfSpan - halfOpening);
-  const clampedBias = Math.max(-maxBias, Math.min(openingCenterBias, maxBias));
-  const openingCenter = (minX + maxX) * 0.5 + clampedBias;
-  const openingMin = openingCenter - halfOpening;
-  const openingMax = openingCenter + halfOpening;
+  openingCenterBias = 0,
+  openingOverride = null
+  ) {
+  const { openingMin, openingMax, openingCenter } =
+    openingOverride ?? resolveDoorOpening(minX, maxX, doorWidth, openingCenterBias);
+  const halfOpening = (openingMax - openingMin) * 0.5;
   const halfThickness = thickness * 0.5;
   const minZ = wallZ - halfThickness;
   const maxZ = wallZ + halfThickness;

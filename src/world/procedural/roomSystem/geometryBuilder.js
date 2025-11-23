@@ -10,7 +10,13 @@ import {
 import { buildElevatorCar } from '../elevatorCar.js';
 import { addCagedElectricWallLight } from '../decorations.js';
 import { randomFloatForEdge } from '../random.js';
-import { buildDoorwayAlongX, buildDoorwayAlongZ, buildSolidWallAlongX, buildSolidWallAlongZ } from '../walls.js';
+import {
+  buildDoorwayAlongX,
+  buildDoorwayAlongZ,
+  buildSolidWallAlongX,
+  buildSolidWallAlongZ,
+  resolveDoorOpening
+} from '../walls.js';
 import { addStorageChest } from '../storageChest.js';
 
 function isOriginCell(x, z) {
@@ -84,7 +90,8 @@ export function createRoomGeometryBuilder({
   getElevatorGateProgress,
   getElevatorOffset,
   setElevatorPanel,
-  setElevatorBounds
+  setElevatorBounds,
+  registerDoor
 }) {
   function resetBounds() {
     bounds.minX = Infinity;
@@ -565,6 +572,12 @@ export function createRoomGeometryBuilder({
                   baseY
                 );
               } else if (type === 'doorway') {
+                const opening = resolveDoorOpening(
+                  edgeMinZ,
+                  edgeMaxZ,
+                  localDoorWidth,
+                  openingBias
+                );
                 buildDoorwayAlongX(
                   vertices,
                   wallX,
@@ -579,8 +592,32 @@ export function createRoomGeometryBuilder({
                   wallThickness,
                   colliders,
                   baseY,
-                  openingBias
+                  openingBias,
+                  opening
                 );
+
+                if (typeof registerDoor === 'function') {
+                  const hingeAtMin =
+                    randomFloatForEdge(gx, gz, nx, nz, 61, getLayerSeed(layerIndex)) < 0.5;
+                  const hingeZ = hingeAtMin ? opening.openingMin : opening.openingMax;
+                  const hingeX = wallX;
+                  const widthDir = hingeAtMin ? [0, 0, 1] : [0, 0, -1];
+                  const forwardDir = [1, 0, 0];
+                  const doorThickness = Math.min(
+                    Math.max(wallThickness * 0.55, 0.06),
+                    wallThickness * 0.95
+                  );
+
+                  registerDoor({
+                    hinge: [hingeX, baseY, hingeZ],
+                    widthDir,
+                    forwardDir,
+                    width: opening.openingMax - opening.openingMin,
+                    height: localDoorHeight,
+                    thickness: doorThickness,
+                    color: mixColors(wallColor, accentColor, 0.35)
+                  });
+                }
               }
             }
           } else if (nz !== gz) {
@@ -631,6 +668,12 @@ export function createRoomGeometryBuilder({
                   baseY
                 );
               } else if (type === 'doorway') {
+                const opening = resolveDoorOpening(
+                  edgeMinX,
+                  edgeMaxX,
+                  localDoorWidth,
+                  openingBias
+                );
                 buildDoorwayAlongZ(
                   vertices,
                   wallZ,
@@ -645,8 +688,32 @@ export function createRoomGeometryBuilder({
                   wallThickness,
                   colliders,
                   baseY,
-                  openingBias
+                  openingBias,
+                  opening
                 );
+
+                if (typeof registerDoor === 'function') {
+                  const hingeAtMin =
+                    randomFloatForEdge(gx, gz, nx, nz, 61, getLayerSeed(layerIndex)) < 0.5;
+                  const hingeX = hingeAtMin ? opening.openingMin : opening.openingMax;
+                  const hingeZ = wallZ;
+                  const widthDir = hingeAtMin ? [1, 0, 0] : [-1, 0, 0];
+                  const forwardDir = [0, 0, 1];
+                  const doorThickness = Math.min(
+                    Math.max(wallThickness * 0.55, 0.06),
+                    wallThickness * 0.95
+                  );
+
+                  registerDoor({
+                    hinge: [hingeX, baseY, hingeZ],
+                    widthDir,
+                    forwardDir,
+                    width: opening.openingMax - opening.openingMin,
+                    height: localDoorHeight,
+                    thickness: doorThickness,
+                    color: mixColors(wallColor, accentColor, 0.35)
+                  });
+                }
               }
             }
           }
