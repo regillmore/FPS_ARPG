@@ -171,12 +171,10 @@ export async function initializeGame({
     });
 
     const worldItemManager = createWorldItemManager(device);
-    //enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
 
-    const { spawnProceduralBarrels, spawnProceduralCameras } = proceduralSpawner;
+    const { spawnProceduralBarrels } = proceduralSpawner;
 
     spawnProceduralBarrels();
-    spawnProceduralCameras();
 
     worldItemManager.spawnPickup({
       id: 'pickup-field-medkit',
@@ -578,7 +576,6 @@ export async function initializeGame({
         roomVertexBuffer = roomSystem.getVertexBuffer();
         roomVertexCount = roomSystem.getVertexCount();
         spawnProceduralBarrels();
-        spawnProceduralCameras();
       }
 
       playerCollisionScratch.length = 0;

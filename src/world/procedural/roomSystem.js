@@ -119,11 +119,8 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   const {
     scheduleBarrelSpawnPoint,
-    scheduleCameraSpawnPoint,
     consumeBarrelSpawnPoints,
-    consumeCameraSpawnPoints,
-    evaluateCellForBarrel,
-    evaluateCellForCamera
+    evaluateCellForBarrel
   } = spawnManager;
 
   const geometryBuilder = createRoomGeometryBuilder({
@@ -151,7 +148,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     getExistingVerticalOpeningStates,
     updateCellVerticalOpeningForLayer,
     evaluateCellForBarrel,
-    evaluateCellForCamera,
     directionOffsets,
     getLayerIndexForHeight,
     getElevatorGateProgress: () => elevatorGateProgress,
@@ -454,9 +450,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     adjustElevatorOffset,
     setElevatorGateProgress,
     consumeBarrelSpawnPoints,
-    consumeCameraSpawnPoints,
     scheduleBarrelSpawnPoint,
-    scheduleCameraSpawnPoint,
     dispose: () => {
       if (vertexBuffer) {
         vertexBuffer.destroy();

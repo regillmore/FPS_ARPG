@@ -968,7 +968,7 @@ canvas {
 }
 
 [data-storage-chest-grid] .item-slot strong {
-  color: var(--storage-chest-color-vivid);
+  color: #f5f8ff;
 }
 
 [data-storage-chest-grid] .item-slot__tag {

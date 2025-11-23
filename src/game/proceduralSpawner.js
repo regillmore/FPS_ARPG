@@ -17,27 +17,6 @@ const clonePositionArray = (source) => {
   return [x, y, z];
 };
 
-const cloneRoomBounds = (source) => {
-  if (!source || typeof source !== 'object') {
-    return null;
-  }
-  const minX = Number(source.minX);
-  const maxX = Number(source.maxX);
-  const minZ = Number(source.minZ);
-  const maxZ = Number(source.maxZ);
-  if (
-    !Number.isFinite(minX) ||
-    !Number.isFinite(maxX) ||
-    !Number.isFinite(minZ) ||
-    !Number.isFinite(maxZ) ||
-    minX >= maxX ||
-    minZ >= maxZ
-  ) {
-    return null;
-  }
-  return { minX, maxX, minZ, maxZ };
-};
-
 const dispatchBestiaryUnlock = (eventTarget, enemyType) => {
   if (!eventTarget || typeof eventTarget.dispatchEvent !== 'function' || !enemyType) {
     return;
@@ -101,21 +80,6 @@ export function createProceduralSpawner({ roomSystem, enemyManager, layerResolve
         key: spawnContext.roomKey ?? '',
         position
       });
-    } else if (
-      spawnContext.type === 'procedural-camera' &&
-      typeof roomSystem?.scheduleCameraSpawnPoint === 'function'
-    ) {
-      let roomBounds = cloneRoomBounds(spawnContext.roomBounds);
-      if (!roomBounds && enemy.roomBounds) {
-        roomBounds = cloneRoomBounds(enemy.roomBounds);
-      }
-      roomSystem.scheduleCameraSpawnPoint({
-        key: spawnContext.roomKey ?? '',
-        position,
-        forward: spawnContext.forward ?? enemy.forward ?? [0, 0, -1],
-        up: spawnContext.up ?? enemy.up ?? [0, 1, 0],
-        roomBounds
-      });
     }
   };
 
@@ -161,69 +125,8 @@ export function createProceduralSpawner({ roomSystem, enemyManager, layerResolve
     }
   };
 
-  const spawnProceduralCameras = () => {
-    const consumeCameraSpawnPoints = roomSystem?.consumeCameraSpawnPoints;
-    if (typeof consumeCameraSpawnPoints !== 'function') {
-      return;
-    }
-
-    const spawns = consumeCameraSpawnPoints();
-    if (!spawns || spawns.length === 0) {
-      return;
-    }
-
-    for (const spawn of spawns) {
-      const position = clonePositionArray(spawn?.position);
-      if (!position) {
-        continue;
-      }
-
-      const shouldSpawnHere =
-        typeof roomSystem?.isPositionWithinGenerationRadius === 'function'
-          ? roomSystem.isPositionWithinGenerationRadius(position)
-          : true;
-
-      if (!shouldSpawnHere) {
-        roomSystem?.scheduleCameraSpawnPoint?.(spawn);
-        continue;
-      }
-
-      const forward = clonePositionArray(spawn?.forward) ?? [0, 0, -1];
-      const up = clonePositionArray(spawn?.up) ?? [0, 1, 0];
-      const roomBounds = cloneRoomBounds(spawn?.roomBounds);
-
-      const cameraLayerIndex = layerResolver ? layerResolver(position[1]) : null;
-      const camera = enemyManager?.spawnSecurityCamera?.({
-        position,
-        forward,
-        up,
-        layerResolver,
-        layerIndex: cameraLayerIndex,
-        roomBounds,
-        onDeath() {
-          if (!securityCameraBestiaryUnlocked) {
-            securityCameraBestiaryUnlocked = true;
-            dispatchBestiaryUnlock(eventTarget, 'security-camera');
-          }
-        }
-      });
-
-      if (camera) {
-        camera.spawnContext = {
-          type: 'procedural-camera',
-          roomKey: spawn?.key ?? '',
-          position,
-          forward,
-          up,
-          roomBounds
-        };
-      }
-    }
-  };
-
   return {
     requeueProceduralEnemy,
-    spawnProceduralBarrels,
-    spawnProceduralCameras
+    spawnProceduralBarrels
   };
 }
