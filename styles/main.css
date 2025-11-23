@@ -280,7 +280,7 @@ canvas {
 
 .pause-menu__container {
   width: min(960px, 90vw);
-  max-height: min(75vh, 640px);
+  max-height: min(85vh, 700px);
   display: grid;
   grid-template-rows: auto auto 1fr;
   gap: 1rem;
@@ -294,7 +294,7 @@ canvas {
 }
 
 .pause-menu__container.has-storage-chest {
-  max-height: min(95vh, 890px);
+  max-height: min(105vh, 950px);
 }
 
 .pause-menu__header h2 {
@@ -773,9 +773,9 @@ canvas {
 }
 
 [data-gear-grid-container] {
-  --inventory-grid-border: rgba(208, 158, 255, 0.32);
-  --inventory-grid-highlight: rgba(208, 158, 255, 0.14);
-  --inventory-grid-highlight-strong: rgba(208, 158, 255, 0.18);
+  --inventory-grid-border: rgba(120, 200, 255, 0.3);
+  --inventory-grid-highlight: rgba(120, 200, 255, 0.1);
+  --inventory-grid-highlight-strong: rgba(120, 200, 255, 0.16);
 }
 
 [data-pack-grid-container] {
