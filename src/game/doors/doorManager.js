@@ -175,6 +175,28 @@ function updateLeafTransform(leaf, anchor, openAmount) {
   mat4FromRotationTranslation(leaf.modelMatrix, rotatedRight, up, rotatedForward, translation);
 }
 
+function updateDoorSwingDirection(door, playerPosition) {
+  if (!door?.anchor || !Array.isArray(door.leaves)) {
+    return;
+  }
+
+  const wallPosition = door.anchor.wallPosition ?? 0;
+  const playerOffset =
+    door.anchor.orientation === 'x'
+      ? (playerPosition?.[0] ?? wallPosition) - wallPosition
+      : (playerPosition?.[2] ?? wallPosition) - wallPosition;
+
+  const playerSide = Math.sign(playerOffset);
+  const awayFromPlayerSign = playerSide === 0 ? door.anchor.normalSign : -playerSide;
+  const swingBase = awayFromPlayerSign === 0 ? 1 : awayFromPlayerSign;
+
+  for (const leaf of door.leaves) {
+    if (!leaf) continue;
+    const forward = leaf.forwardDirection || 1;
+    leaf.swingSign = swingBase * forward;
+  }
+}
+
 export function createDoorManager(device) {
   if (!device) {
     throw new Error('GPUDevice is required to create the door manager.');
@@ -247,7 +269,7 @@ export function createDoorManager(device) {
     doors.push(...next);
   }
 
-  function requestOpen(id) {
+  function requestOpen(id, playerPosition) {
     const door = doors.find((entry) => entry.id === id);
     if (!door) {
       return false;
@@ -255,6 +277,7 @@ export function createDoorManager(device) {
     door.pendingOpen = true;
     if (door.state === 'closed' || door.state === 'closing') {
       door.state = 'opening';
+      updateDoorSwingDirection(door, playerPosition);
     }
     return true;
   }
@@ -276,6 +299,8 @@ export function createDoorManager(device) {
       const horizontalDistanceSq = dx * dx + dz * dz;
       const nearDoor = horizontalDistanceSq <= closeDistanceSq && Math.abs(dy) <= door.anchor.height * 0.75;
 
+      const previousState = door.state;
+
       if (door.state === 'opening') {
         door.openAmount = Math.min(1, door.openAmount + OPEN_SPEED * deltaTime);
         if (door.openAmount >= 0.999) {
@@ -293,6 +318,10 @@ export function createDoorManager(device) {
         }
       } else if (door.pendingOpen && nearDoor) {
         door.state = 'opening';
+      }
+
+      if (door.state === 'opening' && previousState !== 'opening') {
+        updateDoorSwingDirection(door, playerPosition);
       }
 
       updateDoorTransforms(door);
