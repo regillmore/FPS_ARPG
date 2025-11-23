@@ -185,12 +185,10 @@ export async function initializeGame({
     const worldItemManager = createWorldItemManager(device);
     const doorManager = createDoorManager(device);
     doorManager.syncDoors(roomSystem.getDoors?.() ?? []);
-    //enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
 
     const { spawnProceduralBarrels } = proceduralSpawner;
 
     spawnProceduralBarrels();
-    // Security cameras removed
 
     worldItemManager.spawnPickup({
       id: 'pickup-field-medkit',

@@ -1,4 +1,3 @@
-import { createTargetDummy } from './targetDummy.js';
 import { createBarrel } from './barrel.js';
 
 export function createEnemyManager(device, managerOptions = {}) {
