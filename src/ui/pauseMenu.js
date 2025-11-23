@@ -85,14 +85,20 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
 
   const optionsState = {
     framerateCap: 80,
-    showUnvisitedMinimapRooms: false
+    showUnvisitedMinimapRooms: false,
+    disableWalls: false,
+    disableDoors: false
   };
 
   const optionsElements = {
     framerateStatus: pauseMenu.querySelector('[data-options-role="framerate-cap-status"]'),
     framerateOptions: Array.from(pauseMenu.querySelectorAll('[data-option-control="framerate-cap"]')),
     minimapFilterStatus: pauseMenu.querySelector('[data-options-role="minimap-filter-status"]'),
-    minimapFilterToggle: pauseMenu.querySelector('[data-option-control="show-unvisited-minimap-rooms"]')
+    minimapFilterToggle: pauseMenu.querySelector('[data-option-control="show-unvisited-minimap-rooms"]'),
+    wallStatus: pauseMenu.querySelector('[data-options-role="wall-visibility-status"]'),
+    doorStatus: pauseMenu.querySelector('[data-options-role="door-visibility-status"]'),
+    wallToggle: pauseMenu.querySelector('[data-option-control="disable-walls"]'),
+    doorToggle: pauseMenu.querySelector('[data-option-control="disable-doors"]')
   };
 
   for (const slot of itemSlots) {
@@ -304,6 +310,20 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     return 'The minimap hides rooms you have not explored yet.';
   }
 
+  function formatWallStatusText(disableWalls) {
+    if (disableWalls) {
+      return 'Walls are hidden, leaving spaces fully open.';
+    }
+    return 'Walls are visible and block movement as usual.';
+  }
+
+  function formatDoorStatusText(disableDoors) {
+    if (disableDoors) {
+      return 'Door frames are disabled and openings stay unobstructed.';
+    }
+    return 'Doors render normally inside their frames.';
+  }
+
   function updateOptionsUi() {
     if (optionsElements.framerateStatus) {
       optionsElements.framerateStatus.textContent = formatFramerateStatusText(optionsState.framerateCap);
@@ -321,6 +341,18 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     }
     if (optionsElements.minimapFilterToggle) {
       optionsElements.minimapFilterToggle.checked = Boolean(optionsState.showUnvisitedMinimapRooms);
+    }
+    if (optionsElements.wallStatus) {
+      optionsElements.wallStatus.textContent = formatWallStatusText(optionsState.disableWalls);
+    }
+    if (optionsElements.doorStatus) {
+      optionsElements.doorStatus.textContent = formatDoorStatusText(optionsState.disableDoors);
+    }
+    if (optionsElements.wallToggle) {
+      optionsElements.wallToggle.checked = Boolean(optionsState.disableWalls);
+    }
+    if (optionsElements.doorToggle) {
+      optionsElements.doorToggle.checked = Boolean(optionsState.disableDoors);
     }
   }
 
@@ -342,6 +374,28 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
       return;
     }
     optionsState.showUnvisitedMinimapRooms = enabled;
+    updateOptionsUi();
+    emitOptionsChange();
+  }
+
+  function setDisableWalls(nextValue) {
+    const disableWalls = Boolean(nextValue);
+    if (optionsState.disableWalls === disableWalls) {
+      updateOptionsUi();
+      return;
+    }
+    optionsState.disableWalls = disableWalls;
+    updateOptionsUi();
+    emitOptionsChange();
+  }
+
+  function setDisableDoors(nextValue) {
+    const disableDoors = Boolean(nextValue);
+    if (optionsState.disableDoors === disableDoors) {
+      updateOptionsUi();
+      return;
+    }
+    optionsState.disableDoors = disableDoors;
     updateOptionsUi();
     emitOptionsChange();
   }
@@ -1251,6 +1305,14 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
 
   optionsElements.minimapFilterToggle?.addEventListener('change', (event) => {
     setShowUnvisitedMinimapRooms(event?.currentTarget?.checked);
+  });
+
+  optionsElements.wallToggle?.addEventListener('change', (event) => {
+    setDisableWalls(event?.currentTarget?.checked);
+  });
+
+  optionsElements.doorToggle?.addEventListener('change', (event) => {
+    setDisableDoors(event?.currentTarget?.checked);
   });
 
   function setPaused(next) {

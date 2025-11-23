@@ -67,6 +67,8 @@ export function createProceduralRoomSystem(device, options = {}) {
   let elevatorPanel = null;
   let elevatorBounds = null;
   let persistentOriginElevator = null;
+  let disableWalls = false;
+  let disableDoors = false;
   const visitedCells = new Map();
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
@@ -216,7 +218,9 @@ export function createProceduralRoomSystem(device, options = {}) {
       if (Number.isFinite(centerX) && Number.isFinite(centerZ) && Number.isFinite(layerIndex)) {
         persistentOriginElevator = { x: centerX, z: centerZ, layerIndex };
       }
-    }
+    },
+    shouldDisableWalls: () => disableWalls,
+    shouldDisableDoors: () => disableDoors
   });
 
   const { buildGeometryForCenter } = geometryBuilder;
@@ -393,6 +397,18 @@ export function createProceduralRoomSystem(device, options = {}) {
     return true;
   }
 
+  function setDebugGeometryOptions(options) {
+    const nextDisableWalls = Boolean(options?.disableWalls);
+    const nextDisableDoors = Boolean(options?.disableDoors);
+    const changed = nextDisableWalls !== disableWalls || nextDisableDoors !== disableDoors;
+    disableWalls = nextDisableWalls;
+    disableDoors = nextDisableDoors;
+    if (changed) {
+      buildGeometryForCenter(centerCellX, centerCellZ);
+    }
+    return changed;
+  }
+
   function update(playerPosition) {
     const px = playerPosition?.[0] ?? 0;
     const py = playerPosition?.[1] ?? 0;
@@ -456,6 +472,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     setElevatorOffset,
     adjustElevatorOffset,
     setElevatorGateProgress,
+    setDebugGeometryOptions,
     consumeBarrelSpawnPoints,
     consumeCameraSpawnPoints,
     scheduleBarrelSpawnPoint,

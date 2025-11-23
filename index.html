@@ -491,6 +491,49 @@
               </label>
               <p class="diagnostics-card__note">When enabled, hidden rooms remain visible but still require travel to enter.</p>
             </article>
+            <article class="diagnostics-card">
+              <header class="diagnostics-card__header">
+                <p class="diagnostics-card__eyebrow">World Barriers</p>
+                <strong class="diagnostics-card__status" data-options-role="wall-visibility-status">
+                  Walls are visible and block movement as usual.
+                </strong>
+              </header>
+              <p>
+                Hide structural walls to open the play space for rapid traversal or to debug navigation without barrier
+                collisions.
+              </p>
+              <label class="diagnostics-toggle">
+                <input type="checkbox" data-option-control="disable-walls" />
+                <span class="diagnostics-toggle__control">
+                  <span class="diagnostics-toggle__track" aria-hidden="true">
+                    <span class="diagnostics-toggle__thumb"></span>
+                  </span>
+                  <span class="diagnostics-toggle__label">Disable walls</span>
+                </span>
+              </label>
+              <p class="diagnostics-card__note">Floors remain intact while walls are hidden.</p>
+            </article>
+            <article class="diagnostics-card">
+              <header class="diagnostics-card__header">
+                <p class="diagnostics-card__eyebrow">Door Frames</p>
+                <strong class="diagnostics-card__status" data-options-role="door-visibility-status">
+                  Doors render normally inside their frames.
+                </strong>
+              </header>
+              <p>
+                Toggle doorway geometry to leave openings fully clear while keeping rooms and hallways intact.
+              </p>
+              <label class="diagnostics-toggle">
+                <input type="checkbox" data-option-control="disable-doors" />
+                <span class="diagnostics-toggle__control">
+                  <span class="diagnostics-toggle__track" aria-hidden="true">
+                    <span class="diagnostics-toggle__thumb"></span>
+                  </span>
+                  <span class="diagnostics-toggle__label">Disable doors</span>
+                </span>
+              </label>
+              <p class="diagnostics-card__note">Doors and their collision volumes are removed when disabled.</p>
+            </article>
           </div>
         </section>
         <section class="pause-menu__panel" role="tabpanel" id="panel-achievements" aria-labelledby="tab-achievements" data-tab="achievements" hidden>

@@ -98,7 +98,9 @@ export function createRoomGeometryBuilder({
   getElevatorGateProgress,
   getElevatorOffset,
   setElevatorPanel,
-  setElevatorBounds
+  setElevatorBounds,
+  shouldDisableWalls,
+  shouldDisableDoors
 }) {
   function resetBounds() {
     bounds.minX = Infinity;
@@ -423,6 +425,8 @@ export function createRoomGeometryBuilder({
     const fullyEnclosedCache = new Map();
     const layerProfilesCache = new Map();
     const layerSeedCache = new Map();
+    const disableWalls = typeof shouldDisableWalls === 'function' ? shouldDisableWalls() : false;
+    const disableDoors = typeof shouldDisableDoors === 'function' ? shouldDisableDoors() : false;
 
     function getLayerProfilesCached(layerIndex) {
       if (!layerProfilesCache.has(layerIndex)) {
@@ -594,6 +598,9 @@ export function createRoomGeometryBuilder({
               if (type === 'open') {
                 continue;
               }
+              if (disableWalls) {
+                continue;
+              }
               const skipSolidWallBetweenEnclosedRooms =
                 type === 'solid' &&
                 shouldSkipSolidWallBetweenRooms(gx, gz, nx, nz, layerIndex);
@@ -633,6 +640,9 @@ export function createRoomGeometryBuilder({
                   baseY
                 );
               } else if (type === 'doorway') {
+                if (disableDoors) {
+                  continue;
+                }
                 const { openingMin, openingMax } = calculateDoorOpening(
                   edgeMinZ,
                   edgeMaxZ,
@@ -681,6 +691,9 @@ export function createRoomGeometryBuilder({
               if (type === 'open') {
                 continue;
               }
+              if (disableWalls) {
+                continue;
+              }
               const skipSolidWallBetweenEnclosedRooms =
                 type === 'solid' &&
                 shouldSkipSolidWallBetweenRooms(gx, gz, nx, nz, layerIndex);
@@ -720,6 +733,9 @@ export function createRoomGeometryBuilder({
                   baseY
                 );
               } else if (type === 'doorway') {
+                if (disableDoors) {
+                  continue;
+                }
                 const { openingMin, openingMax } = calculateDoorOpening(
                   edgeMinX,
                   edgeMaxX,

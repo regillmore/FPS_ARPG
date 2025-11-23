@@ -186,9 +186,24 @@ export async function initializeGame({
     const worldItemManager = createWorldItemManager(device);
     const doorManager = createDoorManager(device);
     doorManager.syncDoors(roomSystem.getDoors?.() ?? []);
-    //enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
-
     const { spawnProceduralBarrels, spawnProceduralCameras } = proceduralSpawner;
+
+    const applyGeometryRefresh = () => {
+      roomVertexBuffer = roomSystem.getVertexBuffer();
+      roomVertexCount = roomSystem.getVertexCount();
+      spawnProceduralBarrels();
+      spawnProceduralCameras();
+      doorManager.syncDoors(roomSystem.getDoors?.() ?? []);
+    };
+
+    const geometryOptionsChanged = roomSystem.setDebugGeometryOptions?.({
+      disableWalls,
+      disableDoors
+    });
+    if (geometryOptionsChanged) {
+      applyGeometryRefresh();
+    }
+    //enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
 
     spawnProceduralBarrels();
     spawnProceduralCameras();
@@ -496,6 +511,8 @@ export async function initializeGame({
     let disableEnemies = Boolean(initialDiagnostics?.disableEnemies);
     let showFramerate = Boolean(initialDiagnostics?.showFramerate);
     let showUnvisitedMinimapRooms = Boolean(initialOptions?.showUnvisitedMinimapRooms);
+    let disableWalls = Boolean(initialOptions?.disableWalls);
+    let disableDoors = Boolean(initialOptions?.disableDoors);
     const resolveFramerateCap = (value) => {
       const numericValue = Number(value);
       if (!Number.isFinite(numericValue) || numericValue <= 0) {
@@ -522,6 +539,12 @@ export async function initializeGame({
     window.addEventListener('game-options-change', (event) => {
       applyFramerateTarget(event?.detail?.framerateCap);
       showUnvisitedMinimapRooms = Boolean(event?.detail?.showUnvisitedMinimapRooms);
+      disableWalls = Boolean(event?.detail?.disableWalls);
+      disableDoors = Boolean(event?.detail?.disableDoors);
+      const rebuild = roomSystem.setDebugGeometryOptions?.({ disableWalls, disableDoors });
+      if (rebuild) {
+        applyGeometryRefresh();
+      }
     });
 
     const ensureRenderableUniformResources = createEntityUniformManager(
@@ -591,11 +614,7 @@ export async function initializeGame({
 
       geometryChanged = roomSystem.update(controller.position) || geometryChanged;
       if (geometryChanged) {
-        roomVertexBuffer = roomSystem.getVertexBuffer();
-        roomVertexCount = roomSystem.getVertexCount();
-        spawnProceduralBarrels();
-        spawnProceduralCameras();
-        doorManager.syncDoors(roomSystem.getDoors?.() ?? []);
+        applyGeometryRefresh();
       }
 
       doorManager.update(isPaused ? 0 : deltaTime, controller.position);
