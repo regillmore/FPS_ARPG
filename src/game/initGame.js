@@ -1001,7 +1001,7 @@ export async function initializeGame({
             );
 
             if (usePressedThisFrame) {
-              doorManager.requestOpen(highlightedDoor.id);
+              doorManager.requestOpen(highlightedDoor.id, controller.position);
               overlayController?.showTemporaryUsePrompt?.(
                 'Opening door',
                 promptColor,

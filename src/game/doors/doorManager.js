@@ -113,7 +113,7 @@ function createLeaves(anchor, geometry, leafWidth) {
     leaves.push({
       hinge,
       forwardDirection,
-      swingSign: anchor.normalSign * forwardDirection,
+      baseSwingSign: anchor.normalSign * forwardDirection,
       modelMatrix: new Float32Array(16),
       vertexBuffer: geometry.vertexBuffer,
       vertexCount: geometry.vertexCount,
@@ -155,8 +155,8 @@ function buildLeafBounds(anchor, leaf) {
   };
 }
 
-function updateLeafTransform(leaf, anchor, openAmount) {
-  const angle = MAX_SWING_RADIANS * clamp01(openAmount) * leaf.swingSign;
+function updateLeafTransform(leaf, anchor, openAmount, swingDirection = 1) {
+  const angle = MAX_SWING_RADIANS * clamp01(openAmount) * leaf.baseSwingSign * swingDirection;
   const up = [0, anchor.height, 0];
   const rightBase =
     anchor.orientation === 'x'
@@ -213,6 +213,7 @@ export function createDoorManager(device) {
       const previous = existingMap.get(id);
       const openAmount = clamp01(previous?.openAmount ?? 0);
       const state = previous?.state ?? 'closed';
+      const swingDirection = previous?.swingDirection ?? 1;
 
       const door = {
         id,
@@ -225,7 +226,8 @@ export function createDoorManager(device) {
         state: state === 'open' && openAmount <= 0.01 ? 'closed' : state,
         pendingOpen: previous?.pendingOpen ?? false,
         color: anchor.color ?? DEFAULT_DOOR_COLOR,
-        leafWidth
+        leafWidth,
+        swingDirection
       };
 
       updateDoorTransforms(door);
@@ -239,7 +241,7 @@ export function createDoorManager(device) {
     }
     for (const leaf of door.leaves) {
       if (!leaf) continue;
-      updateLeafTransform(leaf, door.anchor, door.openAmount);
+      updateLeafTransform(leaf, door.anchor, door.openAmount, door.swingDirection);
     }
   }
 
@@ -261,11 +263,22 @@ export function createDoorManager(device) {
     doors.push(...next);
   }
 
-  function requestOpen(id) {
+  function requestOpen(id, playerPosition) {
     const door = doors.find((entry) => entry.id === id);
     if (!door) {
       return false;
     }
+
+    const anchor = door.anchor;
+    const distanceFromPlane =
+      anchor?.orientation === 'x'
+        ? (playerPosition?.[0] ?? anchor?.wallPosition ?? 0) - (anchor?.wallPosition ?? 0)
+        : -(playerPosition?.[2] ?? anchor?.wallPosition ?? 0) + (anchor?.wallPosition ?? 0);
+
+    const sideSign = Math.sign(distanceFromPlane);
+    const isFacingNormal = sideSign === 0 ? null : sideSign === Math.sign(anchor?.normalSign ?? 1);
+    door.swingDirection = isFacingNormal === null ? door.swingDirection ?? 1 : isFacingNormal ? -1 : 1;
+
     door.pendingOpen = true;
     if (door.state === 'closed' || door.state === 'closing') {
       door.state = 'opening';
