@@ -2,10 +2,15 @@ import { mat4FromRotationTranslation } from '../../math.js';
 
 const FLOATS_PER_VERTEX = 10;
 const DEFAULT_DOOR_COLOR = [0.62, 0.7, 0.82];
+const DEFAULT_DOORKNOB_COLOR = [0.9, 0.76, 0.46];
 const MAX_SWING_RADIANS = Math.PI * 0.55;
 const OPEN_SPEED = 2.8;
 const CLOSE_SPEED = 2.1;
 const COLLIDER_DISABLE_THRESHOLD = 0.9;
+const KNOB_FORWARD_INSET = 0.12;
+const KNOB_DEPTH = 0.22;
+const KNOB_WIDTH = 0.12;
+const KNOB_HEIGHT = 0.1;
 
 function clamp01(value) {
   if (!Number.isFinite(value)) {
@@ -67,19 +72,7 @@ function pushVertex(target, position, normal, color) {
   );
 }
 
-function createDoorLeafGeometry(device, color) {
-  const vertices = createBoxVertices(
-    {
-      minX: -0.5,
-      maxX: 0.5,
-      minY: 0,
-      maxY: 1,
-      minZ: -0.5,
-      maxZ: 0.5
-    },
-    color
-  );
-
+function createVertexBuffer(device, vertices) {
   const vertexData = new Float32Array(vertices);
   const vertexBuffer = device.createBuffer({
     size: vertexData.byteLength,
@@ -95,7 +88,39 @@ function createDoorLeafGeometry(device, color) {
   };
 }
 
-function createLeaves(anchor, geometry, leafWidth) {
+function createDoorLeafGeometry(device, color) {
+  const vertices = createBoxVertices(
+    {
+      minX: -0.5,
+      maxX: 0.5,
+      minY: 0,
+      maxY: 1,
+      minZ: -0.5,
+      maxZ: 0.5
+    },
+    color
+  );
+
+  return createVertexBuffer(device, vertices);
+}
+
+function createDoorknobGeometry(device, color) {
+  const vertices = createBoxVertices(
+    {
+      minX: -0.5,
+      maxX: 0.5,
+      minY: -0.5,
+      maxY: 0.5,
+      minZ: -0.5,
+      maxZ: 0.5
+    },
+    color
+  );
+
+  return createVertexBuffer(device, vertices);
+}
+
+function createLeaves(anchor, geometry, leafWidth, knobGeometry) {
   const leaves = [];
   const hingeA = anchor.openingMin;
   const hingeB = anchor.openingMax;
@@ -110,6 +135,22 @@ function createLeaves(anchor, geometry, leafWidth) {
         ? new Float32Array([anchor.wallPosition, anchor.baseY, hingeValue])
         : new Float32Array([hingeValue, anchor.baseY, anchor.wallPosition]);
 
+    const knobOffsetFromHinge = 0.5 - KNOB_FORWARD_INSET;
+    const knobOffsets = [
+      new Float32Array([0.5 + KNOB_DEPTH * 0.5, KNOB_HEIGHT, forwardDirection * knobOffsetFromHinge]),
+      new Float32Array([-(0.5 + KNOB_DEPTH * 0.5), KNOB_HEIGHT, forwardDirection * knobOffsetFromHinge])
+    ];
+
+    const knobs = knobGeometry
+      ? knobOffsets.map((offset) => ({
+          offset,
+          size: { depth: KNOB_DEPTH, height: KNOB_HEIGHT, width: KNOB_WIDTH },
+          modelMatrix: new Float32Array(16),
+          vertexBuffer: knobGeometry.vertexBuffer,
+          vertexCount: knobGeometry.vertexCount
+        }))
+      : [];
+
     leaves.push({
       hinge,
       forwardDirection,
@@ -117,7 +158,8 @@ function createLeaves(anchor, geometry, leafWidth) {
       modelMatrix: new Float32Array(16),
       vertexBuffer: geometry.vertexBuffer,
       vertexCount: geometry.vertexCount,
-      leafWidth
+      leafWidth,
+      knobs
     });
   }
 
@@ -155,6 +197,13 @@ function buildLeafBounds(anchor, leaf) {
   };
 }
 
+function scaleVec(out, vec, scale) {
+  out[0] = vec[0] * scale;
+  out[1] = vec[1] * scale;
+  out[2] = vec[2] * scale;
+  return out;
+}
+
 function updateLeafTransform(leaf, anchor, openAmount, swingDirection = 1) {
   const angle = MAX_SWING_RADIANS * clamp01(openAmount) * leaf.baseSwingSign * swingDirection;
   const up = [0, anchor.height, 0];
@@ -172,6 +221,7 @@ function updateLeafTransform(leaf, anchor, openAmount, swingDirection = 1) {
       : [(leaf.leafWidth * 0.5) * leaf.forwardDirection, 0, 0];
 
   const rotatedRight = rotateY([0, 0, 0], rightBase, angle);
+  const rotatedUp = up;
   const rotatedForward = rotateY([0, 0, 0], forwardBase, angle);
   const rotatedOffset = rotateY([0, 0, 0], offset, angle);
 
@@ -182,6 +232,30 @@ function updateLeafTransform(leaf, anchor, openAmount, swingDirection = 1) {
   ];
 
   mat4FromRotationTranslation(leaf.modelMatrix, rotatedRight, up, rotatedForward, translation);
+
+  if (Array.isArray(leaf.knobs) && leaf.knobs.length > 0) {
+    const knobRight = [0, 0, 0];
+    const knobUp = [0, 0, 0];
+    const knobForward = [0, 0, 0];
+
+    for (const knob of leaf.knobs) {
+      if (!knob || !knob.offset || !knob.modelMatrix) {
+        continue;
+      }
+
+      const offsetTranslation = [
+        translation[0] + rotatedRight[0] * knob.offset[0] + rotatedUp[0] * knob.offset[1] + rotatedForward[0] * knob.offset[2],
+        translation[1] + rotatedRight[1] * knob.offset[0] + rotatedUp[1] * knob.offset[1] + rotatedForward[1] * knob.offset[2],
+        translation[2] + rotatedRight[2] * knob.offset[0] + rotatedUp[2] * knob.offset[1] + rotatedForward[2] * knob.offset[2]
+      ];
+
+      scaleVec(knobRight, rotatedRight, knob.size?.depth ?? KNOB_DEPTH);
+      scaleVec(knobUp, rotatedUp, knob.size?.height ?? KNOB_HEIGHT);
+      scaleVec(knobForward, rotatedForward, knob.size?.width ?? KNOB_WIDTH);
+
+      mat4FromRotationTranslation(knob.modelMatrix, knobRight, knobUp, knobForward, offsetTranslation);
+    }
+  }
 }
 
 export function createDoorManager(device) {
@@ -191,6 +265,7 @@ export function createDoorManager(device) {
 
   const doors = [];
   const geometryCache = new Map();
+  const doorknobGeometry = createDoorknobGeometry(device, DEFAULT_DOORKNOB_COLOR);
 
   const getGeometryForColor = (color = DEFAULT_DOOR_COLOR) => {
     const key = color.map((component) => component.toFixed(4)).join(',');
@@ -205,7 +280,7 @@ export function createDoorManager(device) {
   function rebuildDoorFromAnchor(anchor, existingMap) {
     const geometry = getGeometryForColor(anchor.color ?? DEFAULT_DOOR_COLOR);
     const leafWidth = anchor.isDoubleDoor ? anchor.width * 0.5 : anchor.width;
-    const leaves = createLeaves(anchor, geometry, leafWidth);
+    const leaves = createLeaves(anchor, geometry, leafWidth, doorknobGeometry);
 
     return leaves.map((leaf, index) => {
       const { center, ...collider } = buildLeafBounds(anchor, leaf);
@@ -351,6 +426,12 @@ export function createDoorManager(device) {
           continue;
         }
         leaves.push(leaf);
+        if (Array.isArray(leaf.knobs)) {
+          for (const knob of leaf.knobs) {
+            if (!knob || !knob.vertexBuffer) continue;
+            leaves.push(knob);
+          }
+        }
       }
     }
     return leaves;
@@ -361,6 +442,7 @@ export function createDoorManager(device) {
       geometry.vertexBuffer?.destroy?.();
     }
     geometryCache.clear();
+    doorknobGeometry?.vertexBuffer?.destroy?.();
     doors.length = 0;
   }
 
