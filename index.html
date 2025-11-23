@@ -80,97 +80,99 @@
           <div class="inventory-layout">
             <div class="inventory-section">
               <h4>Equipped Gear</h4>
-              <div class="gear-grid">
-                <div
-                  class="item-slot"
-                  data-slot-kind="gear"
-                  data-slot-allowed="primary"
-                  data-item-type="primary"
-                  data-weapon-id="pea-shooter"
-                  data-rarity="common"
-                  data-description="It's the best option when you have no other options."
-                  data-bonuses="Power:+2"
-                  data-item-name="Pea Shooter"
-                  data-item-abbr="PS"
-                >
-                  <span class="item-slot__tag">Primary</span>
-                  <strong>PS</strong>
-                </div>
-                <div
-                  class="item-slot"
-                  data-slot-kind="gear"
-                  data-slot-allowed="melee"
-                  data-item-type="melee"
-                  data-rarity="common"
-                  data-description="You should find something else to use."
-                  data-bonuses="Agility:+1"
-                  data-item-name="Cracked Training Sword"
-                  data-item-abbr="CTS"
-                >
-                  <span class="item-slot__tag">Melee</span>
-                  <strong>CTS</strong>
-                </div>
-                <div
-                  class="item-slot"
-                  data-slot-kind="gear"
-                  data-slot-allowed="head"
-                  data-item-type="head"
-                  data-rarity="common"
-                  data-description="It's a hat. Is it even mine?"
-                  data-bonuses="Resilience:+1"
-                  data-item-name="Knit Cap"
-                  data-item-abbr="KC"
-                >
-                  <span class="item-slot__tag">Head</span>
-                  <strong>KC</strong>
-                </div>
-                <div
-                  class="item-slot"
-                  data-slot-kind="gear"
-                  data-slot-allowed="chest"
-                  data-item-type="chest"
-                  data-rarity="uncommon"
-                  data-description="It's almost warm enough to wear outdoors."
-                  data-bonuses="Resilience:+3"
-                  data-item-name="Festive Sweater"
-                  data-item-abbr="FS"
-                >
-                  <span class="item-slot__tag">Chest</span>
-                  <strong>FS</strong>
-                </div>
-                <div
-                  class="item-slot"
-                  data-slot-kind="gear"
-                  data-slot-allowed="legs"
-                  data-item-type="legs"
-                  data-rarity="common"
-                  data-description="They definitely don't fit."
-                  data-bonuses="Resilience:+2;Agility:-2"
-                  data-item-name="Pajama Pants"
-                  data-item-abbr="PP"
-                >
-                  <span class="item-slot__tag">Legs</span>
-                  <strong>PP</strong>
-                </div>
-                <div
-                  class="item-slot"
-                  data-slot-kind="gear"
-                  data-slot-allowed="feet"
-                  data-item-type="feet"
-                  data-rarity="common"
-                  data-description="They are surprisingly uncomfortable."
-                  data-bonuses="Resilience:+1;Agility:-1"
-                  data-item-name="Offbrand Clogs"
-                  data-item-abbr="OC"
-                >
-                  <span class="item-slot__tag">Feet</span>
-                  <strong>Offbrand Clogs</strong>
-                </div>
-                <div class="item-slot" data-slot-kind="gear" data-slot-allowed="grenade" data-slot="empty">
-                  <span class="item-slot__placeholder">Empty Grenade Slot</span>
-                </div>
-                <div class="item-slot" data-slot-kind="gear" data-slot-allowed="artifact" data-slot="empty">
-                  <span class="item-slot__placeholder">Empty Artifact Slot</span>
+              <div class="inventory-grid-container" data-gear-grid-container>
+                <div class="gear-grid">
+                  <div
+                    class="item-slot"
+                    data-slot-kind="gear"
+                    data-slot-allowed="primary"
+                    data-item-type="primary"
+                    data-weapon-id="pea-shooter"
+                    data-rarity="common"
+                    data-description="It's the best option when you have no other options."
+                    data-bonuses="Power:+2"
+                    data-item-name="Pea Shooter"
+                    data-item-abbr="PS"
+                  >
+                    <span class="item-slot__tag">Primary</span>
+                    <strong>PS</strong>
+                  </div>
+                  <div
+                    class="item-slot"
+                    data-slot-kind="gear"
+                    data-slot-allowed="melee"
+                    data-item-type="melee"
+                    data-rarity="common"
+                    data-description="You should find something else to use."
+                    data-bonuses="Agility:+1"
+                    data-item-name="Cracked Training Sword"
+                    data-item-abbr="CTS"
+                  >
+                    <span class="item-slot__tag">Melee</span>
+                    <strong>CTS</strong>
+                  </div>
+                  <div
+                    class="item-slot"
+                    data-slot-kind="gear"
+                    data-slot-allowed="head"
+                    data-item-type="head"
+                    data-rarity="common"
+                    data-description="It's a hat. Is it even mine?"
+                    data-bonuses="Resilience:+1"
+                    data-item-name="Knit Cap"
+                    data-item-abbr="KC"
+                  >
+                    <span class="item-slot__tag">Head</span>
+                    <strong>KC</strong>
+                  </div>
+                  <div
+                    class="item-slot"
+                    data-slot-kind="gear"
+                    data-slot-allowed="chest"
+                    data-item-type="chest"
+                    data-rarity="uncommon"
+                    data-description="It's almost warm enough to wear outdoors."
+                    data-bonuses="Resilience:+3"
+                    data-item-name="Festive Sweater"
+                    data-item-abbr="FS"
+                  >
+                    <span class="item-slot__tag">Chest</span>
+                    <strong>FS</strong>
+                  </div>
+                  <div
+                    class="item-slot"
+                    data-slot-kind="gear"
+                    data-slot-allowed="legs"
+                    data-item-type="legs"
+                    data-rarity="common"
+                    data-description="They definitely don't fit."
+                    data-bonuses="Resilience:+2;Agility:-2"
+                    data-item-name="Pajama Pants"
+                    data-item-abbr="PP"
+                  >
+                    <span class="item-slot__tag">Legs</span>
+                    <strong>PP</strong>
+                  </div>
+                  <div
+                    class="item-slot"
+                    data-slot-kind="gear"
+                    data-slot-allowed="feet"
+                    data-item-type="feet"
+                    data-rarity="common"
+                    data-description="They are surprisingly uncomfortable."
+                    data-bonuses="Resilience:+1;Agility:-1"
+                    data-item-name="Offbrand Clogs"
+                    data-item-abbr="OC"
+                  >
+                    <span class="item-slot__tag">Feet</span>
+                    <strong>Offbrand Clogs</strong>
+                  </div>
+                  <div class="item-slot" data-slot-kind="gear" data-slot-allowed="grenade" data-slot="empty">
+                    <span class="item-slot__placeholder">Empty Grenade Slot</span>
+                  </div>
+                  <div class="item-slot" data-slot-kind="gear" data-slot-allowed="artifact" data-slot="empty">
+                    <span class="item-slot__placeholder">Empty Artifact Slot</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -178,97 +180,94 @@
           <div class="inventory-layout">
             <div class="inventory-section">
               <h4>Pack Inventory</h4>
-              <div class="inventory-grid">
-                <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
-                  <span class="item-slot__placeholder">Empty Pack Slot</span>
-                </div>
-                <div
-                  class="item-slot"
-                  data-slot-kind="inventory"
-                  data-item-type="grenade"
-                  data-rarity="rare"
-                  data-description="Releases a chain lightning burst that weakens armored targets."
-                  data-bonuses="Shock Damage:+320;Chain Targets:5"
-                  data-item-name="Arcwave Charge"
-                  data-item-abbr="AC"
-                >
-                  <span class="item-slot__tag">Grenade</span>
-                  <strong>Arcwave Charge</strong>
-                </div>
-                <div
-                  class="item-slot"
-                  data-slot-kind="inventory"
-                  data-item-type="artifact"
-                  data-rarity="legendary"
-                  data-description="Triggers a short rewind on shield break, restoring lost stamina."
-                  data-bonuses="Shield Restore:+25%;Stamina Refund:100%"
-                  data-item-name="Chrono Loop"
-                  data-item-abbr="CL"
-                >
-                  <span class="item-slot__tag">Artifact</span>
-                  <strong>CL</strong>
-                </div>
-                <div
-                  class="item-slot"
-                  data-slot-kind="inventory"
-                  data-item-type="primary"
-                  data-weapon-id="pea-shooter-ii"
-                  data-rarity="uncommon"
-                  data-description="They've improved it, somewhat."
-                  data-bonuses="Power:+4"
-                  data-item-name="Pea Shooter II"
-                  data-item-abbr="PS2"
-                >
-                  <span class="item-slot__tag">Primary</span>
-                  <strong>PS2</strong>
-                </div>
-                <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
-                  <span class="item-slot__placeholder">Empty Pack Slot</span>
-                </div>
-                <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
-                  <span class="item-slot__placeholder">Empty Pack Slot</span>
-                </div>
-                <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
-                  <span class="item-slot__placeholder">Empty Pack Slot</span>
-                </div>
-                <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
-                  <span class="item-slot__placeholder">Empty Pack Slot</span>
-                </div>
-                <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
-                  <span class="item-slot__placeholder">Empty Pack Slot</span>
-                </div>
-                <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
-                  <span class="item-slot__placeholder">Empty Pack Slot</span>
-                </div>
-                <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
-                  <span class="item-slot__placeholder">Empty Pack Slot</span>
-                </div>
-                <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
-                  <span class="item-slot__placeholder">Empty Pack Slot</span>
-                </div>
-                <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
-                  <span class="item-slot__placeholder">Empty Pack Slot</span>
-                </div>
-                <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
-                  <span class="item-slot__placeholder">Empty Pack Slot</span>
-                </div>
-                <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
-                  <span class="item-slot__placeholder">Empty Pack Slot</span>
-                </div>
-                <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
-                  <span class="item-slot__placeholder">Empty Pack Slot</span>
+              <div class="inventory-grid-container" data-pack-grid-container>
+                <div class="inventory-grid">
+                  <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
+                    <span class="item-slot__placeholder">Empty Pack Slot</span>
+                  </div>
+                  <div
+                    class="item-slot"
+                    data-slot-kind="inventory"
+                    data-item-type="grenade"
+                    data-rarity="rare"
+                    data-description="Releases a chain lightning burst that weakens armored targets."
+                    data-bonuses="Shock Damage:+320;Chain Targets:5"
+                    data-item-name="Arcwave Charge"
+                    data-item-abbr="AC"
+                  >
+                    <span class="item-slot__tag">Grenade</span>
+                    <strong>Arcwave Charge</strong>
+                  </div>
+                  <div
+                    class="item-slot"
+                    data-slot-kind="inventory"
+                    data-item-type="artifact"
+                    data-rarity="legendary"
+                    data-description="Triggers a short rewind on shield break, restoring lost stamina."
+                    data-bonuses="Shield Restore:+25%;Stamina Refund:100%"
+                    data-item-name="Chrono Loop"
+                    data-item-abbr="CL"
+                  >
+                    <span class="item-slot__tag">Artifact</span>
+                    <strong>CL</strong>
+                  </div>
+                  <div
+                    class="item-slot"
+                    data-slot-kind="inventory"
+                    data-item-type="primary"
+                    data-weapon-id="pea-shooter-ii"
+                    data-rarity="uncommon"
+                    data-description="They've improved it, somewhat."
+                    data-bonuses="Power:+4"
+                    data-item-name="Pea Shooter II"
+                    data-item-abbr="PS2"
+                  >
+                    <span class="item-slot__tag">Primary</span>
+                    <strong>PS2</strong>
+                  </div>
+                  <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
+                    <span class="item-slot__placeholder">Empty Pack Slot</span>
+                  </div>
+                  <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
+                    <span class="item-slot__placeholder">Empty Pack Slot</span>
+                  </div>
+                  <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
+                    <span class="item-slot__placeholder">Empty Pack Slot</span>
+                  </div>
+                  <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
+                    <span class="item-slot__placeholder">Empty Pack Slot</span>
+                  </div>
+                  <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
+                    <span class="item-slot__placeholder">Empty Pack Slot</span>
+                  </div>
+                  <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
+                    <span class="item-slot__placeholder">Empty Pack Slot</span>
+                  </div>
+                  <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
+                    <span class="item-slot__placeholder">Empty Pack Slot</span>
+                  </div>
+                  <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
+                    <span class="item-slot__placeholder">Empty Pack Slot</span>
+                  </div>
+                  <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
+                    <span class="item-slot__placeholder">Empty Pack Slot</span>
+                  </div>
+                  <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
+                    <span class="item-slot__placeholder">Empty Pack Slot</span>
+                  </div>
+                  <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
+                    <span class="item-slot__placeholder">Empty Pack Slot</span>
+                  </div>
+                  <div class="item-slot" data-slot-kind="inventory" data-slot="empty" data-description="This pack slot is empty.">
+                    <span class="item-slot__placeholder">Empty Pack Slot</span>
+                  </div>
                 </div>
               </div>
             </div>
             <div class="inventory-section" data-storage-chest-section hidden>
               <h4>Storage Chest</h4>
               <div class="inventory-grid" data-storage-chest-grid>
-                <div
-                  class="item-slot"
-                  data-slot-kind="storage"
-                  data-slot="empty"
-                  data-description="This storage slot is empty."
-                >
+                <div class="item-slot" data-slot-kind="storage" data-slot="empty" data-description="This storage slot is empty.">
                   <span class="item-slot__placeholder">Empty Storage Slot</span>
                 </div>
                 <div class="item-slot" data-slot-kind="storage" data-slot="empty" data-description="This storage slot is empty.">
@@ -319,7 +318,9 @@
               </div>
             </div>
           </div>
+
         </section>
+
         <section
           class="pause-menu__panel"
           role="tabpanel"

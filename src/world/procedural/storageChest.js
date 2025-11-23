@@ -84,8 +84,10 @@ export function addStorageChest({
 
   if (Array.isArray(storageChests)) {
     const centerY = (bodyMinY + lidMaxY) * 0.5;
+    const primaryColor = Array.isArray(accentColor) ? new Float32Array(accentColor) : null;
     storageChests.push({
       center: new Float32Array([centerX, centerY, centerZ]),
+      primaryColor,
       bounds: {
         minX: bodyMinX,
         maxX: bodyMaxX,

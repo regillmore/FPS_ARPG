@@ -280,7 +280,7 @@ canvas {
 
 .pause-menu__container {
   width: min(960px, 90vw);
-  max-height: min(75vh, 640px);
+  max-height: min(85vh, 700px);
   display: grid;
   grid-template-rows: auto auto 1fr;
   gap: 1rem;
@@ -294,7 +294,7 @@ canvas {
 }
 
 .pause-menu__container.has-storage-chest {
-  max-height: min(95vh, 890px);
+  max-height: min(105vh, 950px);
 }
 
 .pause-menu__header h2 {
@@ -745,6 +745,58 @@ canvas {
   color: rgba(200, 214, 255, 0.95);
 }
 
+.inventory-grid-container {
+  position: relative;
+  padding: 0.85rem;
+  border-radius: 1rem;
+  --inventory-grid-border: rgba(138, 180, 255, 0.18);
+  --inventory-grid-highlight: rgba(138, 180, 255, 0.08);
+  --inventory-grid-highlight-strong: rgba(138, 180, 255, 0.14);
+  background: linear-gradient(145deg, rgba(8, 12, 20, 0.94), rgba(6, 10, 16, 0.9)),
+    radial-gradient(circle at 18% 20%, var(--inventory-grid-highlight), transparent 55%);
+  border: 1px solid var(--inventory-grid-border);
+  box-shadow:
+    0 1.1rem 2.4rem rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(0, 0, 0, 0.25),
+    0 0 0 1px var(--inventory-grid-border) inset;
+}
+
+.inventory-grid-container::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(circle at 82% 16%, var(--inventory-grid-highlight-strong), transparent 45%);
+  opacity: 0.85;
+  z-index: 0;
+}
+
+[data-gear-grid-container] {
+  --inventory-grid-border: rgba(120, 200, 255, 0.3);
+  --inventory-grid-highlight: rgba(120, 200, 255, 0.1);
+  --inventory-grid-highlight-strong: rgba(120, 200, 255, 0.16);
+}
+
+[data-pack-grid-container] {
+  --inventory-grid-border: rgba(120, 200, 255, 0.3);
+  --inventory-grid-highlight: rgba(120, 200, 255, 0.1);
+  --inventory-grid-highlight-strong: rgba(120, 200, 255, 0.16);
+}
+
+[data-gear-grid-container] .gear-grid,
+[data-pack-grid-container] .inventory-grid {
+  position: relative;
+  z-index: 1;
+}
+
+[data-storage-chest-section] {
+  --storage-chest-color: rgba(138, 180, 255, 0.45);
+  --storage-chest-color-soft: rgba(138, 180, 255, 0.2);
+  --storage-chest-color-strong: rgba(138, 180, 255, 0.6);
+  --storage-chest-color-vivid: rgb(178, 212, 255);
+}
+
 .inventory-grid,
 .gear-grid {
   display: grid;
@@ -880,6 +932,55 @@ canvas {
   color: rgba(180, 196, 230, 0.7);
   font-size: 0.85rem;
   letter-spacing: 0.08em;
+}
+
+[data-storage-chest-grid] {
+  position: relative;
+  padding: 0.85rem;
+  border-radius: 1rem;
+  background: linear-gradient(145deg, rgba(8, 12, 20, 0.94), rgba(6, 10, 16, 0.9)),
+    radial-gradient(circle at 18% 20%, var(--storage-chest-color-soft), transparent 55%);
+  border: 1px solid var(--storage-chest-color);
+  box-shadow:
+    0 1.1rem 2.4rem rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(0, 0, 0, 0.25),
+    0 0 0 1px var(--storage-chest-color-soft) inset;
+}
+
+[data-storage-chest-grid]::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(circle at 82% 16%, var(--storage-chest-color-soft), transparent 45%);
+  opacity: 0.85;
+  z-index: 0;
+}
+
+[data-storage-chest-grid] .item-slot {
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(165deg, rgba(12, 18, 28, 0.94), rgba(12, 18, 28, 0.88));
+  box-shadow:
+    inset 0 0 0 1px var(--storage-chest-color-soft),
+    0 0.45rem 1rem rgba(0, 0, 0, 0.35);
+}
+
+[data-storage-chest-grid] .item-slot strong {
+  color: var(--storage-chest-color-vivid);
+}
+
+[data-storage-chest-grid] .item-slot__tag {
+  background: var(--storage-chest-color-soft);
+  border-color: var(--storage-chest-color-strong);
+  color: #f5f8ff;
+}
+
+[data-storage-chest-grid] .item-slot[data-slot="empty"] {
+  border-color: var(--storage-chest-color-soft);
+  color: var(--storage-chest-color-vivid);
+  box-shadow: inset 0 0 0 1px var(--storage-chest-color-soft);
 }
 
 #item-detail-popover {
