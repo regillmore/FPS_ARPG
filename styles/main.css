@@ -745,6 +745,51 @@ canvas {
   color: rgba(200, 214, 255, 0.95);
 }
 
+.inventory-grid-container {
+  position: relative;
+  padding: 0.85rem;
+  border-radius: 1rem;
+  --inventory-grid-border: rgba(138, 180, 255, 0.18);
+  --inventory-grid-highlight: rgba(138, 180, 255, 0.08);
+  --inventory-grid-highlight-strong: rgba(138, 180, 255, 0.14);
+  background: linear-gradient(145deg, rgba(8, 12, 20, 0.94), rgba(6, 10, 16, 0.9)),
+    radial-gradient(circle at 18% 20%, var(--inventory-grid-highlight), transparent 55%);
+  border: 1px solid var(--inventory-grid-border);
+  box-shadow:
+    0 1.1rem 2.4rem rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(0, 0, 0, 0.25),
+    0 0 0 1px var(--inventory-grid-border) inset;
+}
+
+.inventory-grid-container::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(circle at 82% 16%, var(--inventory-grid-highlight-strong), transparent 45%);
+  opacity: 0.85;
+  z-index: 0;
+}
+
+[data-gear-grid-container] {
+  --inventory-grid-border: rgba(208, 158, 255, 0.32);
+  --inventory-grid-highlight: rgba(208, 158, 255, 0.14);
+  --inventory-grid-highlight-strong: rgba(208, 158, 255, 0.18);
+}
+
+[data-pack-grid-container] {
+  --inventory-grid-border: rgba(120, 200, 255, 0.3);
+  --inventory-grid-highlight: rgba(120, 200, 255, 0.1);
+  --inventory-grid-highlight-strong: rgba(120, 200, 255, 0.16);
+}
+
+[data-gear-grid-container] .gear-grid,
+[data-pack-grid-container] .inventory-grid {
+  position: relative;
+  z-index: 1;
+}
+
 [data-storage-chest-section] {
   --storage-chest-color: rgba(138, 180, 255, 0.45);
   --storage-chest-color-soft: rgba(138, 180, 255, 0.2);
