@@ -5,6 +5,7 @@ const DEFAULT_DOOR_COLOR = [0.62, 0.7, 0.82];
 const MAX_SWING_RADIANS = Math.PI * 0.55;
 const OPEN_SPEED = 2.8;
 const CLOSE_SPEED = 2.1;
+const HANDLE_COLOR = [0.9, 0.88, 0.84];
 const COLLIDER_DISABLE_THRESHOLD = 0.9;
 
 function clamp01(value) {
@@ -79,6 +80,64 @@ function createDoorLeafGeometry(device, color) {
     },
     color
   );
+
+  function appendHandle(sideSign) {
+    const plateHeight = 0.28;
+    const plateWidth = 0.12;
+    const plateDepth = 0.05;
+    const leverLength = 0.32;
+    const leverThickness = 0.04;
+    const stemLength = 0.08;
+    const handleCenterY = 0.43;
+
+    const surfaceX = 0.5 * sideSign;
+    const plateMinX = Math.min(surfaceX, surfaceX + plateDepth * sideSign);
+    const plateMaxX = Math.max(surfaceX, surfaceX + plateDepth * sideSign);
+    const plateMinY = handleCenterY - plateHeight * 0.5;
+    const plateMaxY = handleCenterY + plateHeight * 0.5;
+    const plateMinZ = -plateWidth * 0.5;
+    const plateMaxZ = plateWidth * 0.5;
+
+    vertices.push(
+      ...createBoxVertices(
+        { minX: plateMinX, maxX: plateMaxX, minY: plateMinY, maxY: plateMaxY, minZ: plateMinZ, maxZ: plateMaxZ },
+        HANDLE_COLOR
+      )
+    );
+
+    const stemCenterX = surfaceX + (plateDepth + leverThickness * 0.5) * sideSign;
+    const stemMinX = stemCenterX - leverThickness * 0.5;
+    const stemMaxX = stemCenterX + leverThickness * 0.5;
+    const stemMinY = handleCenterY - leverThickness * 0.5;
+    const stemMaxY = handleCenterY + leverThickness * 0.5;
+    const stemMinZ = -stemLength * 0.5;
+    const stemMaxZ = stemLength * 0.5;
+
+    vertices.push(
+      ...createBoxVertices(
+        { minX: stemMinX, maxX: stemMaxX, minY: stemMinY, maxY: stemMaxY, minZ: stemMinZ, maxZ: stemMaxZ },
+        HANDLE_COLOR
+      )
+    );
+
+    const leverCenterX = stemCenterX + (leverThickness * 0.5 + 0.02) * sideSign;
+    const leverMinX = leverCenterX - leverThickness * 0.5;
+    const leverMaxX = leverCenterX + leverThickness * 0.5;
+    const leverMinY = handleCenterY - leverThickness * 0.5;
+    const leverMaxY = handleCenterY + leverThickness * 0.5;
+    const leverMinZ = -leverThickness * 0.5;
+    const leverMaxZ = leverMinZ + leverLength;
+
+    vertices.push(
+      ...createBoxVertices(
+        { minX: leverMinX, maxX: leverMaxX, minY: leverMinY, maxY: leverMaxY, minZ: leverMinZ, maxZ: leverMaxZ },
+        HANDLE_COLOR
+      )
+    );
+  }
+
+  appendHandle(1);
+  appendHandle(-1);
 
   const vertexData = new Float32Array(vertices);
   const vertexBuffer = device.createBuffer({
