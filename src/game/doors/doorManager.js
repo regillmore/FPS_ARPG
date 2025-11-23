@@ -273,7 +273,7 @@ export function createDoorManager(device) {
     const distanceFromPlane =
       anchor?.orientation === 'x'
         ? (playerPosition?.[0] ?? anchor?.wallPosition ?? 0) - (anchor?.wallPosition ?? 0)
-        : (playerPosition?.[2] ?? anchor?.wallPosition ?? 0) - (anchor?.wallPosition ?? 0);
+        : -(playerPosition?.[2] ?? anchor?.wallPosition ?? 0) + (anchor?.wallPosition ?? 0);
 
     const sideSign = Math.sign(distanceFromPlane);
     const isFacingNormal = sideSign === 0 ? null : sideSign === Math.sign(anchor?.normalSign ?? 1);
