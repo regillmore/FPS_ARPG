@@ -290,7 +290,7 @@ export function createDoorManager(device) {
     const px = playerPosition?.[0] ?? 0;
     const py = playerPosition?.[1] ?? 0;
     const pz = playerPosition?.[2] ?? 0;
-    const closeDistanceSq = 5.0;
+    const closeDistanceSq = 30.0;
 
     for (const door of doors) {
       if (!door || !door.center) {
