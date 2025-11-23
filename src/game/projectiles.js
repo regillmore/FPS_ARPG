@@ -252,7 +252,7 @@ export function createProjectileManager(device, options = {}) {
       if (dynamicColliders && dynamicColliders.length > 0) {
         for (let colliderIndex = 0; colliderIndex < dynamicColliders.length; colliderIndex += 1) {
           const collider = dynamicColliders[colliderIndex];
-          const colliderBounds = collider?.bounds;
+          const colliderBounds = collider?.bounds ?? collider;
           if (!colliderBounds) {
             continue;
           }
