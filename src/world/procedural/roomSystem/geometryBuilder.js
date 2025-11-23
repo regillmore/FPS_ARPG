@@ -30,6 +30,18 @@ function calculateSingleDoorwayBias(spanLength, doorWidth, directionRandom) {
   return Math.max(-availableBias, Math.min(targetBias, availableBias));
 }
 
+function calculateDoorOpening(min, max, doorWidth, openingCenterBias = 0) {
+  const halfOpening = Math.min(doorWidth * 0.5, (max - min) * 0.45);
+  const halfSpan = (max - min) * 0.5;
+  const maxBias = Math.max(0, halfSpan - halfOpening);
+  const clampedBias = Math.max(-maxBias, Math.min(openingCenterBias, maxBias));
+  const openingCenter = (min + max) * 0.5 + clampedBias;
+  const openingMin = openingCenter - halfOpening;
+  const openingMax = openingCenter + halfOpening;
+
+  return { openingMin, openingMax };
+}
+
 function getForcedOriginEdgeState(ax, az, bx, bz) {
   const originInvolved = isOriginCell(ax, az) || isOriginCell(bx, bz);
   if (!originInvolved || (ax === bx && az === bz)) {
@@ -58,6 +70,7 @@ export function createRoomGeometryBuilder({
   colliders,
   storageChests,
   decorativeLights,
+  doors,
   roomSize,
   roomHeight,
   levelHeight,
@@ -388,6 +401,9 @@ export function createRoomGeometryBuilder({
     decorativeLights.length = 0;
     resetBounds();
     colliders.length = 0;
+    if (Array.isArray(doors)) {
+      doors.length = 0;
+    }
     if (typeof setElevatorPanel === 'function') {
       setElevatorPanel(null);
     }
@@ -420,6 +436,55 @@ export function createRoomGeometryBuilder({
         layerSeedCache.set(layerIndex, getLayerSeed(layerIndex));
       }
       return layerSeedCache.get(layerIndex);
+    }
+
+    function addDoorAnchor({
+      edgeKey,
+      layerIndex,
+      orientation,
+      wallPosition,
+      openingMin,
+      openingMax,
+      baseY,
+      doorHeight,
+      doorWidth,
+      isDoubleDoor,
+      wallColor,
+      accentColor,
+      normalSign
+    }) {
+      if (!Array.isArray(doors) || typeof wallPosition !== 'number') {
+        return;
+      }
+
+      const openingWidth = openingMax - openingMin;
+      if (openingWidth <= 0) {
+        return;
+      }
+
+      const height = Math.max(Math.min(doorHeight, roomHeight - 0.05), roomHeight * 0.25);
+      const thickness = Math.min(Math.max(wallThickness * 0.6, 0.08), wallThickness);
+      const centerX = orientation === 'x' ? wallPosition : (openingMin + openingMax) * 0.5;
+      const centerZ = orientation === 'z' ? wallPosition : (openingMin + openingMax) * 0.5;
+      const color = mixColors(wallColor, accentColor, 0.5);
+
+      doors.push({
+        id: `${edgeKey}@${layerIndex}`,
+        layerIndex,
+        orientation,
+        wallPosition,
+        openingMin,
+        openingMax,
+        width: openingWidth,
+        height,
+        thickness,
+        baseY,
+        color,
+        isDoubleDoor: Boolean(isDoubleDoor),
+        normalSign: Math.sign(normalSign || 1) || 1,
+        center: [centerX, baseY + height * 0.5, centerZ],
+        doorWidth
+      });
     }
 
     function isCellFullyEnclosedAtLayer(x, z, layerIndex) {
@@ -568,6 +633,27 @@ export function createRoomGeometryBuilder({
                   baseY
                 );
               } else if (type === 'doorway') {
+                const { openingMin, openingMax } = calculateDoorOpening(
+                  edgeMinZ,
+                  edgeMaxZ,
+                  localDoorWidth,
+                  openingBias
+                );
+                addDoorAnchor({
+                  edgeKey,
+                  layerIndex,
+                  orientation: 'x',
+                  wallPosition: wallX,
+                  openingMin,
+                  openingMax,
+                  baseY,
+                  doorHeight: localDoorHeight,
+                  doorWidth: localDoorWidth,
+                  isDoubleDoor,
+                  wallColor,
+                  accentColor,
+                  normalSign: Math.sign(nx - gx)
+                });
                 buildDoorwayAlongX(
                   vertices,
                   wallX,
@@ -634,6 +720,27 @@ export function createRoomGeometryBuilder({
                   baseY
                 );
               } else if (type === 'doorway') {
+                const { openingMin, openingMax } = calculateDoorOpening(
+                  edgeMinX,
+                  edgeMaxX,
+                  localDoorWidth,
+                  openingBias
+                );
+                addDoorAnchor({
+                  edgeKey,
+                  layerIndex,
+                  orientation: 'z',
+                  wallPosition: wallZ,
+                  openingMin,
+                  openingMax,
+                  baseY,
+                  doorHeight: localDoorHeight,
+                  doorWidth: localDoorWidth,
+                  isDoubleDoor,
+                  wallColor,
+                  accentColor,
+                  normalSign: Math.sign(nz - gz)
+                });
                 buildDoorwayAlongZ(
                   vertices,
                   wallZ,

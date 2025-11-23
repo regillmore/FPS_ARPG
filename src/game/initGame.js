@@ -9,6 +9,7 @@ import { createProjectileManager } from './projectiles.js';
 import { createBulletHoleManager } from './bulletHoles.js';
 import { traceRayAABB } from './collisions.js';
 import { createWorldItemManager } from './worldItems.js';
+import { createDoorManager } from './doors/doorManager.js';
 import {
   DEFAULT_PROJECTILE_SETTINGS,
   DEFAULT_WEAPON_OFFSET,
@@ -154,8 +155,20 @@ export async function initializeGame({
 
     const projectileManager = createProjectileManager(device, {
       bounds,
-      getDynamicColliders: () =>
-        disableEnemies ? [] : enemyManager.getHitBoxes(),
+      getDynamicColliders: () => {
+        const colliders = [];
+        const doorHitBoxes = doorManager.getActiveColliders();
+        if (Array.isArray(doorHitBoxes)) {
+          colliders.push(...doorHitBoxes);
+        }
+        if (!disableEnemies) {
+          const enemyHitBoxes = enemyManager.getHitBoxes();
+          if (Array.isArray(enemyHitBoxes)) {
+            colliders.push(...enemyHitBoxes);
+          }
+        }
+        return colliders;
+      },
       getStaticColliders: () => roomColliders,
       onImpact: (impact) => {
         const size = Number.isFinite(impact.projectileSize)
@@ -171,6 +184,8 @@ export async function initializeGame({
     });
 
     const worldItemManager = createWorldItemManager(device);
+    const doorManager = createDoorManager(device);
+    doorManager.syncDoors(roomSystem.getDoors?.() ?? []);
     //enemyManager.spawnTargetDummy({ position: [0, 0, -2.5] });
 
     const { spawnProceduralBarrels, spawnProceduralCameras } = proceduralSpawner;
@@ -557,6 +572,7 @@ export async function initializeGame({
 
       const worldItems =
         typeof worldItemManager.getItems === 'function' ? worldItemManager.getItems() : [];
+      const activeDoors = doorManager.getDoors();
 
       updateStorageChestProximity();
 
@@ -579,7 +595,10 @@ export async function initializeGame({
         roomVertexCount = roomSystem.getVertexCount();
         spawnProceduralBarrels();
         spawnProceduralCameras();
+        doorManager.syncDoors(roomSystem.getDoors?.() ?? []);
       }
+
+      doorManager.update(isPaused ? 0 : deltaTime, controller.position);
 
       playerCollisionScratch.length = 0;
       if (roomColliders) {
@@ -597,6 +616,15 @@ export async function initializeGame({
           const bounds = dynamicHitBoxes[i]?.bounds ?? null;
           if (bounds) {
             playerCollisionScratch.push(bounds);
+          }
+        }
+      }
+
+      const doorHitBoxes = doorManager.getActiveColliders();
+      if (doorHitBoxes) {
+        for (const collider of doorHitBoxes) {
+          if (collider) {
+            playerCollisionScratch.push(collider);
           }
         }
       }
@@ -895,6 +923,7 @@ export async function initializeGame({
           typeof roomSystem.getElevatorPanel === 'function' ? roomSystem.getElevatorPanel() : null;
         let elevatorPromptActive = false;
         let storageChestPromptActive = false;
+        let doorPromptActive = false;
 
         if (elevatorPanel?.bounds && elevatorPanel.center) {
           const dx = controller.position[0] - elevatorPanel.center[0];
@@ -928,6 +957,61 @@ export async function initializeGame({
         }
 
         if (!elevatorPromptActive) {
+          let highlightedDoor = null;
+          let closestDoorDistance = Infinity;
+
+          if (Array.isArray(activeDoors)) {
+            for (const door of activeDoors) {
+              if (!door || !door.interactionBounds || !door.center) {
+                continue;
+              }
+
+              const dx = controller.position[0] - door.center[0];
+              const dz = controller.position[2] - door.center[2];
+              const horizontalDistanceSq = dx * dx + dz * dz;
+              if (horizontalDistanceSq > ITEM_INTERACTION_DISTANCE_SQ) {
+                continue;
+              }
+
+              const verticalDistance = Math.abs(controller.position[1] - door.center[1]);
+              if (verticalDistance > ITEM_INTERACTION_VERTICAL_LIMIT) {
+                continue;
+              }
+
+              const hit = traceRayAABB(eye, viewDirection, ITEM_AIM_MAX_DISTANCE, door.interactionBounds);
+              if (!hit) {
+                continue;
+              }
+
+              if (hit.distance < closestDoorDistance) {
+                closestDoorDistance = hit.distance;
+                highlightedDoor = door;
+              }
+            }
+          }
+
+          if (highlightedDoor) {
+            doorPromptActive = true;
+            const accentColor = highlightedDoor.color ?? [0.75, 0.88, 1];
+            const promptColor = floatColorToCss(accentColor, 'rgb(200, 230, 255)');
+            hudController?.setReticleAccentOverride?.(accentColor);
+            overlayController?.showPersistentUsePrompt?.(
+              `Press ${PICKUP_USE_KEY} to open the door`,
+              promptColor
+            );
+
+            if (usePressedThisFrame) {
+              doorManager.requestOpen(highlightedDoor.id);
+              overlayController?.showTemporaryUsePrompt?.(
+                'Opening door',
+                promptColor,
+                PICKUP_PROMPT_SUCCESS_DURATION * 0.6
+              );
+            }
+          }
+        }
+
+        if (!elevatorPromptActive && !doorPromptActive) {
           let highlightedPickup = null;
           let closestPickupDistance = Infinity;
 
@@ -1119,6 +1203,7 @@ export async function initializeGame({
       const encoder = device.createCommandEncoder();
       const textureView = context.getCurrentTexture().createView();
       const depthTextureView = getDepthTextureView();
+      const renderableDoors = doorManager.getRenderables();
 
       const pass = encoder.beginRenderPass({
         colorAttachments: [
@@ -1141,6 +1226,25 @@ export async function initializeGame({
       pass.setBindGroup(0, worldUniformBindGroup);
       pass.setVertexBuffer(0, roomVertexBuffer);
       pass.draw(roomVertexCount, 1, 0, 0);
+
+      if (Array.isArray(renderableDoors) && renderableDoors.length > 0) {
+        for (const leaf of renderableDoors) {
+          if (!leaf || !leaf.vertexBuffer || !leaf.vertexCount) {
+            continue;
+          }
+          ensureRenderableUniformResources(leaf);
+          if (!leaf.uniformBuffer || !leaf.uniformBindGroup || !leaf.uniformData) {
+            continue;
+          }
+          writeUniformData(leaf.uniformData, viewProj, leaf.modelMatrix ?? IDENTITY_MATRIX, activeLights);
+          device.queue.writeBuffer(leaf.uniformBuffer, 0, leaf.uniformData);
+          pass.setBindGroup(0, leaf.uniformBindGroup);
+          pass.setVertexBuffer(0, leaf.vertexBuffer);
+          pass.draw(leaf.vertexCount, 1, 0, 0);
+        }
+        pass.setBindGroup(0, worldUniformBindGroup);
+        pass.setVertexBuffer(0, roomVertexBuffer);
+      }
 
       if (Array.isArray(worldItems) && worldItems.length > 0) {
         for (const item of worldItems) {
