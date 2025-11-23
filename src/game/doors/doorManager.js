@@ -156,11 +156,11 @@ function updateLeafTransform(leaf, anchor, openAmount) {
   const forwardBase =
     anchor.orientation === 'x'
       ? [0, 0, leaf.leafWidth]
-      : [leaf.leafWidth, 0, 0];
+      : [-leaf.leafWidth, 0, 0];
   const offset =
     anchor.orientation === 'x'
-      ? [0, anchor.height * 0.5, (leaf.leafWidth * 0.5) * leaf.forwardDirection]
-      : [(leaf.leafWidth * 0.5) * leaf.forwardDirection, anchor.height * 0.5, 0];
+      ? [0, 0, (leaf.leafWidth * 0.5) * leaf.forwardDirection]
+      : [(leaf.leafWidth * 0.5) * leaf.forwardDirection, 0, 0];
 
   const rotatedRight = rotateY([0, 0, 0], rightBase, angle);
   const rotatedForward = rotateY([0, 0, 0], forwardBase, angle);
@@ -263,7 +263,7 @@ export function createDoorManager(device) {
     const px = playerPosition?.[0] ?? 0;
     const py = playerPosition?.[1] ?? 0;
     const pz = playerPosition?.[2] ?? 0;
-    const closeDistanceSq = 3.5;
+    const closeDistanceSq = 5.0;
 
     for (const door of doors) {
       if (!door || !door.center) {
