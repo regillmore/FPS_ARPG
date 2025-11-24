@@ -5,7 +5,6 @@ const DEFAULT_DOOR_COLOR = [0.62, 0.7, 0.82];
 const MAX_SWING_RADIANS = Math.PI * 0.55;
 const OPEN_SPEED = 2.8;
 const CLOSE_SPEED = 2.1;
-const COLLIDER_DISABLE_THRESHOLD = 0.9;
 
 function clamp01(value) {
   if (!Number.isFinite(value)) {
@@ -257,6 +256,51 @@ export function createDoorManager(device) {
       if (!leaf) continue;
       updateLeafTransform(leaf, door.anchor, door.openAmount, door.swingDirection);
     }
+    updateDoorCollider(door);
+  }
+
+  function updateDoorCollider(door) {
+    const leaf = door?.leaves?.[0];
+    if (!leaf?.modelMatrix) {
+      return;
+    }
+
+    const m = leaf.modelMatrix;
+    const corners = [
+      [-0.5, 0, -0.5],
+      [-0.5, 0, 0.5],
+      [0.5, 0, -0.5],
+      [0.5, 0, 0.5],
+      [-0.5, 1, -0.5],
+      [-0.5, 1, 0.5],
+      [0.5, 1, -0.5],
+      [0.5, 1, 0.5]
+    ];
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+
+    for (const [x, y, z] of corners) {
+      const worldX = m[0] * x + m[4] * y + m[8] * z + m[12];
+      const worldY = m[1] * x + m[5] * y + m[9] * z + m[13];
+      const worldZ = m[2] * x + m[6] * y + m[10] * z + m[14];
+
+      minX = Math.min(minX, worldX);
+      maxX = Math.max(maxX, worldX);
+      minY = Math.min(minY, worldY);
+      maxY = Math.max(maxY, worldY);
+      minZ = Math.min(minZ, worldZ);
+      maxZ = Math.max(maxZ, worldZ);
+    }
+
+    const center = [(minX + maxX) * 0.5, (minY + maxY) * 0.5, (minZ + maxZ) * 0.5];
+    door.collider = { minX, maxX, minY, maxY, minZ, maxZ };
+    door.interactionBounds = door.collider;
+    door.center = center;
   }
 
   function syncDoors(anchors = []) {
@@ -349,9 +393,6 @@ export function createDoorManager(device) {
     const result = [];
     for (const door of doors) {
       if (!door || !door.collider) {
-        continue;
-      }
-      if (door.openAmount >= COLLIDER_DISABLE_THRESHOLD) {
         continue;
       }
       result.push(door.collider);
