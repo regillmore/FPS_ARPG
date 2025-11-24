@@ -626,6 +626,14 @@ export async function initializeGame({
         }
       }
 
+      const occlusionColliders = [];
+      if (Array.isArray(roomColliders)) {
+        occlusionColliders.push(...roomColliders);
+      }
+      if (Array.isArray(doorHitBoxes)) {
+        occlusionColliders.push(...doorHitBoxes);
+      }
+
       const collisionResult = resolvePlayerCollisions(controller.position, playerCollisionScratch);
 
       const horizontalPadding = Math.max(PLAYER_COLLISION_RADIUS, 0.25);
@@ -1185,7 +1193,7 @@ export async function initializeGame({
         deltaTime,
         paused: Boolean(isPaused),
         cameraPosition: eye,
-        occlusionColliders: roomColliders,
+        occlusionColliders,
         minimap: minimapState
       });
 
