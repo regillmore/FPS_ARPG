@@ -2,6 +2,7 @@ import { mat4FromRotationTranslation } from '../../math.js';
 
 const FLOATS_PER_VERTEX = 10;
 const DEFAULT_DOOR_COLOR = [0.62, 0.7, 0.82];
+const KNOB_COLOR_MULTIPLIER = 0.82;
 const MAX_SWING_RADIANS = Math.PI * 0.55;
 const OPEN_SPEED = 2.8;
 const CLOSE_SPEED = 2.1;
@@ -66,18 +67,28 @@ function pushVertex(target, position, normal, color) {
   );
 }
 
-function createDoorLeafGeometry(device, color) {
-  const vertices = createBoxVertices(
-    {
-      minX: -0.5,
-      maxX: 0.5,
-      minY: 0,
-      maxY: 1,
-      minZ: -0.5,
-      maxZ: 0.5
-    },
-    color
+function createDoorLeafGeometry(device, color, knobOffsetSign = 1) {
+  const knobColor = Array.isArray(color)
+    ? color.map((component) => Math.min(Math.max(component * KNOB_COLOR_MULTIPLIER, 0), 1))
+    : DEFAULT_DOOR_COLOR;
+
+  const vertices = [];
+
+  vertices.push(
+    ...createBoxVertices(
+      {
+        minX: -0.5,
+        maxX: 0.5,
+        minY: 0,
+        maxY: 1,
+        minZ: -0.5,
+        maxZ: 0.5
+      },
+      color
+    )
   );
+
+  addLeverKnobs(vertices, knobColor, knobOffsetSign);
 
   const vertexData = new Float32Array(vertices);
   const vertexBuffer = device.createBuffer({
@@ -94,7 +105,55 @@ function createDoorLeafGeometry(device, color) {
   };
 }
 
-function createLeaves(anchor, geometry, leafWidth) {
+function addLeverKnobs(vertices, color, knobOffsetSign) {
+  const leverHeight = 0.12;
+  const leverWidth = 0.14;
+  const leverDepth = 0.3;
+  const leverCenterY = 0.48;
+  const leverCenterZ = 0.32 * (knobOffsetSign >= 0 ? 1 : -1);
+
+  for (const side of [-1, 1]) {
+    const minX = side > 0 ? 0.45 : -0.75;
+    const maxX = side > 0 ? 0.75 : -0.45;
+    const minY = leverCenterY - leverHeight * 0.5;
+    const maxY = leverCenterY + leverHeight * 0.5;
+    const minZ = leverCenterZ - leverWidth * 0.5;
+    const maxZ = leverCenterZ + leverWidth * 0.5;
+
+    vertices.push(
+      ...createBoxVertices(
+        {
+          minX,
+          maxX,
+          minY,
+          maxY,
+          minZ,
+          maxZ
+        },
+        color
+      )
+    );
+
+    const handleMinX = side > 0 ? maxX - leverDepth * 0.5 : minX + leverDepth * 0.5;
+    const handleMaxX = side > 0 ? maxX + leverDepth * 0.5 : minX - leverDepth * 0.5;
+
+    vertices.push(
+      ...createBoxVertices(
+        {
+          minX: handleMinX,
+          maxX: handleMaxX,
+          minY: leverCenterY - leverHeight * 0.25,
+          maxY: leverCenterY + leverHeight * 0.25,
+          minZ: leverCenterZ - leverWidth * 0.25,
+          maxZ: leverCenterZ + leverWidth * 0.25
+        },
+        color
+      )
+    );
+  }
+}
+
+function createLeaves(anchor, leafWidth, getGeometryForColor, color) {
   const leaves = [];
   const hingeA = anchor.openingMin;
   const hingeB = anchor.openingMax;
@@ -118,6 +177,8 @@ function createLeaves(anchor, geometry, leafWidth) {
   for (let i = 0; i < hingePositions.length; i += 1) {
     const hingeValue = hingePositions[i];
     const forwardDirection = forwardDirections[i];
+    const knobOffsetSign = forwardDirection >= 0 ? 1 : -1;
+    const geometry = getGeometryForColor(color, knobOffsetSign);
     const hinge =
       anchor.orientation === 'x'
         ? new Float32Array([anchor.wallPosition, anchor.baseY, hingeValue])
@@ -205,20 +266,21 @@ export function createDoorManager(device) {
   const doors = [];
   const geometryCache = new Map();
 
-  const getGeometryForColor = (color = DEFAULT_DOOR_COLOR) => {
-    const key = color.map((component) => component.toFixed(4)).join(',');
+  const getGeometryForColor = (color = DEFAULT_DOOR_COLOR, knobOffsetSign = 1) => {
+    const colorKey = color.map((component) => component.toFixed(4)).join(',');
+    const key = `${colorKey}|${knobOffsetSign >= 0 ? 'positive' : 'negative'}`;
     let geometry = geometryCache.get(key);
     if (!geometry) {
-      geometry = createDoorLeafGeometry(device, color);
+      geometry = createDoorLeafGeometry(device, color, knobOffsetSign);
       geometryCache.set(key, geometry);
     }
     return geometry;
   };
 
   function rebuildDoorFromAnchor(anchor, existingMap) {
-    const geometry = getGeometryForColor(anchor.color ?? DEFAULT_DOOR_COLOR);
+    const color = anchor.color ?? DEFAULT_DOOR_COLOR;
     const leafWidth = anchor.isDoubleDoor ? anchor.width * 0.5 : anchor.width;
-    const leaves = createLeaves(anchor, geometry, leafWidth);
+    const leaves = createLeaves(anchor, leafWidth, getGeometryForColor, color);
 
     return leaves.map((leaf, index) => {
       const { center, ...collider } = buildLeafBounds(anchor, leaf);
