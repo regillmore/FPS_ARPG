@@ -99,8 +99,22 @@ function createLeaves(anchor, geometry, leafWidth) {
   const leaves = [];
   const hingeA = anchor.openingMin;
   const hingeB = anchor.openingMax;
-  const hingePositions = anchor.isDoubleDoor ? [hingeA, hingeB] : [hingeA];
-  const forwardDirections = anchor.isDoubleDoor ? [1, -1] : [1];
+  let hingePositions;
+  let forwardDirections;
+
+  if (anchor.isDoubleDoor) {
+    hingePositions = [hingeA, hingeB];
+    forwardDirections = [1, -1];
+  } else {
+    const spanMin = anchor.spanMin ?? hingeA;
+    const spanMax = anchor.spanMax ?? hingeB;
+    const distanceToMin = Math.abs(hingeA - spanMin);
+    const distanceToMax = Math.abs(spanMax - hingeB);
+    const hingeNearMin = distanceToMin <= distanceToMax;
+
+    hingePositions = [hingeNearMin ? hingeA : hingeB];
+    forwardDirections = [hingeNearMin ? 1 : -1];
+  }
 
   for (let i = 0; i < hingePositions.length; i += 1) {
     const hingeValue = hingePositions[i];
