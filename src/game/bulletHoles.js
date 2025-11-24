@@ -8,6 +8,67 @@ const FLOATS_PER_DECAL = FLOATS_PER_VERTEX * VERTICES_PER_DECAL;
 const SURFACE_BIAS = 0.0025;
 const VECTOR_EPSILON = 1e-5;
 
+function transformPoint(matrix, point) {
+  const x = point[0];
+  const y = point[1];
+  const z = point[2];
+
+  return new Float32Array([
+    matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12],
+    matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13],
+    matrix[2] * x + matrix[6] * y + matrix[10] * z + matrix[14]
+  ]);
+}
+
+function transformDirection(matrix, direction) {
+  const x = direction[0];
+  const y = direction[1];
+  const z = direction[2];
+
+  const result = new Float32Array([
+    matrix[0] * x + matrix[4] * y + matrix[8] * z,
+    matrix[1] * x + matrix[5] * y + matrix[9] * z,
+    matrix[2] * x + matrix[6] * y + matrix[10] * z
+  ]);
+
+  const length = Math.hypot(result[0], result[1], result[2]);
+  if (length <= VECTOR_EPSILON) {
+    return result;
+  }
+
+  result[0] /= length;
+  result[1] /= length;
+  result[2] /= length;
+  return result;
+}
+
+function inverseTransformPoint(matrix, point) {
+  const dx = point[0] - matrix[12];
+  const dy = point[1] - matrix[13];
+  const dz = point[2] - matrix[14];
+
+  return new Float32Array([
+    matrix[0] * dx + matrix[1] * dy + matrix[2] * dz,
+    matrix[4] * dx + matrix[5] * dy + matrix[6] * dz,
+    matrix[8] * dx + matrix[9] * dy + matrix[10] * dz
+  ]);
+}
+
+function inverseTransformDirection(matrix, direction) {
+  const x = direction[0];
+  const y = direction[1];
+  const z = direction[2];
+
+  return normalizeVector(
+    new Float32Array([
+      matrix[0] * x + matrix[1] * y + matrix[2] * z,
+      matrix[4] * x + matrix[5] * y + matrix[6] * z,
+      matrix[8] * x + matrix[9] * y + matrix[10] * z
+    ]),
+    direction
+  );
+}
+
 function clampMaxDecals(value) {
   const maxValue = Number(value);
   if (!Number.isFinite(maxValue) || maxValue < 1) {
@@ -144,7 +205,7 @@ export function createBulletHoleManager(device, options = {}) {
     return { tangent, bitangent };
   }
 
-  function spawnBulletHole({ position, normal, size, lifetime, color } = {}) {
+  function spawnBulletHole({ position, normal, size, lifetime, color, attachment } = {}) {
     const basePosition = toVector3(position, [0, 0, 0]);
     const normalizedNormal = normalizeVector(normal, [0, 0, 1]);
 
@@ -180,6 +241,22 @@ export function createBulletHoleManager(device, options = {}) {
     rotatedBitangent[1] = bitangent[1] * cosR - tangent[1] * sinR;
     rotatedBitangent[2] = bitangent[2] * cosR - tangent[2] * sinR;
 
+    const attachmentData = (() => {
+      const leaf = attachment?.leaf;
+      const modelMatrix = leaf?.modelMatrix;
+      if (!modelMatrix) {
+        return null;
+      }
+
+      return {
+        leaf,
+        localPosition: inverseTransformPoint(modelMatrix, basePosition),
+        localNormal: inverseTransformDirection(modelMatrix, normalizedNormal),
+        localTangent: inverseTransformDirection(modelMatrix, rotatedTangent),
+        localBitangent: inverseTransformDirection(modelMatrix, rotatedBitangent)
+      };
+    })();
+
     if (bulletHoles.length >= maxDecals) {
       bulletHoles.shift();
     }
@@ -193,7 +270,8 @@ export function createBulletHoleManager(device, options = {}) {
       lifetime: resolvedLifetime,
       age: 0,
       color: resolvedColor,
-      surfaceBias: SURFACE_BIAS
+      surfaceBias: SURFACE_BIAS,
+      attachment: attachmentData
     });
 
     markDirty();
@@ -214,6 +292,15 @@ export function createBulletHoleManager(device, options = {}) {
       }
     }
 
+    if (!changed) {
+      for (const bulletHole of bulletHoles) {
+        if (bulletHole?.attachment) {
+          changed = true;
+          break;
+        }
+      }
+    }
+
     if (changed) {
       markDirty();
     }
@@ -228,11 +315,20 @@ export function createBulletHoleManager(device, options = {}) {
     for (let i = 0; i < bulletHoles.length; i += 1) {
       const bulletHole = bulletHoles[i];
       const half = bulletHole.size / 2;
-      const tangent = bulletHole.tangent;
-      const bitangent = bulletHole.bitangent;
-      const normal = bulletHole.normal;
-      const center = bulletHole.position;
+      let tangent = bulletHole.tangent;
+      let bitangent = bulletHole.bitangent;
+      let normal = bulletHole.normal;
+      let center = bulletHole.position;
       const bias = bulletHole.surfaceBias;
+
+      const attachment = bulletHole.attachment;
+      const modelMatrix = attachment?.leaf?.modelMatrix;
+      if (attachment && modelMatrix) {
+        tangent = transformDirection(modelMatrix, attachment.localTangent);
+        bitangent = transformDirection(modelMatrix, attachment.localBitangent);
+        normal = transformDirection(modelMatrix, attachment.localNormal);
+        center = transformPoint(modelMatrix, attachment.localPosition);
+      }
 
       const corners = [
         [

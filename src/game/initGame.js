@@ -183,7 +183,9 @@ export async function initializeGame({
     });
 
     const worldItemManager = createWorldItemManager(device);
-    const doorManager = createDoorManager(device);
+    const doorManager = createDoorManager(device, {
+      spawnAttachedBulletHole: (impact) => bulletHoleManager.spawnBulletHole(impact)
+    });
     doorManager.syncDoors(roomSystem.getDoors?.() ?? []);
 
     const { spawnProceduralBarrels } = proceduralSpawner;

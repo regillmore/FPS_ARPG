@@ -198,13 +198,15 @@ function updateLeafTransform(leaf, anchor, openAmount, swingDirection = 1) {
   mat4FromRotationTranslation(leaf.modelMatrix, rotatedRight, up, rotatedForward, translation);
 }
 
-export function createDoorManager(device) {
+export function createDoorManager(device, options = {}) {
   if (!device) {
     throw new Error('GPUDevice is required to create the door manager.');
   }
 
   const doors = [];
   const geometryCache = new Map();
+  const spawnAttachedBulletHole =
+    typeof options.spawnAttachedBulletHole === 'function' ? options.spawnAttachedBulletHole : null;
 
   const getGeometryForColor = (color = DEFAULT_DOOR_COLOR) => {
     const key = color.map((component) => component.toFixed(4)).join(',');
@@ -233,7 +235,16 @@ export function createDoorManager(device) {
         id,
         anchor,
         leaves: [leaf],
-        collider,
+        collider: {
+          ...collider,
+          onHit: spawnAttachedBulletHole
+            ? (impact) =>
+                spawnAttachedBulletHole({
+                  ...impact,
+                  attachment: { leaf }
+                })
+            : undefined
+        },
         interactionBounds: collider,
         center,
         openAmount,
