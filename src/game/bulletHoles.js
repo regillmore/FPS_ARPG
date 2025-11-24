@@ -7,6 +7,14 @@ const VERTICES_PER_DECAL = 6;
 const FLOATS_PER_DECAL = FLOATS_PER_VERTEX * VERTICES_PER_DECAL;
 const SURFACE_BIAS = 0.0025;
 const VECTOR_EPSILON = 1e-5;
+const IDENTITY_MATRIX = Object.freeze(
+  new Float32Array([
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1
+  ])
+);
 
 function clampMaxDecals(value) {
   const maxValue = Number(value);
@@ -68,6 +76,69 @@ function cross(out, a, b) {
   return out;
 }
 
+function extractBasisFromMatrix(matrix, basis) {
+  if (!basis) {
+    basis = {
+      right: new Float32Array(3),
+      up: new Float32Array(3),
+      forward: new Float32Array(3),
+      translation: new Float32Array(3)
+    };
+  }
+
+  basis.right[0] = matrix[0];
+  basis.right[1] = matrix[1];
+  basis.right[2] = matrix[2];
+
+  basis.up[0] = matrix[4];
+  basis.up[1] = matrix[5];
+  basis.up[2] = matrix[6];
+
+  basis.forward[0] = matrix[8];
+  basis.forward[1] = matrix[9];
+  basis.forward[2] = matrix[10];
+
+  basis.translation[0] = matrix[12];
+  basis.translation[1] = matrix[13];
+  basis.translation[2] = matrix[14];
+
+  return basis;
+}
+
+function applyRotation(out, basis, vector) {
+  out[0] =
+    basis.right[0] * vector[0] + basis.up[0] * vector[1] + basis.forward[0] * vector[2];
+  out[1] =
+    basis.right[1] * vector[0] + basis.up[1] * vector[1] + basis.forward[1] * vector[2];
+  out[2] =
+    basis.right[2] * vector[0] + basis.up[2] * vector[1] + basis.forward[2] * vector[2];
+  return out;
+}
+
+function applyInverseRotation(out, basis, vector) {
+  out[0] =
+    basis.right[0] * vector[0] + basis.right[1] * vector[1] + basis.right[2] * vector[2];
+  out[1] = basis.up[0] * vector[0] + basis.up[1] * vector[1] + basis.up[2] * vector[2];
+  out[2] =
+    basis.forward[0] * vector[0] + basis.forward[1] * vector[1] + basis.forward[2] * vector[2];
+  return out;
+}
+
+function transformPoint(out, basis, localPosition) {
+  applyRotation(out, basis, localPosition);
+  out[0] += basis.translation[0];
+  out[1] += basis.translation[1];
+  out[2] += basis.translation[2];
+  return out;
+}
+
+function transformPointInverse(out, basis, worldPosition) {
+  const dx = worldPosition[0] - basis.translation[0];
+  const dy = worldPosition[1] - basis.translation[1];
+  const dz = worldPosition[2] - basis.translation[2];
+  return applyInverseRotation(out, basis, [dx, dy, dz]);
+}
+
 function writeVertex(target, offset, position, normal, color) {
   target[offset++] = position[0];
   target[offset++] = position[1];
@@ -104,8 +175,64 @@ export function createBulletHoleManager(device, options = {}) {
   let vertexCount = 0;
   let vertexDataDirty = false;
 
+  const attachmentBasisScratch = {
+    right: new Float32Array(3),
+    up: new Float32Array(3),
+    forward: new Float32Array(3),
+    translation: new Float32Array(3)
+  };
+  const transformScratch = {
+    position: new Float32Array(3),
+    normal: new Float32Array(3),
+    tangent: new Float32Array(3),
+    bitangent: new Float32Array(3)
+  };
+
   function markDirty() {
     vertexDataDirty = true;
+  }
+
+  function createAttachment(attachment, position, normal, tangent, bitangent) {
+    if (!attachment || typeof attachment.getMatrix !== 'function') {
+      return null;
+    }
+
+    let matrix = attachment.getMatrix();
+    if (!matrix) {
+      matrix = IDENTITY_MATRIX;
+    }
+
+    const basis = extractBasisFromMatrix(matrix, attachmentBasisScratch);
+    const localPosition = transformPointInverse(new Float32Array(3), basis, position);
+    const localNormal = applyInverseRotation(new Float32Array(3), basis, normal);
+    const localTangent = applyInverseRotation(new Float32Array(3), basis, tangent);
+    const localBitangent = applyInverseRotation(new Float32Array(3), basis, bitangent);
+
+    return {
+      getMatrix: attachment.getMatrix,
+      localPosition,
+      localNormal,
+      localTangent,
+      localBitangent
+    };
+  }
+
+  function applyAttachment(attachment, target) {
+    if (!attachment || typeof attachment.getMatrix !== 'function') {
+      return null;
+    }
+
+    const matrix = attachment.getMatrix();
+    if (!matrix) {
+      return null;
+    }
+
+    const basis = extractBasisFromMatrix(matrix, attachmentBasisScratch);
+    transformPoint(target.position, basis, attachment.localPosition);
+    applyRotation(target.normal, basis, attachment.localNormal);
+    applyRotation(target.tangent, basis, attachment.localTangent);
+    applyRotation(target.bitangent, basis, attachment.localBitangent);
+    return target;
   }
 
   function computeOrthonormalBasis(normal) {
@@ -144,7 +271,7 @@ export function createBulletHoleManager(device, options = {}) {
     return { tangent, bitangent };
   }
 
-  function spawnBulletHole({ position, normal, size, lifetime, color } = {}) {
+  function spawnBulletHole({ position, normal, size, lifetime, color, attachment } = {}) {
     const basePosition = toVector3(position, [0, 0, 0]);
     const normalizedNormal = normalizeVector(normal, [0, 0, 1]);
 
@@ -180,6 +307,14 @@ export function createBulletHoleManager(device, options = {}) {
     rotatedBitangent[1] = bitangent[1] * cosR - tangent[1] * sinR;
     rotatedBitangent[2] = bitangent[2] * cosR - tangent[2] * sinR;
 
+    const resolvedAttachment = createAttachment(
+      attachment,
+      basePosition,
+      normalizedNormal,
+      rotatedTangent,
+      rotatedBitangent
+    );
+
     if (bulletHoles.length >= maxDecals) {
       bulletHoles.shift();
     }
@@ -193,7 +328,8 @@ export function createBulletHoleManager(device, options = {}) {
       lifetime: resolvedLifetime,
       age: 0,
       color: resolvedColor,
-      surfaceBias: SURFACE_BIAS
+      surfaceBias: SURFACE_BIAS,
+      attachment: resolvedAttachment
     });
 
     markDirty();
@@ -205,16 +341,22 @@ export function createBulletHoleManager(device, options = {}) {
     }
 
     let changed = false;
+    let hasAttachment = false;
     for (let index = bulletHoles.length - 1; index >= 0; index -= 1) {
       const bulletHole = bulletHoles[index];
       bulletHole.age += deltaTime;
       if (bulletHole.age >= bulletHole.lifetime) {
         bulletHoles.splice(index, 1);
         changed = true;
+        continue;
+      }
+
+      if (bulletHole.attachment) {
+        hasAttachment = true;
       }
     }
 
-    if (changed) {
+    if (changed || hasAttachment) {
       markDirty();
     }
   }
@@ -228,10 +370,14 @@ export function createBulletHoleManager(device, options = {}) {
     for (let i = 0; i < bulletHoles.length; i += 1) {
       const bulletHole = bulletHoles[i];
       const half = bulletHole.size / 2;
-      const tangent = bulletHole.tangent;
-      const bitangent = bulletHole.bitangent;
-      const normal = bulletHole.normal;
-      const center = bulletHole.position;
+      const resolvedAttachment = bulletHole.attachment
+        ? applyAttachment(bulletHole.attachment, transformScratch)
+        : null;
+      const resolved = resolvedAttachment || bulletHole;
+      const tangent = resolved.tangent;
+      const bitangent = resolved.bitangent;
+      const normal = resolved.normal;
+      const center = resolved.position;
       const bias = bulletHole.surfaceBias;
 
       const corners = [

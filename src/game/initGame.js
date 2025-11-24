@@ -152,6 +152,73 @@ export async function initializeGame({
     });
     requeueProceduralEnemy = proceduralSpawner.requeueProceduralEnemy;
 
+    const elevatorAttachmentMatrix = new Float32Array(16);
+
+    function writeElevatorMatrix(offset) {
+      elevatorAttachmentMatrix[0] = 1;
+      elevatorAttachmentMatrix[1] = 0;
+      elevatorAttachmentMatrix[2] = 0;
+      elevatorAttachmentMatrix[3] = 0;
+      elevatorAttachmentMatrix[4] = 0;
+      elevatorAttachmentMatrix[5] = 1;
+      elevatorAttachmentMatrix[6] = 0;
+      elevatorAttachmentMatrix[7] = 0;
+      elevatorAttachmentMatrix[8] = 0;
+      elevatorAttachmentMatrix[9] = 0;
+      elevatorAttachmentMatrix[10] = 1;
+      elevatorAttachmentMatrix[11] = 0;
+      elevatorAttachmentMatrix[12] = 0;
+      elevatorAttachmentMatrix[13] = offset;
+      elevatorAttachmentMatrix[14] = 0;
+      elevatorAttachmentMatrix[15] = 1;
+      return elevatorAttachmentMatrix;
+    }
+
+    function createElevatorAttachment(position) {
+      if (!position) {
+        return null;
+      }
+
+      const elevatorBounds = typeof roomSystem.getElevatorBounds === 'function'
+        ? roomSystem.getElevatorBounds()
+        : null;
+      if (!elevatorBounds) {
+        return null;
+      }
+
+      const minX = Math.min(
+        elevatorBounds.minX,
+        Number.isFinite(elevatorBounds.canopyMinX) ? elevatorBounds.canopyMinX : elevatorBounds.minX
+      );
+      const maxX = Math.max(
+        elevatorBounds.maxX,
+        Number.isFinite(elevatorBounds.canopyMaxX) ? elevatorBounds.canopyMaxX : elevatorBounds.maxX
+      );
+      const minZ = Math.min(
+        elevatorBounds.minZ,
+        Number.isFinite(elevatorBounds.canopyMinZ) ? elevatorBounds.canopyMinZ : elevatorBounds.minZ
+      );
+      const maxZ = Math.max(
+        elevatorBounds.maxZ,
+        Number.isFinite(elevatorBounds.canopyMaxZ) ? elevatorBounds.canopyMaxZ : elevatorBounds.maxZ
+      );
+
+      const margin = 0.12;
+      const withinBounds =
+        position[0] >= minX - margin &&
+        position[0] <= maxX + margin &&
+        position[2] >= minZ - margin &&
+        position[2] <= maxZ + margin;
+
+      if (!withinBounds) {
+        return null;
+      }
+
+      return {
+        getMatrix: () => writeElevatorMatrix(roomSystem.getElevatorOffset?.() ?? 0)
+      };
+    }
+
     const projectileManager = createProjectileManager(device, {
       bounds,
       getDynamicColliders: () => {
@@ -177,13 +244,14 @@ export async function initializeGame({
           position: impact.position,
           normal: impact.normal,
           size,
-          color: impact.projectileColor
+          color: impact.projectileColor,
+          attachment: createElevatorAttachment(impact.position)
         });
       }
     });
 
     const worldItemManager = createWorldItemManager(device);
-    const doorManager = createDoorManager(device);
+    const doorManager = createDoorManager(device, { bulletHoleManager });
     doorManager.syncDoors(roomSystem.getDoors?.() ?? []);
 
     const { spawnProceduralBarrels } = proceduralSpawner;

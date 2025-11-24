@@ -198,11 +198,12 @@ function updateLeafTransform(leaf, anchor, openAmount, swingDirection = 1) {
   mat4FromRotationTranslation(leaf.modelMatrix, rotatedRight, up, rotatedForward, translation);
 }
 
-export function createDoorManager(device) {
+export function createDoorManager(device, options = {}) {
   if (!device) {
     throw new Error('GPUDevice is required to create the door manager.');
   }
 
+  const bulletHoleManager = options.bulletHoleManager ?? null;
   const doors = [];
   const geometryCache = new Map();
 
@@ -243,6 +244,28 @@ export function createDoorManager(device) {
         leafWidth,
         swingDirection
       };
+
+      if (collider && bulletHoleManager) {
+        collider.onHit = (impact) => {
+          if (!impact) {
+            return;
+          }
+
+          const size = Number.isFinite(impact.projectileSize)
+            ? Math.max(impact.projectileSize * 3, 0.12)
+            : undefined;
+
+          bulletHoleManager.spawnBulletHole({
+            position: impact.position,
+            normal: impact.normal,
+            size,
+            color: impact.projectileColor ?? door.color,
+            attachment: {
+              getMatrix: () => leaf.modelMatrix
+            }
+          });
+        };
+      }
 
       updateDoorTransforms(door);
       return door;
