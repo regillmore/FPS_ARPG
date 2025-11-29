@@ -272,7 +272,9 @@ export function createRoomGeometryBuilder({
     roomHeight,
     wallThickness,
     colliders,
-    doubleDoorWidth,
+    cellEdges,
+    doorWidth,
+    openingCenter,
     floorColor,
     wallColor,
     accentColor,
@@ -286,8 +288,12 @@ export function createRoomGeometryBuilder({
     const spanZ = maxZ - minZ;
     const crossSpan = direction === 'north' || direction === 'south' ? spanX : spanZ;
     const depthSpan = direction === 'north' || direction === 'south' ? spanZ : spanX;
-    const deckDepth = Math.min(Math.max(depthSpan * 0.35, doubleDoorWidth * 0.75), depthSpan * 0.55);
-    const deckWidth = Math.min(Math.max(doubleDoorWidth * 2.5, doubleDoorWidth), crossSpan - wallThickness * 0.4);
+    const localDoorWidth = doorWidth ?? doubleDoorWidth;
+    const deckDepth = Math.min(Math.max(depthSpan * 0.35, localDoorWidth * 0.75), depthSpan * 0.55);
+    const deckWidth = Math.min(
+      Math.max(localDoorWidth * 2.5, localDoorWidth),
+      crossSpan - wallThickness * 0.4
+    );
     if (deckDepth <= 1e-4 || deckWidth <= 1e-4) {
       return;
     }
@@ -307,26 +313,55 @@ export function createRoomGeometryBuilder({
     let deckMinZ = minZ;
     let deckMaxZ = maxZ;
 
+    const attachesToNegativeSide =
+      direction === 'north' || direction === 'south'
+        ? (openingCenter ?? centerX) - minX <= maxX - (openingCenter ?? centerX)
+        : (openingCenter ?? centerZ) - minZ <= maxZ - (openingCenter ?? centerZ);
+    const attachToWest = direction === 'north' || direction === 'south' ? attachesToNegativeSide : null;
+    const attachToNorth = direction === 'east' || direction === 'west' ? attachesToNegativeSide : null;
+
+    const effectiveDeckWidth = Math.min(deckWidth, direction === 'north' || direction === 'south' ? spanX : spanZ);
+
     if (direction === 'north') {
       deckMinZ = minZ;
       deckMaxZ = Math.min(maxZ, minZ + deckDepth);
-      deckMinX = Math.max(minX + wallThickness * 0.5, centerX - deckWidth * 0.5);
-      deckMaxX = Math.min(maxX - wallThickness * 0.5, centerX + deckWidth * 0.5);
+      if (attachToWest) {
+        deckMinX = minX;
+        deckMaxX = Math.min(maxX, deckMinX + effectiveDeckWidth);
+      } else {
+        deckMaxX = maxX;
+        deckMinX = Math.max(minX, deckMaxX - effectiveDeckWidth);
+      }
     } else if (direction === 'south') {
       deckMinZ = Math.max(minZ, maxZ - deckDepth);
       deckMaxZ = maxZ;
-      deckMinX = Math.max(minX + wallThickness * 0.5, centerX - deckWidth * 0.5);
-      deckMaxX = Math.min(maxX - wallThickness * 0.5, centerX + deckWidth * 0.5);
+      if (attachToWest) {
+        deckMinX = minX;
+        deckMaxX = Math.min(maxX, deckMinX + effectiveDeckWidth);
+      } else {
+        deckMaxX = maxX;
+        deckMinX = Math.max(minX, deckMaxX - effectiveDeckWidth);
+      }
     } else if (direction === 'east') {
       deckMinX = Math.max(minX, maxX - deckDepth);
       deckMaxX = maxX;
-      deckMinZ = Math.max(minZ + wallThickness * 0.5, centerZ - deckWidth * 0.5);
-      deckMaxZ = Math.min(maxZ - wallThickness * 0.5, centerZ + deckWidth * 0.5);
+      if (attachToNorth) {
+        deckMinZ = minZ;
+        deckMaxZ = Math.min(maxZ, deckMinZ + effectiveDeckWidth);
+      } else {
+        deckMaxZ = maxZ;
+        deckMinZ = Math.max(minZ, deckMaxZ - effectiveDeckWidth);
+      }
     } else if (direction === 'west') {
       deckMinX = minX;
       deckMaxX = Math.min(maxX, minX + deckDepth);
-      deckMinZ = Math.max(minZ + wallThickness * 0.5, centerZ - deckWidth * 0.5);
-      deckMaxZ = Math.min(maxZ - wallThickness * 0.5, centerZ + deckWidth * 0.5);
+      if (attachToNorth) {
+        deckMinZ = minZ;
+        deckMaxZ = Math.min(maxZ, deckMinZ + effectiveDeckWidth);
+      } else {
+        deckMaxZ = maxZ;
+        deckMinZ = Math.max(minZ, deckMaxZ - effectiveDeckWidth);
+      }
     }
 
     if (deckMinX >= deckMaxX || deckMinZ >= deckMaxZ) {
@@ -341,14 +376,28 @@ export function createRoomGeometryBuilder({
       const railMaxY = Math.min(deckMaxY + railHeight, baseY + roomHeight - 0.1);
 
       const sides = [];
-     if (direction === 'north' || direction === 'south') {
-        sides.push([deckMinX, railMinY, deckMinZ, Math.min(deckMinX + railThickness, deckMaxX), railMaxY, deckMaxZ]);
-        sides.push([Math.max(deckMaxX - railThickness, deckMinX), railMinY, deckMinZ, deckMaxX, railMaxY, deckMaxZ]);
+      if (direction === 'north' || direction === 'south') {
+        const attachToEast = !attachToWest;
+        const openWest = cellEdges?.west === 'open';
+        const openEast = cellEdges?.east === 'open';
+        if (!attachToWest || openWest) {
+          sides.push([deckMinX, railMinY, deckMinZ, Math.min(deckMinX + railThickness, deckMaxX), railMaxY, deckMaxZ]);
+        }
+        if (!attachToEast || openEast) {
+          sides.push([Math.max(deckMaxX - railThickness, deckMinX), railMinY, deckMinZ, deckMaxX, railMaxY, deckMaxZ]);
+        }
         const wallAlignedZ = direction === 'south' ? deckMinZ : Math.max(deckMaxZ - railThickness, deckMinZ);
         sides.push([deckMinX, railMinY, wallAlignedZ, deckMaxX, railMaxY, Math.min(wallAlignedZ + railThickness, deckMaxZ)]);
       } else {
-        sides.push([deckMinX, railMinY, deckMinZ, deckMaxX, railMaxY, Math.min(deckMinZ + railThickness, deckMaxZ)]);
-        sides.push([deckMinX, railMinY, Math.max(deckMaxZ - railThickness, deckMinZ), deckMaxX, railMaxY, deckMaxZ]);
+        const attachToSouth = attachToNorth === null ? false : !attachToNorth;
+        const openNorth = cellEdges?.north === 'open';
+        const openSouth = cellEdges?.south === 'open';
+        if (!attachToNorth || openNorth) {
+          sides.push([deckMinX, railMinY, deckMinZ, deckMaxX, railMaxY, Math.min(deckMinZ + railThickness, deckMaxZ)]);
+        }
+        if (!attachToSouth || openSouth) {
+          sides.push([deckMinX, railMinY, Math.max(deckMaxZ - railThickness, deckMinZ), deckMaxX, railMaxY, deckMaxZ]);
+        }
         const wallAlignedX = direction === 'east' ? deckMinX : Math.max(deckMaxX - railThickness, deckMinX);
         sides.push([wallAlignedX, railMinY, deckMinZ, Math.min(wallAlignedX + railThickness, deckMaxX), railMaxY, deckMaxZ]);
       }
@@ -848,6 +897,7 @@ export function createRoomGeometryBuilder({
 
           const isOrigin = isOriginCell(gx, gz);
           const balconyDirection = edges?.balconyDirection ?? null;
+          let balconyOpeningCenter = null;
           if (edges) {
             const seedForLayer = getLayerSeed(layerIndex);
             const hasOpenEdge =
@@ -892,6 +942,30 @@ export function createRoomGeometryBuilder({
                 edges.south === 'solid'
               ) {
                 hallwayOrientation = 'x';
+              }
+            }
+
+            if (balconyDirection) {
+              const offset = directionOffsets[balconyDirection];
+              if (offset) {
+                const neighborX = gx + offset[0];
+                const neighborZ = gz + offset[1];
+                const spanMin =
+                  balconyDirection === 'north' || balconyDirection === 'south' ? minX : minZ;
+                const spanMax =
+                  balconyDirection === 'north' || balconyDirection === 'south' ? maxX : maxZ;
+                const openingBias = calculateSingleDoorwayBias(
+                  spanMax - spanMin,
+                  singleDoorWidth,
+                  randomFloatForEdge(gx, gz, neighborX, neighborZ, 43, seedForLayer)
+                );
+                const { openingMin, openingMax } = calculateDoorOpening(
+                  spanMin,
+                  spanMax,
+                  singleDoorWidth,
+                  openingBias
+                );
+                balconyOpeningCenter = (openingMin + openingMax) * 0.5;
               }
             }
           }
@@ -959,7 +1033,9 @@ export function createRoomGeometryBuilder({
                 roomHeight,
                 wallThickness,
                 colliders,
-                doubleDoorWidth,
+                edges,
+                singleDoorWidth,
+                balconyOpeningCenter,
                 profile.floorColor,
                 profile.wallColor,
                 profile.accentColor,
