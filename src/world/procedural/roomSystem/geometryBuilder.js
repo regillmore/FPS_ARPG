@@ -272,6 +272,7 @@ export function createRoomGeometryBuilder({
     roomHeight,
     wallThickness,
     colliders,
+    cellEdges,
     doorWidth,
     openingCenter,
     floorColor,
@@ -377,20 +378,24 @@ export function createRoomGeometryBuilder({
       const sides = [];
       if (direction === 'north' || direction === 'south') {
         const attachToEast = !attachToWest;
-        if (!attachToWest) {
+        const openWest = cellEdges?.west === 'open';
+        const openEast = cellEdges?.east === 'open';
+        if (!attachToWest || openWest) {
           sides.push([deckMinX, railMinY, deckMinZ, Math.min(deckMinX + railThickness, deckMaxX), railMaxY, deckMaxZ]);
         }
-        if (!attachToEast) {
+        if (!attachToEast || openEast) {
           sides.push([Math.max(deckMaxX - railThickness, deckMinX), railMinY, deckMinZ, deckMaxX, railMaxY, deckMaxZ]);
         }
         const wallAlignedZ = direction === 'south' ? deckMinZ : Math.max(deckMaxZ - railThickness, deckMinZ);
         sides.push([deckMinX, railMinY, wallAlignedZ, deckMaxX, railMaxY, Math.min(wallAlignedZ + railThickness, deckMaxZ)]);
       } else {
         const attachToSouth = attachToNorth === null ? false : !attachToNorth;
-        if (!attachToNorth) {
+        const openNorth = cellEdges?.north === 'open';
+        const openSouth = cellEdges?.south === 'open';
+        if (!attachToNorth || openNorth) {
           sides.push([deckMinX, railMinY, deckMinZ, deckMaxX, railMaxY, Math.min(deckMinZ + railThickness, deckMaxZ)]);
         }
-        if (!attachToSouth) {
+        if (!attachToSouth || openSouth) {
           sides.push([deckMinX, railMinY, Math.max(deckMaxZ - railThickness, deckMinZ), deckMaxX, railMaxY, deckMaxZ]);
         }
         const wallAlignedX = direction === 'east' ? deckMinX : Math.max(deckMaxX - railThickness, deckMinX);
@@ -1028,6 +1033,7 @@ export function createRoomGeometryBuilder({
                 roomHeight,
                 wallThickness,
                 colliders,
+                edges,
                 singleDoorWidth,
                 balconyOpeningCenter,
                 profile.floorColor,
