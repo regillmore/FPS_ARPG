@@ -261,6 +261,43 @@ export function createRoomGeometryBuilder({
     }
   }
 
+  function addBalconyRailing(
+    vertices,
+    colliders,
+    bounds,
+    orientation,
+    wallPosition,
+    spanMin,
+    spanMax,
+    baseY,
+    roomHeight,
+    wallThickness,
+    wallColor,
+    accentColor
+  ) {
+    const railHeight = Math.min(roomHeight * 0.15, Math.max(roomHeight - 0.25, 0));
+    const railThickness = Math.min(Math.max(wallThickness * 0.5, 0.05), wallThickness);
+    const color = mixColors(wallColor, accentColor, 0.55);
+
+    if (railHeight <= 1e-4 || railThickness <= 1e-4) {
+      return;
+    }
+
+    if (orientation === 'x') {
+      const halfThickness = railThickness * 0.5;
+      const minX = wallPosition - halfThickness;
+      const maxX = wallPosition + halfThickness;
+      addBox(vertices, minX, baseY, spanMin, maxX, baseY + railHeight, spanMax, color, bounds);
+      addCollider(colliders, minX, baseY, spanMin, maxX, baseY + railHeight, spanMax);
+    } else if (orientation === 'z') {
+      const halfThickness = railThickness * 0.5;
+      const minZ = wallPosition - halfThickness;
+      const maxZ = wallPosition + halfThickness;
+      addBox(vertices, spanMin, baseY, minZ, spanMax, baseY + railHeight, maxZ, color, bounds);
+      addCollider(colliders, spanMin, baseY, minZ, spanMax, baseY + railHeight, maxZ);
+    }
+  }
+
   function addDoorwayBalcony(
     vertices,
     direction,
@@ -575,7 +612,13 @@ export function createRoomGeometryBuilder({
       const bothEnclosed = enclosedA && enclosedB;
       const bothBalconies = balconyA && balconyB;
       const mixedBalconyAndEnclosed = (enclosedA && balconyB) || (balconyA && enclosedB);
-      return bothEnclosed || bothBalconies || mixedBalconyAndEnclosed;
+      const skip = bothEnclosed || bothBalconies || mixedBalconyAndEnclosed;
+      return {
+        skip,
+        balconyA,
+        balconyB,
+        needsBalconyRailing: skip && !bothEnclosed && (balconyA || balconyB)
+      };
     }
 
     for (let gx = cx - generationRadius; gx <= cx + generationRadius; gx += 1) {
@@ -640,14 +683,39 @@ export function createRoomGeometryBuilder({
               if (type === 'open') {
                 continue;
               }
-              const skipSolidWallBetweenEnclosedRooms =
-                type === 'solid' &&
-                shouldSkipSolidWallBetweenRooms(gx, gz, nx, nz, layerIndex);
-              if (skipSolidWallBetweenEnclosedRooms) {
-                continue;
-              }
               const profile = profilePerLayer.get(layerIndex);
               const neighborProfile = neighborProfiles.get(layerIndex);
+              const baseY = layerIndex * levelHeight;
+              const wallContext =
+                type === 'solid' ? shouldSkipSolidWallBetweenRooms(gx, gz, nx, nz, layerIndex) : null;
+              if (wallContext?.skip) {
+                if (wallContext.needsBalconyRailing) {
+                  const balconyProfile =
+                    wallContext.balconyA && wallContext.balconyB
+                      ? {
+                          wallColor: mixColors(profile.wallColor, neighborProfile.wallColor, 0.5),
+                          accentColor: mixColors(profile.accentColor, neighborProfile.accentColor, 0.5)
+                        }
+                      : wallContext.balconyA
+                        ? profile
+                        : neighborProfile;
+                  addBalconyRailing(
+                    vertices,
+                    colliders,
+                    bounds,
+                    'x',
+                    wallX,
+                    edgeMinZ,
+                    edgeMaxZ,
+                    baseY,
+                    roomHeight,
+                    wallThickness,
+                    balconyProfile.wallColor,
+                    balconyProfile.accentColor
+                  );
+                }
+                continue;
+              }
               const wallColor = mixColors(profile.wallColor, neighborProfile.wallColor, 0.5);
               const accentColor = mixColors(profile.accentColor, neighborProfile.accentColor, 0.5);
               const isDoubleDoor =
@@ -664,7 +732,6 @@ export function createRoomGeometryBuilder({
                     localDoorWidth,
                     randomFloatForEdge(gx, gz, nx, nz, 43, getLayerSeed(layerIndex))
                   );
-              const baseY = layerIndex * levelHeight;
               if (type === 'solid') {
                 buildSolidWallAlongX(
                   vertices,
@@ -729,14 +796,39 @@ export function createRoomGeometryBuilder({
               if (type === 'open') {
                 continue;
               }
-              const skipSolidWallBetweenEnclosedRooms =
-                type === 'solid' &&
-                shouldSkipSolidWallBetweenRooms(gx, gz, nx, nz, layerIndex);
-              if (skipSolidWallBetweenEnclosedRooms) {
-                continue;
-              }
               const profile = profilePerLayer.get(layerIndex);
               const neighborProfile = neighborProfiles.get(layerIndex);
+              const baseY = layerIndex * levelHeight;
+              const wallContext =
+                type === 'solid' ? shouldSkipSolidWallBetweenRooms(gx, gz, nx, nz, layerIndex) : null;
+              if (wallContext?.skip) {
+                if (wallContext.needsBalconyRailing) {
+                  const balconyProfile =
+                    wallContext.balconyA && wallContext.balconyB
+                      ? {
+                          wallColor: mixColors(profile.wallColor, neighborProfile.wallColor, 0.5),
+                          accentColor: mixColors(profile.accentColor, neighborProfile.accentColor, 0.5)
+                        }
+                      : wallContext.balconyA
+                        ? profile
+                        : neighborProfile;
+                  addBalconyRailing(
+                    vertices,
+                    colliders,
+                    bounds,
+                    'z',
+                    wallZ,
+                    edgeMinX,
+                    edgeMaxX,
+                    baseY,
+                    roomHeight,
+                    wallThickness,
+                    balconyProfile.wallColor,
+                    balconyProfile.accentColor
+                  );
+                }
+                continue;
+              }
               const wallColor = mixColors(profile.wallColor, neighborProfile.wallColor, 0.5);
               const accentColor = mixColors(profile.accentColor, neighborProfile.accentColor, 0.5);
               const isDoubleDoor =
@@ -753,7 +845,6 @@ export function createRoomGeometryBuilder({
                     localDoorWidth,
                     randomFloatForEdge(gx, gz, nx, nz, 43, getLayerSeed(layerIndex))
                   );
-              const baseY = layerIndex * levelHeight;
               if (type === 'solid') {
                 buildSolidWallAlongZ(
                   vertices,
