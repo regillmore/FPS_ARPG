@@ -272,7 +272,8 @@ export function createRoomGeometryBuilder({
     roomHeight,
     wallThickness,
     colliders,
-    doubleDoorWidth,
+    doorWidth,
+    openingCenter,
     floorColor,
     wallColor,
     accentColor,
@@ -286,8 +287,12 @@ export function createRoomGeometryBuilder({
     const spanZ = maxZ - minZ;
     const crossSpan = direction === 'north' || direction === 'south' ? spanX : spanZ;
     const depthSpan = direction === 'north' || direction === 'south' ? spanZ : spanX;
-    const deckDepth = Math.min(Math.max(depthSpan * 0.35, doubleDoorWidth * 0.75), depthSpan * 0.55);
-    const deckWidth = Math.min(Math.max(doubleDoorWidth * 2.5, doubleDoorWidth), crossSpan - wallThickness * 0.4);
+    const localDoorWidth = doorWidth ?? doubleDoorWidth;
+    const deckDepth = Math.min(Math.max(depthSpan * 0.35, localDoorWidth * 0.75), depthSpan * 0.55);
+    const deckWidth = Math.min(
+      Math.max(localDoorWidth * 2.5, localDoorWidth),
+      crossSpan - wallThickness * 0.4
+    );
     if (deckDepth <= 1e-4 || deckWidth <= 1e-4) {
       return;
     }
@@ -302,6 +307,10 @@ export function createRoomGeometryBuilder({
     const centerX = (minX + maxX) * 0.5;
     const centerZ = (minZ + maxZ) * 0.5;
 
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
     let deckMinX = minX;
     let deckMaxX = maxX;
     let deckMinZ = minZ;
@@ -310,23 +319,43 @@ export function createRoomGeometryBuilder({
     if (direction === 'north') {
       deckMinZ = minZ;
       deckMaxZ = Math.min(maxZ, minZ + deckDepth);
-      deckMinX = Math.max(minX + wallThickness * 0.5, centerX - deckWidth * 0.5);
-      deckMaxX = Math.min(maxX - wallThickness * 0.5, centerX + deckWidth * 0.5);
+      const deckCenterX = clamp(
+        openingCenter ?? centerX,
+        minX + wallThickness * 0.5 + deckWidth * 0.5,
+        maxX - wallThickness * 0.5 - deckWidth * 0.5
+      );
+      deckMinX = deckCenterX - deckWidth * 0.5;
+      deckMaxX = deckCenterX + deckWidth * 0.5;
     } else if (direction === 'south') {
       deckMinZ = Math.max(minZ, maxZ - deckDepth);
       deckMaxZ = maxZ;
-      deckMinX = Math.max(minX + wallThickness * 0.5, centerX - deckWidth * 0.5);
-      deckMaxX = Math.min(maxX - wallThickness * 0.5, centerX + deckWidth * 0.5);
+      const deckCenterX = clamp(
+        openingCenter ?? centerX,
+        minX + wallThickness * 0.5 + deckWidth * 0.5,
+        maxX - wallThickness * 0.5 - deckWidth * 0.5
+      );
+      deckMinX = deckCenterX - deckWidth * 0.5;
+      deckMaxX = deckCenterX + deckWidth * 0.5;
     } else if (direction === 'east') {
       deckMinX = Math.max(minX, maxX - deckDepth);
       deckMaxX = maxX;
-      deckMinZ = Math.max(minZ + wallThickness * 0.5, centerZ - deckWidth * 0.5);
-      deckMaxZ = Math.min(maxZ - wallThickness * 0.5, centerZ + deckWidth * 0.5);
+      const deckCenterZ = clamp(
+        openingCenter ?? centerZ,
+        minZ + wallThickness * 0.5 + deckWidth * 0.5,
+        maxZ - wallThickness * 0.5 - deckWidth * 0.5
+      );
+      deckMinZ = deckCenterZ - deckWidth * 0.5;
+      deckMaxZ = deckCenterZ + deckWidth * 0.5;
     } else if (direction === 'west') {
       deckMinX = minX;
       deckMaxX = Math.min(maxX, minX + deckDepth);
-      deckMinZ = Math.max(minZ + wallThickness * 0.5, centerZ - deckWidth * 0.5);
-      deckMaxZ = Math.min(maxZ - wallThickness * 0.5, centerZ + deckWidth * 0.5);
+      const deckCenterZ = clamp(
+        openingCenter ?? centerZ,
+        minZ + wallThickness * 0.5 + deckWidth * 0.5,
+        maxZ - wallThickness * 0.5 - deckWidth * 0.5
+      );
+      deckMinZ = deckCenterZ - deckWidth * 0.5;
+      deckMaxZ = deckCenterZ + deckWidth * 0.5;
     }
 
     if (deckMinX >= deckMaxX || deckMinZ >= deckMaxZ) {
@@ -848,6 +877,7 @@ export function createRoomGeometryBuilder({
 
           const isOrigin = isOriginCell(gx, gz);
           const balconyDirection = edges?.balconyDirection ?? null;
+          let balconyOpeningCenter = null;
           if (edges) {
             const seedForLayer = getLayerSeed(layerIndex);
             const hasOpenEdge =
@@ -892,6 +922,30 @@ export function createRoomGeometryBuilder({
                 edges.south === 'solid'
               ) {
                 hallwayOrientation = 'x';
+              }
+            }
+
+            if (balconyDirection) {
+              const offset = directionOffsets[balconyDirection];
+              if (offset) {
+                const neighborX = gx + offset[0];
+                const neighborZ = gz + offset[1];
+                const spanMin =
+                  balconyDirection === 'north' || balconyDirection === 'south' ? minX : minZ;
+                const spanMax =
+                  balconyDirection === 'north' || balconyDirection === 'south' ? maxX : maxZ;
+                const openingBias = calculateSingleDoorwayBias(
+                  spanMax - spanMin,
+                  singleDoorWidth,
+                  randomFloatForEdge(gx, gz, neighborX, neighborZ, 43, seedForLayer)
+                );
+                const { openingMin, openingMax } = calculateDoorOpening(
+                  spanMin,
+                  spanMax,
+                  singleDoorWidth,
+                  openingBias
+                );
+                balconyOpeningCenter = (openingMin + openingMax) * 0.5;
               }
             }
           }
@@ -959,7 +1013,8 @@ export function createRoomGeometryBuilder({
                 roomHeight,
                 wallThickness,
                 colliders,
-                doubleDoorWidth,
+                singleDoorWidth,
+                balconyOpeningCenter,
                 profile.floorColor,
                 profile.wallColor,
                 profile.accentColor,

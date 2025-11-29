@@ -166,7 +166,7 @@ export function createCellState(worldSeed) {
       }
     }
 
-    const hasBalcony = doorwayCount === 1 && closedCount >= 3 && !openEdge && doubleDoorway;
+    const hasBalcony = doorwayCount === 1 && closedCount >= 3 && !openEdge && !doubleDoorway;
     const shouldOpen = isElevatorCell(x, z);
     const openings = getVerticalOpeningStates(key);
     openings.set(layerIndex, shouldOpen);
