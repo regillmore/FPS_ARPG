@@ -378,24 +378,20 @@ export function createRoomGeometryBuilder({
       const sides = [];
       if (direction === 'north' || direction === 'south') {
         const attachToEast = !attachToWest;
-        const openWest = cellEdges?.west === 'open';
-        const openEast = cellEdges?.east === 'open';
-        if (!attachToWest || openWest) {
+        if (!attachToWest) {
           sides.push([deckMinX, railMinY, deckMinZ, Math.min(deckMinX + railThickness, deckMaxX), railMaxY, deckMaxZ]);
         }
-        if (!attachToEast || openEast) {
+        if (!attachToEast) {
           sides.push([Math.max(deckMaxX - railThickness, deckMinX), railMinY, deckMinZ, deckMaxX, railMaxY, deckMaxZ]);
         }
         const wallAlignedZ = direction === 'south' ? deckMinZ : Math.max(deckMaxZ - railThickness, deckMinZ);
         sides.push([deckMinX, railMinY, wallAlignedZ, deckMaxX, railMaxY, Math.min(wallAlignedZ + railThickness, deckMaxZ)]);
       } else {
         const attachToSouth = attachToNorth === null ? false : !attachToNorth;
-        const openNorth = cellEdges?.north === 'open';
-        const openSouth = cellEdges?.south === 'open';
-        if (!attachToNorth || openNorth) {
+        if (!attachToNorth) {
           sides.push([deckMinX, railMinY, deckMinZ, deckMaxX, railMaxY, Math.min(deckMinZ + railThickness, deckMaxZ)]);
         }
-        if (!attachToSouth || openSouth) {
+        if (!attachToSouth) {
           sides.push([deckMinX, railMinY, Math.max(deckMaxZ - railThickness, deckMinZ), deckMaxX, railMaxY, deckMaxZ]);
         }
         const wallAlignedX = direction === 'east' ? deckMinX : Math.max(deckMaxX - railThickness, deckMinX);
