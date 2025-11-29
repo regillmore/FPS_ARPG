@@ -291,7 +291,7 @@ export function createRoomGeometryBuilder({
     const localDoorWidth = doorWidth ?? doubleDoorWidth;
     const deckDepth = Math.min(Math.max(depthSpan * 0.35, localDoorWidth * 0.75), depthSpan * 0.55);
     const deckWidth = Math.min(
-      Math.max(localDoorWidth * 2.5, localDoorWidth),
+      Math.max(localDoorWidth * 3.5, localDoorWidth),
       crossSpan - wallThickness * 0.4
     );
     if (deckDepth <= 1e-4 || deckWidth <= 1e-4) {
