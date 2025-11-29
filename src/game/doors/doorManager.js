@@ -323,7 +323,7 @@ export function createDoorManager(device) {
 
   function requestOpen(id, playerPosition) {
     const door = doors.find((entry) => entry.id === id);
-    if (!door) {
+    if (!door || door.state === 'open') {
       return false;
     }
 

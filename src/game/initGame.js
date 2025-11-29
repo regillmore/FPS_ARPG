@@ -967,7 +967,7 @@ export async function initializeGame({
 
           if (Array.isArray(activeDoors)) {
             for (const door of activeDoors) {
-              if (!door || !door.interactionBounds || !door.center) {
+              if (!door || door.state === 'open' || !door.interactionBounds || !door.center) {
                 continue;
               }
 
