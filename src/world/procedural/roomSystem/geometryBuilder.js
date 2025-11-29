@@ -1050,7 +1050,7 @@ export function createRoomGeometryBuilder({
             const chestInsetFromWall = wallThickness * 0.75;
             const chestHalfWidth = 0.3;
             const chestHalfDepth = 0.25;
-            const doorClearance = doubleDoorWidth * 0.6;
+            const doorClearance = doubleDoorWidth * 0.8;
             const chestCenterX = Math.min(maxX - chestInsetFromWall - chestHalfWidth, centerX + doorClearance);
             const chestCenterZ = maxZ - chestInsetFromWall - chestHalfDepth;
 

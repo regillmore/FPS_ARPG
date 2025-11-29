@@ -1,4 +1,4 @@
-export const DEFAULT_ROOM_SIZE = 10;
+export const DEFAULT_ROOM_SIZE = 15;
 export const DEFAULT_ROOM_HEIGHT = 4;
 export const DEFAULT_DOOR_HEIGHT = 2.5;
 export const DEFAULT_DOOR_WIDTH = 1.2;
