@@ -184,7 +184,7 @@ function writeTemplate(target, offset, template, transform) {
 
 function createFighterGeometry(device) {
   const staticVertices = [];
-  const legTemplates = { left: [], right: [] };
+  const legTemplates = { left: {}, right: {} };
 
   const torsoHeight = BODY_HEIGHT * 0.25;
   const hipHeight = BODY_HEIGHT * 0.3;
@@ -242,59 +242,77 @@ function createFighterGeometry(device) {
 
   const legWidth = HALF_WIDTH * 0.35;
   const legDepth = HALF_DEPTH * 0.4;
-  const legHeight = BODY_HEIGHT * 0.08;
-  const footHeight = BODY_HEIGHT * 0.25;
+  const thighLength = BODY_HEIGHT * 0.11;
+  const shinLength = BODY_HEIGHT * 0.08;
+  const footHeight = BODY_HEIGHT * 0.06;
   const hipOffsetX = torsoWidth * 0.35;
-  const hipOriginY = footHeight;
+  const hipOriginY = thighLength + shinLength + footHeight;
 
   addBoxTemplate(
-    legTemplates.left,
-    [-legWidth, 0, -legDepth],
-    [legWidth, legHeight, legDepth],
+    legTemplates.left.thigh ?? (legTemplates.left.thigh = []),
+    [-legWidth, -thighLength, -legDepth],
+    [legWidth, 0, legDepth],
     COLORS.trim
   );
   addBoxTemplate(
-    legTemplates.left,
-    [-legWidth * 0.8, -footHeight, -legDepth * 1.1],
-    [legWidth * 0.8, 0, legDepth * 1.3],
+    legTemplates.left.shin ?? (legTemplates.left.shin = []),
+    [-legWidth * 0.85, -shinLength, -legDepth * 1.05],
+    [legWidth * 0.85, 0, legDepth * 1.1],
+    COLORS.trim
+  );
+  addBoxTemplate(
+    legTemplates.left.shin,
+    [-legWidth * 0.9, -shinLength - footHeight, -legDepth * 1.4],
+    [legWidth * 0.9, -shinLength, legDepth * 1.6],
     COLORS.accent
   );
 
   addBoxTemplate(
-    legTemplates.right,
-    [-legWidth, 0, -legDepth],
-    [legWidth, legHeight, legDepth],
+    legTemplates.right.thigh ?? (legTemplates.right.thigh = []),
+    [-legWidth, -thighLength, -legDepth],
+    [legWidth, 0, legDepth],
     COLORS.trim
   );
   addBoxTemplate(
-    legTemplates.right,
-    [-legWidth * 0.8, -footHeight, -legDepth * 1.1],
-    [legWidth * 0.8, 0, legDepth * 1.3],
+    legTemplates.right.shin ?? (legTemplates.right.shin = []),
+    [-legWidth * 0.85, -shinLength, -legDepth * 1.05],
+    [legWidth * 0.85, 0, legDepth * 1.1],
+    COLORS.trim
+  );
+  addBoxTemplate(
+    legTemplates.right.shin,
+    [-legWidth * 0.9, -shinLength - footHeight, -legDepth * 1.4],
+    [legWidth * 0.9, -shinLength, legDepth * 1.6],
     COLORS.accent
   );
 
   const staticFloatCount = staticVertices.length;
-  const legFloatCount = legTemplates.left.length * FLOATS_PER_VERTEX;
-  const vertexData = new Float32Array(staticFloatCount + legFloatCount * 2);
+  const leftThighFloatCount = legTemplates.left.thigh.length * FLOATS_PER_VERTEX;
+  const leftShinFloatCount = legTemplates.left.shin.length * FLOATS_PER_VERTEX;
+  const rightThighFloatCount = legTemplates.right.thigh.length * FLOATS_PER_VERTEX;
+  const rightShinFloatCount = legTemplates.right.shin.length * FLOATS_PER_VERTEX;
+  const vertexData = new Float32Array(
+    staticFloatCount + leftThighFloatCount + leftShinFloatCount + rightThighFloatCount + rightShinFloatCount
+  );
 
   vertexData.set(staticVertices, 0);
 
-  const leftOffset = staticFloatCount;
-  const rightOffset = staticFloatCount + legFloatCount;
+  const leftThighOffset = staticFloatCount;
+  const leftShinOffset = leftThighOffset + leftThighFloatCount;
+  const rightThighOffset = leftShinOffset + leftShinFloatCount;
+  const rightShinOffset = rightThighOffset + rightThighFloatCount;
 
-  writeTemplate(
-    vertexData,
-    leftOffset,
-    legTemplates.left,
-    composeLegTransform(0, [hipOffsetX, hipOriginY, 0])
-  );
+  const kneeLocalOffset = [0, -thighLength, 0];
+  const leftHipTransform = composeLegTransform(0, [hipOffsetX, hipOriginY, 0]);
+  const rightHipTransform = composeLegTransform(0, [-hipOffsetX, hipOriginY, 0]);
+  const leftKneePosition = applyTransform(kneeLocalOffset, leftHipTransform.rotation, leftHipTransform.translation);
+  const rightKneePosition = applyTransform(kneeLocalOffset, rightHipTransform.rotation, rightHipTransform.translation);
 
-  writeTemplate(
-    vertexData,
-    rightOffset,
-    legTemplates.right,
-    composeLegTransform(0, [-hipOffsetX, hipOriginY, 0])
-  );
+  writeTemplate(vertexData, leftThighOffset, legTemplates.left.thigh, leftHipTransform);
+  writeTemplate(vertexData, leftShinOffset, legTemplates.left.shin, composeLegTransform(0, leftKneePosition));
+
+  writeTemplate(vertexData, rightThighOffset, legTemplates.right.thigh, rightHipTransform);
+  writeTemplate(vertexData, rightShinOffset, legTemplates.right.shin, composeLegTransform(0, rightKneePosition));
   const vertexBuffer = device.createBuffer({
     size: vertexData.byteLength,
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
@@ -304,20 +322,55 @@ function createFighterGeometry(device) {
   new Float32Array(vertexBuffer.getMappedRange()).set(vertexData);
   vertexBuffer.unmap();
 
-  function updateLegPose(leftAngle, rightAngle) {
-    writeTemplate(vertexData, leftOffset, legTemplates.left, composeLegTransform(leftAngle, [hipOffsetX, hipOriginY, 0]));
-    writeTemplate(vertexData, rightOffset, legTemplates.right, composeLegTransform(rightAngle, [-hipOffsetX, hipOriginY, 0]));
+  function updateLegPose(leftAngle, rightAngle, gait = 1) {
+    const bendFactor = Math.max(0, Math.min(Number.isFinite(gait) ? gait : 0, 1));
+    const leftHipTransform = composeLegTransform(leftAngle, [hipOffsetX, hipOriginY, 0]);
+    const rightHipTransform = composeLegTransform(rightAngle, [-hipOffsetX, hipOriginY, 0]);
 
-    device.queue.writeBuffer(
-      vertexBuffer,
-      leftOffset * Float32Array.BYTES_PER_ELEMENT,
-      vertexData.subarray(leftOffset, leftOffset + legFloatCount)
+    const leftKneeAngle = Math.abs(leftAngle) * 0.9 * bendFactor + 0.2 * bendFactor;
+    const rightKneeAngle = Math.abs(rightAngle) * 0.9 * bendFactor + 0.2 * bendFactor;
+
+    const leftKneePosition = applyTransform(kneeLocalOffset, leftHipTransform.rotation, leftHipTransform.translation);
+    const rightKneePosition = applyTransform(kneeLocalOffset, rightHipTransform.rotation, rightHipTransform.translation);
+
+    writeTemplate(vertexData, leftThighOffset, legTemplates.left.thigh, leftHipTransform);
+    writeTemplate(
+      vertexData,
+      leftShinOffset,
+      legTemplates.left.shin,
+      composeLegTransform(leftAngle + leftKneeAngle, leftKneePosition)
+    );
+
+    writeTemplate(vertexData, rightThighOffset, legTemplates.right.thigh, rightHipTransform);
+    writeTemplate(
+      vertexData,
+      rightShinOffset,
+      legTemplates.right.shin,
+      composeLegTransform(rightAngle + rightKneeAngle, rightKneePosition)
     );
 
     device.queue.writeBuffer(
       vertexBuffer,
-      rightOffset * Float32Array.BYTES_PER_ELEMENT,
-      vertexData.subarray(rightOffset, rightOffset + legFloatCount)
+      leftThighOffset * Float32Array.BYTES_PER_ELEMENT,
+      vertexData.subarray(leftThighOffset, leftThighOffset + leftThighFloatCount)
+    );
+
+    device.queue.writeBuffer(
+      vertexBuffer,
+      leftShinOffset * Float32Array.BYTES_PER_ELEMENT,
+      vertexData.subarray(leftShinOffset, leftShinOffset + leftShinFloatCount)
+    );
+
+    device.queue.writeBuffer(
+      vertexBuffer,
+      rightThighOffset * Float32Array.BYTES_PER_ELEMENT,
+      vertexData.subarray(rightThighOffset, rightThighOffset + rightThighFloatCount)
+    );
+
+    device.queue.writeBuffer(
+      vertexBuffer,
+      rightShinOffset * Float32Array.BYTES_PER_ELEMENT,
+      vertexData.subarray(rightShinOffset, rightShinOffset + rightShinFloatCount)
     );
   }
 
@@ -933,7 +986,7 @@ export function createFighter(device, options = {}) {
     }
 
     const swingAngle = Math.sin(legPhase) * LEG_SWING_AMPLITUDE * legMotion;
-    geometry.updateLegPose?.(swingAngle, -swingAngle);
+    geometry.updateLegPose?.(swingAngle, -swingAngle, legMotion);
   }
 
   function seekPlayer(deltaTime, context) {
