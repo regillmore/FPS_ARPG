@@ -258,7 +258,7 @@ export function createFighter(device, options = {}) {
     return { layerIndex, cellX, cellZ };
   }
 
-  function roomsShareOpenWall(roomAKey, roomBKey, nav) {
+  function roomsShareOpenWall(roomAKey, roomBKey, nav, activeDoors = null) {
     if (!nav || typeof nav.getCellEdges !== 'function') {
       return false;
     }
@@ -292,15 +292,63 @@ export function createFighter(device, options = {}) {
     }
 
     const opposite = oppositeDirections[direction];
-    return edgesA[direction] === 'open' && edgesB[opposite] === 'open';
+
+    if (edgesA[direction] === 'open' && edgesB[opposite] === 'open') {
+      return true;
+    }
+
+    const isDoorEdge = edgesA[direction] === 'doorway' && edgesB[opposite] === 'doorway';
+    if (!isDoorEdge || !Array.isArray(activeDoors)) {
+      return false;
+    }
+
+    const doorAnchor = typeof nav.getDoorBetween === 'function'
+      ? nav.getDoorBetween(roomA.layerIndex, roomA.cellX, roomA.cellZ, roomB.cellX, roomB.cellZ)
+      : null;
+
+    if (!doorAnchor?.id) {
+      return false;
+    }
+
+    const matchingDoors = activeDoors.filter((door) => {
+      if (!door) {
+        return false;
+      }
+
+      const doorId = door.id;
+      const anchorId = door.anchor?.id;
+
+      return (
+        anchorId === doorAnchor.id ||
+        doorId === doorAnchor.id ||
+        (typeof doorId === 'string' && doorId.startsWith(`${doorAnchor.id}:`))
+      );
+    });
+
+    if (matchingDoors.length === 0) {
+      return false;
+    }
+
+    return matchingDoors.every((door) => {
+      if (!door) {
+        return false;
+      }
+
+      if (door.state === 'open') {
+        return true;
+      }
+
+      const openAmount = Number(door.openAmount);
+      return Number.isFinite(openAmount) && openAmount >= 0.9;
+    });
   }
 
-  function isPlayerInEngagementRoom(playerRoomKey, enemyRoomKey, nav) {
+  function isPlayerInEngagementRoom(playerRoomKey, enemyRoomKey, nav, activeDoors = null) {
     if (playerRoomKey === enemyRoomKey) {
       return true;
     }
 
-    return roomsShareOpenWall(playerRoomKey, enemyRoomKey, nav);
+    return roomsShareOpenWall(playerRoomKey, enemyRoomKey, nav, activeDoors);
   }
 
   function clearPath() {
@@ -625,7 +673,8 @@ export function createFighter(device, options = {}) {
         isPlayerInEngagementRoom(
           context.playerRoomKey,
           fighter.spawnContext.roomKey,
-          context.navigation
+          context.navigation,
+          context.activeDoors
         )
       ) {
         isAggro = true;
