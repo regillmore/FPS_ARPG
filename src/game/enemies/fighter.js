@@ -585,10 +585,18 @@ export function createFighter(device, options = {}) {
             translation[2]
           ];
 
-      waypoints.push({ position: waypointPosition, doorId: door?.id ?? null });
+      waypoints.push({
+        position: waypointPosition,
+        doorId: door?.id ?? null,
+        wallState: edgeState ?? null
+      });
     }
 
-    waypoints.push({ position: [playerPosition[0], translation[1], playerPosition[2]], doorId: null });
+    waypoints.push({
+      position: [playerPosition[0], translation[1], playerPosition[2]],
+      doorId: null,
+      wallState: null
+    });
 
     pathState.waypoints = waypoints;
     pathState.waypointIndex = 0;
@@ -681,6 +689,19 @@ export function createFighter(device, options = {}) {
     return true;
   }
 
+  function shouldPreferLocalSeekForWaypoints(waypoints) {
+    if (!Array.isArray(waypoints) || waypoints.length === 0) {
+      return false;
+    }
+
+    const walls = waypoints.filter((waypoint) => typeof waypoint?.wallState === 'string');
+    if (walls.length === 0) {
+      return true;
+    }
+
+    return walls.length <= 2 && walls.every((waypoint) => waypoint.wallState === 'open');
+  }
+
   function syncTransform() {
     computeRight(right, forward);
     mat4FromRotationTranslation(modelMatrix, right, up, forward, translation);
@@ -759,7 +780,10 @@ export function createFighter(device, options = {}) {
           rebuildPath(navigation, enemyCell, playerCell, context.playerPosition);
         }
 
-        followedPath = followPath(deltaTime, context);
+        const preferLocalSeek = shouldPreferLocalSeekForWaypoints(pathState.waypoints);
+        if (!preferLocalSeek) {
+          followedPath = followPath(deltaTime, context);
+        }
       } else {
         clearPath();
       }
