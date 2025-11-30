@@ -21,6 +21,10 @@ const DOOR_GAP_RATIO = 0.34;
 const MIN_CLIP_MARGIN = 10;
 const DEFAULT_FLOOR_LABEL = 'G';
 
+function getCellKey(x, z) {
+  return `${x},${z}`;
+}
+
 function formatFloorLabel(layerIndex) {
   if (!Number.isFinite(layerIndex)) {
     return DEFAULT_FLOOR_LABEL;
@@ -88,6 +92,52 @@ function createTransform(snapshot, space) {
       };
     }
   };
+}
+
+function buildVisibleCellSet(snapshot) {
+  const cells = Array.isArray(snapshot?.cells) ? snapshot.cells : null;
+  if (!cells || cells.length === 0) {
+    return null;
+  }
+
+  const visibleCells = new Set();
+  for (const cell of cells) {
+    const cx = Number.isFinite(cell?.x) ? cell.x : null;
+    const cz = Number.isFinite(cell?.z) ? cell.z : null;
+    if (cx === null || cz === null) {
+      continue;
+    }
+    visibleCells.add(getCellKey(cx, cz));
+  }
+
+  return visibleCells;
+}
+
+function isEnemyVisibleOnMinimap(enemy, snapshot, visibleCells) {
+  if (!snapshot || !visibleCells || visibleCells.size === 0) {
+    return true;
+  }
+
+  const cellSize = Number.isFinite(snapshot.cellSize) ? snapshot.cellSize : null;
+  const halfCell = Number.isFinite(snapshot.halfCellSize)
+    ? snapshot.halfCellSize
+    : cellSize !== null
+      ? cellSize * 0.5
+      : null;
+
+  if (!(cellSize > 0) || !(halfCell > 0)) {
+    return true;
+  }
+
+  const ex = Number.isFinite(enemy?.x) ? enemy.x : null;
+  const ez = Number.isFinite(enemy?.z) ? enemy.z : null;
+  if (ex === null || ez === null) {
+    return false;
+  }
+
+  const cellX = Math.floor((ex + halfCell) / cellSize);
+  const cellZ = Math.floor((ez + halfCell) / cellSize);
+  return visibleCells.has(getCellKey(cellX, cellZ));
 }
 
 function drawCells(ctx, snapshot, transform, dpr) {
@@ -444,11 +494,14 @@ function drawMinimap(ctx, canvasSize, data) {
       })
     : null;
 
+  const visibleCells = buildVisibleCellSet(snapshot);
+  const visibleEnemies = enemies.filter((enemy) => isEnemyVisibleOnMinimap(enemy, snapshot, visibleCells));
+
   drawCells(ctx, snapshot, transform, dpr);
   drawEdges(ctx, snapshot, transform, dpr);
   drawBalconyIcons(ctx, snapshot, transform, dpr);
   drawOriginElevatorWaypoint(ctx, transform, originElevator, dpr, centerX, centerY, clipRadius);
-  drawEnemies(ctx, snapshot, transform, enemies, dpr);
+  drawEnemies(ctx, snapshot, transform, visibleEnemies, dpr);
   drawPlayer(ctx, playerYaw, dpr, centerX, centerY);
 
   ctx.restore();
