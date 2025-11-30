@@ -13,6 +13,7 @@ import {
 } from './constants.js';
 import { positionToCell, positionToLayer } from './spatial.js';
 import { createCellState } from './roomSystem/cellState.js';
+import { createEdgeKey } from './profile.js';
 import { createSpawnManager } from './roomSystem/spawnManager.js';
 import { createRoomGeometryBuilder } from './roomSystem/geometryBuilder.js';
 
@@ -444,6 +445,66 @@ export function createProceduralRoomSystem(device, options = {}) {
     return `${layerIndex}:${getCellKey(cellX, cellZ)}`;
   }
 
+  function getDoorForEdge(layerIndex, ax, az, bx, bz) {
+    if (!Array.isArray(doors)) {
+      return null;
+    }
+
+    const id = `${createEdgeKey(ax, az, bx, bz)}@${layerIndex}`;
+    return doors.find((door) => door.id === id) ?? null;
+  }
+
+  function getCellEdgeSnapshot(layerIndex, cellX, cellZ) {
+    const edges = getExistingCellEdgesForLayer(layerIndex, cellX, cellZ);
+    if (!edges) {
+      return null;
+    }
+
+    return {
+      north: edges.north,
+      south: edges.south,
+      east: edges.east,
+      west: edges.west
+    };
+  }
+
+  function positionToCellCoords(position) {
+    if (!position) {
+      return null;
+    }
+
+    const px = Number(position[0]);
+    const py = Number(position[1]);
+    const pz = Number(position[2]);
+
+    if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
+      return null;
+    }
+
+    return {
+      cellX: positionToCell(px, roomSize, halfRoom),
+      cellZ: positionToCell(pz, roomSize, halfRoom),
+      layerIndex: positionToLayer(py, levelHeight, floorThickness)
+    };
+  }
+
+  function getNavigationHelper() {
+    return {
+      roomSize,
+      halfRoom,
+      levelHeight,
+      generationRadius,
+      positionToCell: positionToCellCoords,
+      getCellEdges: getCellEdgeSnapshot,
+      getDoorBetween: getDoorForEdge,
+      getRoomCenter: (cellX, cellZ, layerIndex = 0) => [
+        cellX * roomSize,
+        layerIndex * levelHeight,
+        cellZ * roomSize
+      ]
+    };
+  }
+
   function update(playerPosition) {
     const px = playerPosition?.[0] ?? 0;
     const py = playerPosition?.[1] ?? 0;
@@ -502,6 +563,7 @@ export function createProceduralRoomSystem(device, options = {}) {
       layerIndex: centerLayerIndex
     }),
     getRoomKeyForPosition,
+    getNavigationHelper,
     isPositionWithinGenerationRadius,
     getElevatorOffset: () => elevatorOffset,
     getElevatorGateProgress: () => elevatorGateProgress,

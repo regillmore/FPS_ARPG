@@ -238,6 +238,7 @@ export function createDoorManager(device) {
         openAmount,
         state: state === 'open' && openAmount <= 0.01 ? 'closed' : state,
         pendingOpen: previous?.pendingOpen ?? false,
+        lastOpenerPosition: previous?.lastOpenerPosition ?? null,
         color: anchor.color ?? DEFAULT_DOOR_COLOR,
         leafWidth,
         swingDirection
@@ -327,6 +328,8 @@ export function createDoorManager(device) {
       return false;
     }
 
+    door.lastOpenerPosition = playerPosition ?? null;
+
     const anchor = door.anchor;
     const distanceFromPlane =
       anchor?.orientation === 'x'
@@ -345,9 +348,6 @@ export function createDoorManager(device) {
   }
 
   function update(deltaTime, playerPosition, activeLayerIndex) {
-    const px = playerPosition?.[0] ?? 0;
-    const py = playerPosition?.[1] ?? 0;
-    const pz = playerPosition?.[2] ?? 0;
     const closeDistanceSq = 30.0;
     const hasLayerConstraint = Number.isFinite(activeLayerIndex);
 
@@ -360,11 +360,20 @@ export function createDoorManager(device) {
         continue;
       }
 
-      const dx = px - door.center[0];
-      const dz = pz - door.center[2];
-      const dy = py - door.center[1];
-      const horizontalDistanceSq = dx * dx + dz * dz;
-      const nearDoor = horizontalDistanceSq <= closeDistanceSq && Math.abs(dy) <= door.anchor.height * 0.75;
+      const nearDoor = (() => {
+        const checkNear = (position) => {
+          if (!position) {
+            return false;
+          }
+          const dx = position[0] - door.center[0];
+          const dz = position[2] - door.center[2];
+          const dy = position[1] - door.center[1];
+          const horizontalDistanceSq = dx * dx + dz * dz;
+          return horizontalDistanceSq <= closeDistanceSq && Math.abs(dy) <= door.anchor.height * 0.75;
+        };
+
+        return checkNear(door.lastOpenerPosition) || checkNear(playerPosition);
+      })();
 
       if (door.state === 'opening') {
         door.openAmount = Math.min(1, door.openAmount + OPEN_SPEED * deltaTime);

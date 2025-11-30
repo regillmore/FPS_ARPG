@@ -73,6 +73,9 @@ export async function initializeGame({
         : null;
     const levelHeight =
       typeof roomSystem.getLevelHeight === 'function' ? roomSystem.getLevelHeight() : null;
+    const navigationHelper = typeof roomSystem.getNavigationHelper === 'function'
+      ? roomSystem.getNavigationHelper()
+      : null;
     const roomColliders = roomSystem.getColliders();
     const storageChests =
       typeof roomSystem.getStorageChests === 'function' ? roomSystem.getStorageChests() : [];
@@ -252,6 +255,12 @@ export async function initializeGame({
       playerRadius: PLAYER_COLLISION_RADIUS,
       playerHalfHeight: PLAYER_COLLISION_HALF_HEIGHT,
       staticColliders: roomColliders,
+      doorColliders: typeof doorManager.getActiveColliders === 'function'
+        ? doorManager.getActiveColliders()
+        : [],
+      activeDoors: typeof doorManager.getDoors === 'function' ? doorManager.getDoors() : [],
+      requestDoorOpen: typeof doorManager.requestOpen === 'function' ? doorManager.requestOpen : null,
+      navigation: navigationHelper,
       playerLayerIndex: layerResolver ? layerResolver(controller.position[1]) : null,
       playerRoomKey:
         typeof roomSystem.getRoomKeyForPosition === 'function'
@@ -798,6 +807,10 @@ export async function initializeGame({
         if (!disableEnemies) {
           enemyUpdateContext.playerPosition = controller.position;
           enemyUpdateContext.staticColliders = roomColliders;
+          enemyUpdateContext.navigation = navigationHelper;
+          enemyUpdateContext.doorColliders = doorHitBoxes;
+          enemyUpdateContext.activeDoors = activeDoors;
+          enemyUpdateContext.requestDoorOpen = doorManager.requestOpen;
           enemyUpdateContext.playerLayerIndex = layerResolver
             ? layerResolver(controller.position[1])
             : null;

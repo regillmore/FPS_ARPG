@@ -1,4 +1,5 @@
 import { mat4FromRotationTranslation } from '../../math.js';
+import { resolveCapsuleCollisions } from '../playerCollisions.js';
 
 const FLOATS_PER_VERTEX = 10;
 const HALF_WIDTH = 0.35;
@@ -23,6 +24,18 @@ const LOCAL_BOUNDS = Object.freeze({
   minZ: -HALF_DEPTH,
   maxZ: HALF_DEPTH + NOSE_LENGTH
 });
+
+const FIGHTER_COLLISION_RADIUS = Math.max(HALF_WIDTH, HALF_DEPTH);
+const FIGHTER_COLLISION_HALF_HEIGHT = BODY_HEIGHT * 0.5;
+const PATH_REBUILD_INTERVAL = 0.35;
+const WAYPOINT_REACHED_DISTANCE = 0.35;
+const DOOR_OPEN_DISTANCE = 2.5;
+const directionOffsets = {
+  north: [0, -1],
+  south: [0, 1],
+  east: [1, 0],
+  west: [-1, 0]
+};
 
 function pushVertex(target, position, normal, color) {
   target.push(
@@ -199,6 +212,310 @@ export function createFighter(device, options = {}) {
 
   const onDeath = typeof options.onDeath === 'function' ? options.onDeath : null;
   const onDamaged = typeof options.onDamaged === 'function' ? options.onDamaged : null;
+  const collisionScratch = [];
+  const pathState = {
+    waypoints: [],
+    waypointIndex: 0,
+    lastPlayerCellKey: '',
+    lastEnemyCellKey: '',
+    layerIndex: null,
+    rebuildTimer: 0
+  };
+
+  function layeredCellKey(cell) {
+    if (!cell) {
+      return '';
+    }
+    return `${cell.layerIndex}:${cell.cellX},${cell.cellZ}`;
+  }
+
+  function clearPath() {
+    pathState.waypoints.length = 0;
+    pathState.waypointIndex = 0;
+  }
+
+  function gatherColliders(context) {
+    collisionScratch.length = 0;
+
+    if (Array.isArray(context?.staticColliders)) {
+      for (let i = 0; i < context.staticColliders.length; i += 1) {
+        const collider = context.staticColliders[i];
+        if (collider) {
+          collisionScratch.push(collider);
+        }
+      }
+    }
+
+    if (Array.isArray(context?.doorColliders)) {
+      for (let i = 0; i < context.doorColliders.length; i += 1) {
+        const collider = context.doorColliders[i];
+        if (collider) {
+          collisionScratch.push(collider);
+        }
+      }
+    }
+
+    return collisionScratch;
+  }
+
+  function requestDoorOpen(doorId, context) {
+    if (!doorId || typeof context?.requestDoorOpen !== 'function') {
+      return;
+    }
+
+    if (Array.isArray(context.activeDoors)) {
+      const matchingDoors = context.activeDoors.filter((entry) => {
+        if (!entry) {
+          return false;
+        }
+        return (
+          entry.id === doorId ||
+          entry.anchor?.id === doorId ||
+          (doorId && typeof entry.id === 'string' && entry.id.startsWith(`${doorId}:`))
+        );
+      });
+
+      if (matchingDoors.length > 0) {
+        let pendingRequest = false;
+        for (const door of matchingDoors) {
+          if (door.state === 'open') {
+            continue;
+          }
+          context.requestDoorOpen(door.id, translation);
+          pendingRequest = true;
+        }
+
+        if (!pendingRequest) {
+          return;
+        }
+
+        return;
+      }
+    }
+
+    context.requestDoorOpen(doorId, translation);
+  }
+
+  function buildCellPath(nav, startCell, goalCell) {
+    if (!nav) {
+      return null;
+    }
+
+    const startKey = layeredCellKey(startCell);
+    const goalKey = layeredCellKey(goalCell);
+    if (!startKey || !goalKey) {
+      return null;
+    }
+
+    if (startKey === goalKey) {
+      return [startCell];
+    }
+
+    const queue = [startCell];
+    const cameFrom = new Map([[startKey, null]]);
+    const cellByKey = new Map([[startKey, startCell]]);
+    const searchRadius = Math.max(1, Math.floor(nav.generationRadius ?? 6));
+
+    while (queue.length > 0 && !cameFrom.has(goalKey)) {
+      const cell = queue.shift();
+      if (!cell) {
+        continue;
+      }
+
+      const edges = typeof nav.getCellEdges === 'function'
+        ? nav.getCellEdges(cell.layerIndex, cell.cellX, cell.cellZ)
+        : null;
+      if (!edges) {
+        continue;
+      }
+
+      for (const direction of Object.keys(directionOffsets)) {
+        const state = edges[direction];
+        if (state !== 'open' && state !== 'doorway') {
+          continue;
+        }
+        const offset = directionOffsets[direction];
+        const neighbor = {
+          cellX: cell.cellX + offset[0],
+          cellZ: cell.cellZ + offset[1],
+          layerIndex: cell.layerIndex
+        };
+        if (
+          Math.abs(neighbor.cellX - startCell.cellX) > searchRadius ||
+          Math.abs(neighbor.cellZ - startCell.cellZ) > searchRadius
+        ) {
+          continue;
+        }
+
+        const neighborKey = layeredCellKey(neighbor);
+        if (!neighborKey || cameFrom.has(neighborKey)) {
+          continue;
+        }
+        cameFrom.set(neighborKey, cell);
+        cellByKey.set(neighborKey, neighbor);
+        queue.push(neighbor);
+
+        if (neighborKey === goalKey) {
+          break;
+        }
+      }
+    }
+
+    if (!cameFrom.has(goalKey)) {
+      return null;
+    }
+
+    const path = [];
+    let currentKey = goalKey;
+    while (currentKey) {
+      const cell = cellByKey.get(currentKey);
+      if (cell) {
+        path.push(cell);
+      }
+      const previousCell = cameFrom.get(currentKey);
+      currentKey = previousCell ? layeredCellKey(previousCell) : '';
+    }
+
+    path.reverse();
+    return path;
+  }
+
+  function rebuildPath(nav, enemyCell, playerCell, playerPosition) {
+    if (!nav || !enemyCell || !playerCell || enemyCell.layerIndex !== playerCell.layerIndex) {
+      clearPath();
+      return false;
+    }
+
+    const pathCells = buildCellPath(nav, enemyCell, playerCell);
+    if (!pathCells || pathCells.length === 0) {
+      clearPath();
+      return false;
+    }
+
+    const waypoints = [];
+    for (let i = 1; i < pathCells.length; i += 1) {
+      const from = pathCells[i - 1];
+      const to = pathCells[i];
+      const deltaX = to.cellX - from.cellX;
+      const deltaZ = to.cellZ - from.cellZ;
+      const direction = deltaX === 1 ? 'east' : deltaX === -1 ? 'west' : deltaZ === 1 ? 'south' : 'north';
+      const edges = typeof nav.getCellEdges === 'function'
+        ? nav.getCellEdges(from.layerIndex, from.cellX, from.cellZ)
+        : null;
+      const edgeState = edges ? edges[direction] : null;
+      const door = edgeState === 'doorway'
+        ? nav.getDoorBetween?.(from.layerIndex, from.cellX, from.cellZ, to.cellX, to.cellZ)
+        : null;
+
+      const waypointPosition = door?.center
+        ? [door.center[0], translation[1], door.center[2]]
+        : nav.getRoomCenter?.(to.cellX, to.cellZ, to.layerIndex) ?? [
+            translation[0],
+            translation[1],
+            translation[2]
+          ];
+
+      waypoints.push({ position: waypointPosition, doorId: door?.id ?? null });
+    }
+
+    waypoints.push({ position: [playerPosition[0], translation[1], playerPosition[2]], doorId: null });
+
+    pathState.waypoints = waypoints;
+    pathState.waypointIndex = 0;
+    pathState.lastPlayerCellKey = layeredCellKey(playerCell);
+    pathState.lastEnemyCellKey = layeredCellKey(enemyCell);
+    pathState.layerIndex = enemyCell.layerIndex;
+    pathState.rebuildTimer = PATH_REBUILD_INTERVAL;
+    return true;
+  }
+
+  function moveTowards(target, deltaTime, context) {
+    if (!target) {
+      return;
+    }
+
+    const dx = target[0] - translation[0];
+    const dz = target[2] - translation[2];
+    const distance = Math.hypot(dx, dz);
+    if (distance < 1e-4) {
+      return;
+    }
+
+    const directionX = dx / distance;
+    const directionZ = dz / distance;
+    const speed = Number.isFinite(options.speed) && options.speed > 0 ? options.speed : DEFAULT_SPEED;
+    const step = Math.min(distance, speed * deltaTime);
+
+    const previousX = translation[0];
+    const previousZ = translation[2];
+
+    translation[0] += directionX * step;
+    translation[2] += directionZ * step;
+
+    const colliders = gatherColliders(context);
+    if (colliders.length > 0) {
+      resolveCapsuleCollisions(translation, colliders, FIGHTER_COLLISION_RADIUS, FIGHTER_COLLISION_HALF_HEIGHT);
+    }
+
+    const movedX = translation[0] - previousX;
+    const movedZ = translation[2] - previousZ;
+    const movedDistance = Math.hypot(movedX, movedZ);
+    if (movedDistance > 1e-4) {
+      normalizeForward(forward, movedX, movedZ);
+    } else {
+      normalizeForward(forward, directionX, directionZ);
+    }
+  }
+
+  function followPath(deltaTime, context) {
+    if (!Array.isArray(pathState.waypoints) || pathState.waypoints.length === 0) {
+      return false;
+    }
+
+    const waypoint = pathState.waypoints[pathState.waypointIndex];
+    if (!waypoint) {
+      return false;
+    }
+
+    const target = waypoint.position;
+    const dx = target[0] - translation[0];
+    const dz = target[2] - translation[2];
+    const distance = Math.hypot(dx, dz);
+
+    if (distance < WAYPOINT_REACHED_DISTANCE) {
+      pathState.waypointIndex = Math.min(pathState.waypointIndex + 1, pathState.waypoints.length - 1);
+      return true;
+    }
+
+    if (waypoint.doorId && distance < DOOR_OPEN_DISTANCE) {
+      requestDoorOpen(waypoint.doorId, context);
+    }
+
+    const directionX = dx / (distance || 1);
+    const directionZ = dz / (distance || 1);
+    const speed = Number.isFinite(options.speed) && options.speed > 0 ? options.speed : DEFAULT_SPEED;
+    const step = Math.min(distance, speed * deltaTime);
+
+    const previousX = translation[0];
+    const previousZ = translation[2];
+
+    translation[0] += directionX * step;
+    translation[2] += directionZ * step;
+
+    const colliders = gatherColliders(context);
+    if (colliders.length > 0) {
+      resolveCapsuleCollisions(translation, colliders, FIGHTER_COLLISION_RADIUS, FIGHTER_COLLISION_HALF_HEIGHT);
+    }
+
+    const movedX = translation[0] - previousX;
+    const movedZ = translation[2] - previousZ;
+    const movedDistance = Math.hypot(movedX, movedZ);
+    if (movedDistance > 1e-4) {
+      normalizeForward(forward, movedX, movedZ);
+    }
+
+    return true;
+  }
 
   function syncTransform() {
     computeRight(right, forward);
@@ -221,22 +538,37 @@ export function createFighter(device, options = {}) {
       return;
     }
 
-    const target = context.playerPosition;
-    const dx = target[0] - translation[0];
-    const dz = target[2] - translation[2];
-    const distance = Math.hypot(dx, dz);
-    if (distance < 1e-4) {
-      return;
+    pathState.rebuildTimer = Math.max(pathState.rebuildTimer - deltaTime, 0);
+    const navigation = context.navigation;
+    let followedPath = false;
+
+    if (navigation && typeof navigation.positionToCell === 'function') {
+      const enemyCell = navigation.positionToCell(translation);
+      const playerCell = navigation.positionToCell(context.playerPosition);
+
+      if (enemyCell && playerCell && enemyCell.layerIndex === playerCell.layerIndex) {
+        const enemyKey = layeredCellKey(enemyCell);
+        const playerKey = layeredCellKey(playerCell);
+        const needsRebuild =
+          pathState.waypoints.length === 0 ||
+          pathState.layerIndex !== enemyCell.layerIndex ||
+          pathState.lastEnemyCellKey !== enemyKey ||
+          pathState.lastPlayerCellKey !== playerKey ||
+          pathState.rebuildTimer <= 0;
+
+        if (needsRebuild) {
+          rebuildPath(navigation, enemyCell, playerCell, context.playerPosition);
+        }
+
+        followedPath = followPath(deltaTime, context);
+      } else {
+        clearPath();
+      }
     }
 
-    const directionX = dx / distance;
-    const directionZ = dz / distance;
-    const speed = Number.isFinite(options.speed) && options.speed > 0 ? options.speed : DEFAULT_SPEED;
-    const step = Math.min(distance, speed * deltaTime);
-
-    translation[0] += directionX * step;
-    translation[2] += directionZ * step;
-    normalizeForward(forward, directionX, directionZ);
+    if (!followedPath) {
+      moveTowards(context.playerPosition, deltaTime, context);
+    }
   }
 
   function takeDamage(amount, context = {}) {
