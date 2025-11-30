@@ -1,5 +1,9 @@
 import { mat4FromRotationTranslation } from '../../math.js';
 import { resolveCapsuleCollisions } from '../playerCollisions.js';
+import {
+  createRoomPathFollower,
+  isPlayerInEngagementRoom
+} from './navigation/roomNavigation.js';
 
 const FLOATS_PER_VERTEX = 10;
 const HALF_WIDTH = 0.35;
@@ -30,18 +34,6 @@ const FIGHTER_COLLISION_HALF_HEIGHT = BODY_HEIGHT * 0.5;
 const PATH_REBUILD_INTERVAL = 0.35;
 const WAYPOINT_REACHED_DISTANCE = 0.35;
 const DOOR_OPEN_DISTANCE = 2.5;
-const directionOffsets = {
-  north: [0, -1],
-  south: [0, 1],
-  east: [1, 0],
-  west: [-1, 0]
-};
-const oppositeDirections = {
-  north: 'south',
-  south: 'north',
-  east: 'west',
-  west: 'east'
-};
 
 function pushVertex(target, position, normal, color) {
   target.push(
@@ -221,147 +213,6 @@ export function createFighter(device, options = {}) {
   const onDamaged = typeof options.onDamaged === 'function' ? options.onDamaged : null;
   const collisionScratch = [];
   const collisionPosition = new Float32Array(3);
-  const pathState = {
-    waypoints: [],
-    waypointIndex: 0,
-    lastPlayerCellKey: '',
-    lastEnemyCellKey: '',
-    layerIndex: null,
-    rebuildTimer: 0
-  };
-
-  function layeredCellKey(cell) {
-    if (!cell) {
-      return '';
-    }
-    return `${cell.layerIndex}:${cell.cellX},${cell.cellZ}`;
-  }
-
-  function parseRoomKey(roomKey) {
-    if (typeof roomKey !== 'string' || roomKey.length === 0) {
-      return null;
-    }
-
-    const [layerPart, cellPart] = roomKey.split(':');
-    if (!cellPart) {
-      return null;
-    }
-
-    const [cellXPart, cellZPart] = cellPart.split(',');
-    const layerIndex = Number(layerPart);
-    const cellX = Number(cellXPart);
-    const cellZ = Number(cellZPart);
-
-    if (!Number.isInteger(layerIndex) || !Number.isInteger(cellX) || !Number.isInteger(cellZ)) {
-      return null;
-    }
-
-    return { layerIndex, cellX, cellZ };
-  }
-
-  function roomsShareOpenWall(roomAKey, roomBKey, nav, activeDoors = null) {
-    if (!nav || typeof nav.getCellEdges !== 'function') {
-      return false;
-    }
-
-    const roomA = parseRoomKey(roomAKey);
-    const roomB = parseRoomKey(roomBKey);
-    if (!roomA || !roomB || roomA.layerIndex !== roomB.layerIndex) {
-      return false;
-    }
-
-    const deltaX = roomB.cellX - roomA.cellX;
-    const deltaZ = roomB.cellZ - roomA.cellZ;
-    let direction = '';
-
-    if (deltaX === 1 && deltaZ === 0) {
-      direction = 'east';
-    } else if (deltaX === -1 && deltaZ === 0) {
-      direction = 'west';
-    } else if (deltaX === 0 && deltaZ === 1) {
-      direction = 'south';
-    } else if (deltaX === 0 && deltaZ === -1) {
-      direction = 'north';
-    } else {
-      return false;
-    }
-
-    const edgesA = nav.getCellEdges(roomA.layerIndex, roomA.cellX, roomA.cellZ);
-    const edgesB = nav.getCellEdges(roomB.layerIndex, roomB.cellX, roomB.cellZ);
-    if (!edgesA || !edgesB) {
-      return false;
-    }
-
-    const opposite = oppositeDirections[direction];
-
-    if (edgesA[direction] === 'open' && edgesB[opposite] === 'open') {
-      return true;
-    }
-
-    const isDoorEdge = edgesA[direction] === 'doorway' && edgesB[opposite] === 'doorway';
-    if (!isDoorEdge || !Array.isArray(activeDoors)) {
-      return false;
-    }
-
-    const doorAnchor = typeof nav.getDoorBetween === 'function'
-      ? nav.getDoorBetween(roomA.layerIndex, roomA.cellX, roomA.cellZ, roomB.cellX, roomB.cellZ)
-      : null;
-
-    if (!doorAnchor?.id) {
-      return false;
-    }
-
-    const baseDoorAnchorId = String(doorAnchor.id);
-    const matchingDoors = activeDoors.filter((door) => {
-      if (!door) {
-        return false;
-      }
-
-      const doorId = door.id;
-      const anchorId = door.anchor?.id;
-      const anchorRootId = typeof anchorId === 'string' ? anchorId.split(':')[0] : null;
-      const doorRootId = typeof doorId === 'string' ? doorId.split(':')[0] : null;
-
-      return (
-        anchorId === doorAnchor.id ||
-        doorId === doorAnchor.id ||
-        anchorRootId === baseDoorAnchorId ||
-        doorRootId === baseDoorAnchorId ||
-        (typeof doorId === 'string' && doorId.startsWith(`${baseDoorAnchorId}:`))
-      );
-    });
-
-    if (matchingDoors.length === 0) {
-      return false;
-    }
-
-    return matchingDoors.some((door) => {
-      if (!door) {
-        return false;
-      }
-
-      if (door.state === 'open') {
-        return true;
-      }
-
-      const openAmount = Number(door.openAmount);
-      return Number.isFinite(openAmount) && openAmount >= 0.9;
-    });
-  }
-
-  function isPlayerInEngagementRoom(playerRoomKey, enemyRoomKey, nav, activeDoors = null) {
-    if (playerRoomKey === enemyRoomKey) {
-      return true;
-    }
-
-    return roomsShareOpenWall(playerRoomKey, enemyRoomKey, nav, activeDoors);
-  }
-
-  function clearPath() {
-    pathState.waypoints.length = 0;
-    pathState.waypointIndex = 0;
-  }
-
   function gatherColliders(context) {
     collisionScratch.length = 0;
 
@@ -448,238 +299,16 @@ export function createFighter(device, options = {}) {
     context.requestDoorOpen(doorId, translation);
   }
 
-  function buildCellPath(nav, startCell, goalCell) {
-    if (!nav) {
-      return null;
-    }
-
-    const startKey = layeredCellKey(startCell);
-    const goalKey = layeredCellKey(goalCell);
-    if (!startKey || !goalKey) {
-      return null;
-    }
-
-    if (startKey === goalKey) {
-      return [startCell];
-    }
-
-    const queue = [{ cell: startCell, cost: 0 }];
-    const costByKey = new Map([[startKey, 0]]);
-    const cameFrom = new Map([[startKey, null]]);
-    const cellByKey = new Map([[startKey, startCell]]);
-    const searchRadius = Math.max(1, Math.floor(nav.generationRadius ?? 6));
-
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current || !current.cell) {
-        continue;
-      }
-
-      const cell = current.cell;
-      const cellKey = layeredCellKey(cell);
-      const currentCost = cellKey ? costByKey.get(cellKey) ?? 0 : 0;
-
-      if (cellKey === goalKey) {
-        break;
-      }
-
-      const edges = typeof nav.getCellEdges === 'function'
-        ? nav.getCellEdges(cell.layerIndex, cell.cellX, cell.cellZ)
-        : null;
-      if (!edges) {
-        continue;
-      }
-
-      for (const direction of Object.keys(directionOffsets)) {
-        const state = edges[direction];
-        if (state !== 'open' && state !== 'doorway') {
-          continue;
-        }
-        const offset = directionOffsets[direction];
-        const neighbor = {
-          cellX: cell.cellX + offset[0],
-          cellZ: cell.cellZ + offset[1],
-          layerIndex: cell.layerIndex
-        };
-        if (
-          Math.abs(neighbor.cellX - startCell.cellX) > searchRadius ||
-          Math.abs(neighbor.cellZ - startCell.cellZ) > searchRadius
-        ) {
-          continue;
-        }
-
-        const neighborKey = layeredCellKey(neighbor);
-        if (!neighborKey) {
-          continue;
-        }
-
-        const edgeCost = state === 'doorway' ? 1.1 : 1;
-        const newCost = currentCost + edgeCost;
-        const previousCost = costByKey.get(neighborKey);
-        if (previousCost === undefined || newCost < previousCost) {
-          costByKey.set(neighborKey, newCost);
-          cameFrom.set(neighborKey, cell);
-          cellByKey.set(neighborKey, neighbor);
-
-          const insertionIndex = queue.findIndex((entry) => entry.cost > newCost);
-          if (insertionIndex === -1) {
-            queue.push({ cell: neighbor, cost: newCost });
-          } else {
-            queue.splice(insertionIndex, 0, { cell: neighbor, cost: newCost });
-          }
-        }
-      }
-    }
-
-    if (!cameFrom.has(goalKey)) {
-      return null;
-    }
-
-    const path = [];
-    let currentKey = goalKey;
-    while (currentKey) {
-      const cell = cellByKey.get(currentKey);
-      if (cell) {
-        path.push(cell);
-      }
-      const previousCell = cameFrom.get(currentKey);
-      currentKey = previousCell ? layeredCellKey(previousCell) : '';
-    }
-
-    path.reverse();
-    return path;
-  }
-
-  function rebuildPath(nav, enemyCell, playerCell, playerPosition) {
-    if (!nav || !enemyCell || !playerCell || enemyCell.layerIndex !== playerCell.layerIndex) {
-      clearPath();
-      return false;
-    }
-
-    const pathCells = buildCellPath(nav, enemyCell, playerCell);
-    if (!pathCells || pathCells.length === 0) {
-      clearPath();
-      return false;
-    }
-
-    const waypoints = [];
-    for (let i = 1; i < pathCells.length; i += 1) {
-      const from = pathCells[i - 1];
-      const to = pathCells[i];
-      const deltaX = to.cellX - from.cellX;
-      const deltaZ = to.cellZ - from.cellZ;
-      const direction = deltaX === 1 ? 'east' : deltaX === -1 ? 'west' : deltaZ === 1 ? 'south' : 'north';
-      const edges = typeof nav.getCellEdges === 'function'
-        ? nav.getCellEdges(from.layerIndex, from.cellX, from.cellZ)
-        : null;
-      const edgeState = edges ? edges[direction] : null;
-      const door = edgeState === 'doorway'
-        ? nav.getDoorBetween?.(from.layerIndex, from.cellX, from.cellZ, to.cellX, to.cellZ)
-        : null;
-
-      const waypointPosition = door?.center
-        ? [door.center[0], translation[1], door.center[2]]
-        : nav.getRoomCenter?.(to.cellX, to.cellZ, to.layerIndex) ?? [
-            translation[0],
-            translation[1],
-            translation[2]
-          ];
-
-      waypoints.push({ position: waypointPosition, doorId: door?.id ?? null });
-    }
-
-    waypoints.push({ position: [playerPosition[0], translation[1], playerPosition[2]], doorId: null });
-
-    pathState.waypoints = waypoints;
-    pathState.waypointIndex = 0;
-    pathState.lastPlayerCellKey = layeredCellKey(playerCell);
-    pathState.lastEnemyCellKey = layeredCellKey(enemyCell);
-    pathState.layerIndex = enemyCell.layerIndex;
-    pathState.rebuildTimer = PATH_REBUILD_INTERVAL;
-    return true;
-  }
-
-  function moveTowards(target, deltaTime, context) {
-    if (!target) {
-      return;
-    }
-
-    const dx = target[0] - translation[0];
-    const dz = target[2] - translation[2];
-    const distance = Math.hypot(dx, dz);
-    if (distance < 1e-4) {
-      return;
-    }
-
-    const directionX = dx / distance;
-    const directionZ = dz / distance;
-    const speed = Number.isFinite(options.speed) && options.speed > 0 ? options.speed : DEFAULT_SPEED;
-    const step = Math.min(distance, speed * deltaTime);
-
-    const previousX = translation[0];
-    const previousZ = translation[2];
-
-    translation[0] += directionX * step;
-    translation[2] += directionZ * step;
-
-    resolveCollisions(context);
-
-    const movedX = translation[0] - previousX;
-    const movedZ = translation[2] - previousZ;
-    const movedDistance = Math.hypot(movedX, movedZ);
-    if (movedDistance > 1e-4) {
-      normalizeForward(forward, movedX, movedZ);
-    } else {
-      normalizeForward(forward, directionX, directionZ);
-    }
-  }
-
-  function followPath(deltaTime, context) {
-    if (!Array.isArray(pathState.waypoints) || pathState.waypoints.length === 0) {
-      return false;
-    }
-
-    const waypoint = pathState.waypoints[pathState.waypointIndex];
-    if (!waypoint) {
-      return false;
-    }
-
-    const target = waypoint.position;
-    const dx = target[0] - translation[0];
-    const dz = target[2] - translation[2];
-    const distance = Math.hypot(dx, dz);
-
-    if (distance < WAYPOINT_REACHED_DISTANCE) {
-      pathState.waypointIndex = Math.min(pathState.waypointIndex + 1, pathState.waypoints.length - 1);
-      return true;
-    }
-
-    if (waypoint.doorId && distance < DOOR_OPEN_DISTANCE) {
-      requestDoorOpen(waypoint.doorId, context);
-    }
-
-    const directionX = dx / (distance || 1);
-    const directionZ = dz / (distance || 1);
-    const speed = Number.isFinite(options.speed) && options.speed > 0 ? options.speed : DEFAULT_SPEED;
-    const step = Math.min(distance, speed * deltaTime);
-
-    const previousX = translation[0];
-    const previousZ = translation[2];
-
-    translation[0] += directionX * step;
-    translation[2] += directionZ * step;
-
-    resolveCollisions(context);
-
-    const movedX = translation[0] - previousX;
-    const movedZ = translation[2] - previousZ;
-    const movedDistance = Math.hypot(movedX, movedZ);
-    if (movedDistance > 1e-4) {
-      normalizeForward(forward, movedX, movedZ);
-    }
-
-    return true;
-  }
+  const pathFollower = createRoomPathFollower({
+    translation,
+    getSpeed: () => (Number.isFinite(options.speed) && options.speed > 0 ? options.speed : DEFAULT_SPEED),
+    resolveCollisions: (context) => resolveCollisions(context),
+    normalizeForward: (x, z) => normalizeForward(forward, x, z),
+    requestDoorOpen: (doorId, context) => requestDoorOpen(doorId, context),
+    pathRebuildInterval: PATH_REBUILD_INTERVAL,
+    waypointReachedDistance: WAYPOINT_REACHED_DISTANCE,
+    doorOpenDistance: DOOR_OPEN_DISTANCE
+  });
 
   function syncTransform() {
     computeRight(right, forward);
@@ -737,7 +366,7 @@ export function createFighter(device, options = {}) {
       return;
     }
 
-    pathState.rebuildTimer = Math.max(pathState.rebuildTimer - deltaTime, 0);
+    pathFollower.tick(deltaTime);
     const navigation = context.navigation;
     let followedPath = false;
 
@@ -746,27 +375,18 @@ export function createFighter(device, options = {}) {
       const playerCell = navigation.positionToCell(context.playerPosition);
 
       if (enemyCell && playerCell && enemyCell.layerIndex === playerCell.layerIndex) {
-        const enemyKey = layeredCellKey(enemyCell);
-        const playerKey = layeredCellKey(playerCell);
-        const needsRebuild =
-          pathState.waypoints.length === 0 ||
-          pathState.layerIndex !== enemyCell.layerIndex ||
-          pathState.lastEnemyCellKey !== enemyKey ||
-          pathState.lastPlayerCellKey !== playerKey ||
-          pathState.rebuildTimer <= 0;
-
-        if (needsRebuild) {
-          rebuildPath(navigation, enemyCell, playerCell, context.playerPosition);
+        if (pathFollower.shouldRebuild(enemyCell, playerCell)) {
+          pathFollower.rebuildPath(navigation, enemyCell, playerCell, context.playerPosition);
         }
 
-        followedPath = followPath(deltaTime, context);
+        followedPath = pathFollower.followPath(deltaTime, context);
       } else {
-        clearPath();
+        pathFollower.clearPath();
       }
     }
 
     if (!followedPath) {
-      moveTowards(context.playerPosition, deltaTime, context);
+      pathFollower.moveTowards(context.playerPosition, deltaTime, context);
     }
   }
 
