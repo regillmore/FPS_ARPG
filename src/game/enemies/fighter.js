@@ -463,24 +463,15 @@ export function createFighter(device, options = {}) {
       return [startCell];
     }
 
-    const queue = [{ cell: startCell, cost: 0 }];
-    const costByKey = new Map([[startKey, 0]]);
+    const queue = [startCell];
     const cameFrom = new Map([[startKey, null]]);
     const cellByKey = new Map([[startKey, startCell]]);
     const searchRadius = Math.max(1, Math.floor(nav.generationRadius ?? 6));
 
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current || !current.cell) {
+    while (queue.length > 0 && !cameFrom.has(goalKey)) {
+      const cell = queue.shift();
+      if (!cell) {
         continue;
-      }
-
-      const cell = current.cell;
-      const cellKey = layeredCellKey(cell);
-      const currentCost = cellKey ? costByKey.get(cellKey) ?? 0 : 0;
-
-      if (cellKey === goalKey) {
-        break;
       }
 
       const edges = typeof nav.getCellEdges === 'function'
@@ -509,24 +500,15 @@ export function createFighter(device, options = {}) {
         }
 
         const neighborKey = layeredCellKey(neighbor);
-        if (!neighborKey) {
+        if (!neighborKey || cameFrom.has(neighborKey)) {
           continue;
         }
+        cameFrom.set(neighborKey, cell);
+        cellByKey.set(neighborKey, neighbor);
+        queue.push(neighbor);
 
-        const edgeCost = state === 'doorway' ? 1.1 : 1;
-        const newCost = currentCost + edgeCost;
-        const previousCost = costByKey.get(neighborKey);
-        if (previousCost === undefined || newCost < previousCost) {
-          costByKey.set(neighborKey, newCost);
-          cameFrom.set(neighborKey, cell);
-          cellByKey.set(neighborKey, neighbor);
-
-          const insertionIndex = queue.findIndex((entry) => entry.cost > newCost);
-          if (insertionIndex === -1) {
-            queue.push({ cell: neighbor, cost: newCost });
-          } else {
-            queue.splice(insertionIndex, 0, { cell: neighbor, cost: newCost });
-          }
+        if (neighborKey === goalKey) {
+          break;
         }
       }
     }
