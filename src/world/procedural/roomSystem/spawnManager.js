@@ -9,14 +9,14 @@ export function createSpawnManager({
   halfRoom,
   levelHeight
 }) {
-  const pendingBarrelSpawns = [];
-  const discoveredBarrelRooms = new Set();
+  const pendingFighterSpawns = [];
+  const discoveredFighterRooms = new Set();
 
-  function getBarrelRoomKey(layerIndex, x, z) {
+  function getFighterRoomKey(layerIndex, x, z) {
     return `${layerIndex}:${getCellKey(x, z)}`;
   }
 
-  function scheduleBarrelSpawnPoint(spawn) {
+  function scheduleFighterSpawnPoint(spawn) {
     if (!spawn) {
       return false;
     }
@@ -25,13 +25,13 @@ export function createSpawnManager({
       return false;
     }
     const key = typeof spawn.key === 'string' ? spawn.key : spawn.key ? String(spawn.key) : '';
-    pendingBarrelSpawns.push({ key, position: normalizedPosition });
+    pendingFighterSpawns.push({ key, position: normalizedPosition });
     return true;
   }
 
-  function evaluateCellForBarrel(x, z, layerIndex) {
-    const roomKey = getBarrelRoomKey(layerIndex, x, z);
-    if (discoveredBarrelRooms.has(roomKey)) {
+  function evaluateCellForFighter(x, z, layerIndex) {
+    const roomKey = getFighterRoomKey(layerIndex, x, z);
+    if (discoveredFighterRooms.has(roomKey)) {
       return;
     }
 
@@ -89,23 +89,23 @@ export function createSpawnManager({
       return;
     }
 
-    discoveredBarrelRooms.add(roomKey);
+    discoveredFighterRooms.add(roomKey);
 
     for (let i = 0; i < offsets.length; i += 1) {
       const [offsetX, offsetZ] = offsets[i];
       const position = [centerX + offsetX, baseY, centerZ + offsetZ];
-      scheduleBarrelSpawnPoint({ key: roomKey, position });
+      scheduleFighterSpawnPoint({ key: roomKey, position });
     }
   }
 
   return {
-    scheduleBarrelSpawnPoint,
-    consumeBarrelSpawnPoints: () => {
-      if (pendingBarrelSpawns.length === 0) {
+    scheduleFighterSpawnPoint,
+    consumeFighterSpawnPoints: () => {
+      if (pendingFighterSpawns.length === 0) {
         return [];
       }
-      return pendingBarrelSpawns.splice(0, pendingBarrelSpawns.length);
+      return pendingFighterSpawns.splice(0, pendingFighterSpawns.length);
     },
-    evaluateCellForBarrel
+    evaluateCellForFighter
   };
 }

@@ -27,6 +27,29 @@ const BESTIARY_ENTRY_DEFINITIONS = Object.freeze({
           'Volatile drums can set off other hazards. Sweep the environment before firing to avoid collateral damage.'
       }
     ]
+  },
+  fighter: {
+    id: 'fighter',
+    tag: 'Assailant',
+    name: 'Roomborne Fighter',
+    rosterLine: 'Aggressive close-quarters pursuer',
+    subtitle: 'Idles until disturbed, then relentlessly hunts intruders.',
+    summary:
+      'Compact strike drones outfitted with reinforced hulls and forward-facing armor. Fighters wait for motion in their assigned room before accelerating toward the source.',
+    traits: [
+      {
+        label: 'Threat Vector',
+        description: 'Closes distance quickly once provoked, attempting to overwhelm targets with ramming strikes.'
+      },
+      {
+        label: 'Countermeasures',
+        description: 'Keep moving and use vertical cover to break line of sight. Focus fire before they gain momentum.'
+      },
+      {
+        label: 'Field Notes',
+        description: 'Power sources glow beneath the canopy; concentrated fire there appears to disrupt guidance systems.'
+      }
+    ]
   }
 });
 

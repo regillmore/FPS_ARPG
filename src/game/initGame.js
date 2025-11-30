@@ -186,9 +186,9 @@ export async function initializeGame({
     const doorManager = createDoorManager(device);
     doorManager.syncDoors(roomSystem.getDoors?.() ?? []);
 
-    const { spawnProceduralBarrels } = proceduralSpawner;
+    const { spawnProceduralFighters } = proceduralSpawner;
 
-    spawnProceduralBarrels();
+    spawnProceduralFighters();
 
     worldItemManager.spawnPickup({
       id: 'pickup-field-medkit',
@@ -252,7 +252,11 @@ export async function initializeGame({
       playerRadius: PLAYER_COLLISION_RADIUS,
       playerHalfHeight: PLAYER_COLLISION_HALF_HEIGHT,
       staticColliders: roomColliders,
-      playerLayerIndex: layerResolver ? layerResolver(controller.position[1]) : null
+      playerLayerIndex: layerResolver ? layerResolver(controller.position[1]) : null,
+      playerRoomKey:
+        typeof roomSystem.getRoomKeyForPosition === 'function'
+          ? roomSystem.getRoomKeyForPosition(controller.position)
+          : ''
     };
 
     const updateStorageChestProximity = () => {
@@ -590,7 +594,7 @@ export async function initializeGame({
       if (geometryChanged) {
         roomVertexBuffer = roomSystem.getVertexBuffer();
         roomVertexCount = roomSystem.getVertexCount();
-        spawnProceduralBarrels();
+        spawnProceduralFighters();
         // Security cameras removed
         doorManager.syncDoors(roomSystem.getDoors?.() ?? []);
       }
@@ -797,6 +801,10 @@ export async function initializeGame({
           enemyUpdateContext.playerLayerIndex = layerResolver
             ? layerResolver(controller.position[1])
             : null;
+          enemyUpdateContext.playerRoomKey =
+            typeof roomSystem.getRoomKeyForPosition === 'function'
+              ? roomSystem.getRoomKeyForPosition(controller.position)
+              : '';
           enemyManager.update(deltaTime, enemyUpdateContext);
         }
         if (primaryFireCooldown > 0) {

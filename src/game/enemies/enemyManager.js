@@ -1,4 +1,5 @@
 import { createBarrel } from './barrel.js';
+import { createFighter } from './fighter.js';
 
 export function createEnemyManager(device, managerOptions = {}) {
   if (!device) {
@@ -94,6 +95,59 @@ export function createEnemyManager(device, managerOptions = {}) {
     return addEnemy(barrel);
   }
 
+  function spawnFighter(options) {
+    const { onDeath: userOnDeath, onDamaged: userOnDamaged, experienceReward, ...rest } = options ?? {};
+    let fighter = null;
+    const rewardXp = Number.isFinite(experienceReward) ? Number(experienceReward) : 50;
+
+    const enemyOptions = {
+      ...rest,
+      onDeath(details) {
+        if (typeof userOnDeath === 'function') {
+          try {
+            userOnDeath(details);
+          } catch (error) {
+            console.error('Error while handling fighter death callback:', error);
+          }
+        }
+        removeEnemy(fighter);
+        if (onEnemyDeath) {
+          try {
+            onEnemyDeath({
+              enemy: fighter,
+              experienceReward: rewardXp,
+              context: details?.context ?? null
+            });
+          } catch (error) {
+            console.error('Error while handling global enemy death callback:', error);
+          }
+        }
+      },
+      onDamaged(details) {
+        if (typeof userOnDamaged === 'function') {
+          try {
+            userOnDamaged(details);
+          } catch (error) {
+            console.error('Error while handling fighter damage callback:', error);
+          }
+        }
+        if (onEnemyDamaged) {
+          try {
+            onEnemyDamaged(details);
+          } catch (error) {
+            console.error('Error while handling global enemy damage callback:', error);
+          }
+        }
+      }
+    };
+
+    fighter = createFighter(device, enemyOptions);
+    if (fighter) {
+      fighter.experienceReward = rewardXp;
+    }
+    return addEnemy(fighter);
+  }
+
   function update(deltaTime, context = null) {
     for (let i = enemies.length - 1; i >= 0; i -= 1) {
       const enemy = enemies[i];
@@ -179,6 +233,7 @@ export function createEnemyManager(device, managerOptions = {}) {
   return {
     spawnTargetDummy,
     spawnBarrel,
+    spawnFighter,
     update,
     getEnemies,
     getHitBoxes,

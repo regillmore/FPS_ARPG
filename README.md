@@ -9,7 +9,7 @@ The latest build is deployed to GitHub Pages: https://regillmore.github.io/FPS_A
 ## Core features
 
 - **Vanilla WebGPU renderer** with forward lighting, depth buffering, and simple material controls defined in `index.html` and `src/webgpu`. It runs entirely in the browser—no bundler required.
-- **Procedural level system** that streams modular rooms around the player, including doors, elevator shafts, spatial partitioning, and decorative props for variation. Enemy and barrel spawns are tied into the same room graph to keep encounters near the player.
+- **Procedural level system** that streams modular rooms around the player, including doors, elevator shafts, spatial partitioning, and decorative props for variation. Enemy and fighter spawns are tied into the same room graph to keep encounters near the player.
 - **Combat sandbox** featuring a first-person controller, hitscan projectiles with bullet hole decals, and basic enemy AI that awards experience on defeat.
 - **Loot and inventory**: storage chests and ground pickups feed into an inventory grid, allowing weapon and gear slots, rarity tags, and a simple stat system.
 - **In-game HUD and pause menu**: a tabbed pause screen with stats, loadout, bestiary, options, and achievements; a diegetic HUD displays crosshair, floating damage numbers, pickup prompts, and framerate.

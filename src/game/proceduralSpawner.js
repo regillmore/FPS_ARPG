@@ -29,7 +29,7 @@ const dispatchBestiaryUnlock = (eventTarget, enemyType) => {
 };
 
 export function createProceduralSpawner({ roomSystem, enemyManager, eventTarget = DEFAULT_EVENT_TARGET } = {}) {
-  let barrelBestiaryUnlocked = false;
+  let fighterBestiaryUnlocked = false;
 
   const requeueProceduralEnemy = (enemy) => {
     if (!enemy) {
@@ -72,18 +72,18 @@ export function createProceduralSpawner({ roomSystem, enemyManager, eventTarget 
     }
 
     if (
-      spawnContext.type === 'procedural-barrel' &&
-      typeof roomSystem?.scheduleBarrelSpawnPoint === 'function'
+      spawnContext.type === 'procedural-fighter' &&
+      typeof roomSystem?.scheduleFighterSpawnPoint === 'function'
     ) {
-      roomSystem.scheduleBarrelSpawnPoint({
+      roomSystem.scheduleFighterSpawnPoint({
         key: spawnContext.roomKey ?? '',
         position
       });
     }
   };
 
-  const spawnProceduralBarrels = () => {
-    const spawns = roomSystem?.consumeBarrelSpawnPoints?.();
+  const spawnProceduralFighters = () => {
+    const spawns = roomSystem?.consumeFighterSpawnPoints?.();
     if (!spawns || spawns.length === 0) {
       return;
     }
@@ -100,23 +100,23 @@ export function createProceduralSpawner({ roomSystem, enemyManager, eventTarget 
           : true;
 
       if (!shouldSpawnHere) {
-        roomSystem?.scheduleBarrelSpawnPoint?.(spawn);
+        roomSystem?.scheduleFighterSpawnPoint?.(spawn);
         continue;
       }
 
-      const barrel = enemyManager?.spawnBarrel?.({
+      const fighter = enemyManager?.spawnFighter?.({
         position,
         onDeath() {
-          if (!barrelBestiaryUnlocked) {
-            barrelBestiaryUnlocked = true;
-            dispatchBestiaryUnlock(eventTarget, 'barrel');
+          if (!fighterBestiaryUnlocked) {
+            fighterBestiaryUnlocked = true;
+            dispatchBestiaryUnlock(eventTarget, 'fighter');
           }
         }
       });
 
-      if (barrel) {
-        barrel.spawnContext = {
-          type: 'procedural-barrel',
+      if (fighter) {
+        fighter.spawnContext = {
+          type: 'procedural-fighter',
           roomKey: spawn?.key ?? '',
           position
         };
@@ -126,6 +126,6 @@ export function createProceduralSpawner({ roomSystem, enemyManager, eventTarget 
 
   return {
     requeueProceduralEnemy,
-    spawnProceduralBarrels
+    spawnProceduralFighters
   };
 }
