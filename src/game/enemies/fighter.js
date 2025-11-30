@@ -213,6 +213,7 @@ export function createFighter(device, options = {}) {
   const onDeath = typeof options.onDeath === 'function' ? options.onDeath : null;
   const onDamaged = typeof options.onDamaged === 'function' ? options.onDamaged : null;
   const collisionScratch = [];
+  const collisionPosition = new Float32Array(3);
   const pathState = {
     waypoints: [],
     waypointIndex: 0,
@@ -256,6 +257,30 @@ export function createFighter(device, options = {}) {
     }
 
     return collisionScratch;
+  }
+
+  function resolveCollisions(context) {
+    const colliders = gatherColliders(context);
+    if (colliders.length === 0) {
+      return colliders;
+    }
+
+    collisionPosition[0] = translation[0];
+    collisionPosition[1] = translation[1] + FIGHTER_COLLISION_HALF_HEIGHT;
+    collisionPosition[2] = translation[2];
+
+    resolveCapsuleCollisions(
+      collisionPosition,
+      colliders,
+      FIGHTER_COLLISION_RADIUS,
+      FIGHTER_COLLISION_HALF_HEIGHT
+    );
+
+    translation[0] = collisionPosition[0];
+    translation[1] = collisionPosition[1] - FIGHTER_COLLISION_HALF_HEIGHT;
+    translation[2] = collisionPosition[2];
+
+    return colliders;
   }
 
   function requestDoorOpen(doorId, context) {
@@ -452,10 +477,7 @@ export function createFighter(device, options = {}) {
     translation[0] += directionX * step;
     translation[2] += directionZ * step;
 
-    const colliders = gatherColliders(context);
-    if (colliders.length > 0) {
-      resolveCapsuleCollisions(translation, colliders, FIGHTER_COLLISION_RADIUS, FIGHTER_COLLISION_HALF_HEIGHT);
-    }
+    resolveCollisions(context);
 
     const movedX = translation[0] - previousX;
     const movedZ = translation[2] - previousZ;
@@ -502,10 +524,7 @@ export function createFighter(device, options = {}) {
     translation[0] += directionX * step;
     translation[2] += directionZ * step;
 
-    const colliders = gatherColliders(context);
-    if (colliders.length > 0) {
-      resolveCapsuleCollisions(translation, colliders, FIGHTER_COLLISION_RADIUS, FIGHTER_COLLISION_HALF_HEIGHT);
-    }
+    resolveCollisions(context);
 
     const movedX = translation[0] - previousX;
     const movedZ = translation[2] - previousZ;
