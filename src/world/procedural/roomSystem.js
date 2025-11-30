@@ -23,6 +23,13 @@ const directionOffsets = {
   west: [-1, 0]
 };
 
+const oppositeDirections = {
+  north: 'south',
+  south: 'north',
+  east: 'west',
+  west: 'east'
+};
+
 export function createProceduralRoomSystem(device, options = {}) {
   const roomSize = options.roomSize ?? DEFAULT_ROOM_SIZE;
   const roomHeight = options.roomHeight ?? DEFAULT_ROOM_HEIGHT;
@@ -219,12 +226,50 @@ export function createProceduralRoomSystem(device, options = {}) {
   }
 
   function markCellVisited(layerIndex, x, z) {
-    const edges = getExistingCellEdgesForLayer(layerIndex, x, z);
-    if (!edges) {
+    if (!getExistingCellEdgesForLayer(layerIndex, x, z)) {
       return;
     }
-    const key = getCellKey(x, z);
-    getVisitedCellsForLayer(layerIndex).add(key);
+
+    const layerVisited = getVisitedCellsForLayer(layerIndex);
+    const traversalStack = [[x, z]];
+    const processed = new Set();
+
+    while (traversalStack.length > 0) {
+      const [currentX, currentZ] = traversalStack.pop();
+      const cellKey = getCellKey(currentX, currentZ);
+      if (processed.has(cellKey)) {
+        continue;
+      }
+
+      processed.add(cellKey);
+      layerVisited.add(cellKey);
+
+      const cellEdges = getExistingCellEdgesForLayer(layerIndex, currentX, currentZ);
+      if (!cellEdges) {
+        continue;
+      }
+
+      for (const direction of Object.keys(directionOffsets)) {
+        if (cellEdges[direction] !== 'open') {
+          continue;
+        }
+
+        const offset = directionOffsets[direction];
+        const neighborX = currentX + offset[0];
+        const neighborZ = currentZ + offset[1];
+        const neighborEdges = getExistingCellEdgesForLayer(layerIndex, neighborX, neighborZ);
+        if (!neighborEdges) {
+          continue;
+        }
+
+        const opposite = oppositeDirections[direction];
+        if (neighborEdges[opposite] !== 'open') {
+          continue;
+        }
+
+        traversalStack.push([neighborX, neighborZ]);
+      }
+    }
   }
 
   function getLayerIndexForHeight(height) {
