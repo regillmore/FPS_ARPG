@@ -313,7 +313,12 @@ export function createEnemyManager(device, managerOptions = {}) {
         continue;
       }
 
+      const wasAggro = enemy.isAggressive;
       enemy.update?.(deltaTime, context);
+
+      if (!wasAggro && enemy.type === 'fighter' && enemy.isAggressive) {
+        alertNearbyIdleFighters(enemy, context);
+      }
 
       if (!shouldRetainEnemy) {
         continue;
