@@ -135,9 +135,11 @@ export function createEnemyManager(device, managerOptions = {}) {
   }
 
   function alertNearbyIdleFighters(source, context) {
-    if (!source?.spawnContext?.roomKey || !context?.navigation) {
+    if (!source?.spawnContext?.roomKey) {
       return;
     }
+
+    const navigation = context?.navigation;
 
     for (const enemy of enemies) {
       if (!enemy || enemy === source || enemy.type !== 'fighter') {
@@ -153,7 +155,15 @@ export function createEnemyManager(device, managerOptions = {}) {
         continue;
       }
 
-      if (roomsShareOpenWall(source.spawnContext.roomKey, enemyRoomKey, context.navigation, context.activeDoors)) {
+      if (enemyRoomKey === source.spawnContext.roomKey) {
+        enemy.startAggro?.(context);
+        continue;
+      }
+
+      if (
+        navigation &&
+        roomsShareOpenWall(source.spawnContext.roomKey, enemyRoomKey, navigation, context?.activeDoors)
+      ) {
         enemy.startAggro?.(context);
       }
     }
