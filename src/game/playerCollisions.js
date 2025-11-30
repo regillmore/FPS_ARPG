@@ -2,22 +2,26 @@ export const PLAYER_COLLISION_RADIUS = 0.4;
 export const PLAYER_COLLISION_HALF_HEIGHT = 1.0;
 const PLAYER_COLLISION_ITERATIONS = 6;
 
-export function resolvePlayerCollisions(position, colliders) {
+export function resolveCapsuleCollisions(position, colliders, radius, halfHeight) {
   const result = { grounded: false, hitCeiling: false };
   if (!colliders || colliders.length === 0) {
     return result;
   }
 
-  const radius = PLAYER_COLLISION_RADIUS;
-  const halfHeight = PLAYER_COLLISION_HALF_HEIGHT;
+  const resolvedRadius = Math.max(0, Number(radius));
+  const resolvedHalfHeight = Math.max(0, Number(halfHeight));
+  if (!(resolvedRadius > 0) || !(resolvedHalfHeight > 0)) {
+    return result;
+  }
+
   const maxIterations = PLAYER_COLLISION_ITERATIONS;
   const nearFloorEpsilon = 1e-4;
   const overlapTolerance = 1e-4;
 
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
     let adjusted = false;
-    const playerMinY = position[1] - halfHeight;
-    const playerMaxY = position[1] + halfHeight;
+    const playerMinY = position[1] - resolvedHalfHeight;
+    const playerMaxY = position[1] + resolvedHalfHeight;
 
     for (let i = 0; i < colliders.length; i += 1) {
       const collider = colliders[i];
@@ -32,10 +36,10 @@ export function resolvePlayerCollisions(position, colliders) {
         continue;
       }
 
-      const playerMinX = position[0] - radius;
-      const playerMaxX = position[0] + radius;
-      const playerMinZ = position[2] - radius;
-      const playerMaxZ = position[2] + radius;
+      const playerMinX = position[0] - resolvedRadius;
+      const playerMaxX = position[0] + resolvedRadius;
+      const playerMinZ = position[2] - resolvedRadius;
+      const playerMaxZ = position[2] + resolvedRadius;
 
       if (
         playerMaxX <= collider.minX + overlapTolerance ||
@@ -69,7 +73,7 @@ export function resolvePlayerCollisions(position, colliders) {
         playerCenterZ <= collider.maxZ;
 
       const treatAsFloorOrCeiling =
-        colliderHeight <= halfHeight * 2 + 0.1 &&
+        colliderHeight <= resolvedHalfHeight * 2 + 0.1 &&
         withinHorizontalBounds &&
         (playerCenterY >= collider.maxY - 1e-3 || playerCenterY <= collider.minY + 1e-3);
 
@@ -124,11 +128,11 @@ export function resolvePlayerCollisions(position, colliders) {
   }
 
   if (!result.grounded) {
-    const playerMinY = position[1] - halfHeight;
+    const playerMinY = position[1] - resolvedHalfHeight;
     const playerCenterX = position[0];
     const playerCenterZ = position[2];
     const groundSnapDistance = Math.max(nearFloorEpsilon * 10, 0.01);
-    const horizontalTolerance = radius * 0.1;
+    const horizontalTolerance = resolvedRadius * 0.1;
 
     for (let i = 0; i < colliders.length; i += 1) {
       const collider = colliders[i];
@@ -137,7 +141,7 @@ export function resolvePlayerCollisions(position, colliders) {
       }
 
       const colliderHeight = collider.maxY - collider.minY;
-      if (colliderHeight > halfHeight * 2 + 0.1) {
+      if (colliderHeight > resolvedHalfHeight * 2 + 0.1) {
         continue;
       }
 
@@ -155,7 +159,7 @@ export function resolvePlayerCollisions(position, colliders) {
         playerMinY <= collider.maxY + groundSnapDistance
       ) {
         if (playerMinY < collider.maxY) {
-          position[1] = collider.maxY + halfHeight;
+          position[1] = collider.maxY + resolvedHalfHeight;
         }
         result.grounded = true;
         break;
@@ -164,4 +168,8 @@ export function resolvePlayerCollisions(position, colliders) {
   }
 
   return result;
+}
+
+export function resolvePlayerCollisions(position, colliders) {
+  return resolveCapsuleCollisions(position, colliders, PLAYER_COLLISION_RADIUS, PLAYER_COLLISION_HALF_HEIGHT);
 }
