@@ -69,6 +69,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   let elevatorBounds = null;
   let persistentOriginElevator = null;
   const visitedCells = new Map();
+  const roomConnectivity = new Map();
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
@@ -108,6 +109,65 @@ export function createProceduralRoomSystem(device, options = {}) {
     updateCellVerticalOpeningForLayer
   } = cellState;
 
+  function getRoomClusterKey(layerIndex, x, z) {
+    const resolvedLayer = Number.isFinite(layerIndex) ? layerIndex : 0;
+    const cacheKey = getCellKey(x, z);
+    const existingLayerCache = roomConnectivity.get(resolvedLayer);
+    if (existingLayerCache?.has(cacheKey)) {
+      return existingLayerCache.get(cacheKey);
+    }
+
+    const traversalStack = [[x, z]];
+    const componentCells = [];
+    const processed = new Set();
+    let canonicalCellKey = cacheKey;
+    let layerCache = existingLayerCache ?? new Map();
+
+    while (traversalStack.length > 0) {
+      const [currentX, currentZ] = traversalStack.pop();
+      const cellKey = getCellKey(currentX, currentZ);
+
+      if (processed.has(cellKey) || layerCache.has(cellKey)) {
+        continue;
+      }
+
+      processed.add(cellKey);
+      componentCells.push(cellKey);
+      if (cellKey < canonicalCellKey) {
+        canonicalCellKey = cellKey;
+      }
+
+      const cellEdges = getExistingCellEdgesForLayer(resolvedLayer, currentX, currentZ);
+      if (!cellEdges) {
+        continue;
+      }
+
+      for (const direction of Object.keys(directionOffsets)) {
+        if (cellEdges[direction] !== 'open') {
+          continue;
+        }
+
+        const offset = directionOffsets[direction];
+        const neighborX = currentX + offset[0];
+        const neighborZ = currentZ + offset[1];
+        const neighborEdges = getExistingCellEdgesForLayer(resolvedLayer, neighborX, neighborZ);
+        if (!neighborEdges || neighborEdges[oppositeDirections[direction]] !== 'open') {
+          continue;
+        }
+
+        traversalStack.push([neighborX, neighborZ]);
+      }
+    }
+
+    const roomKey = `${resolvedLayer}:${canonicalCellKey}`;
+    for (let i = 0; i < componentCells.length; i += 1) {
+      layerCache.set(componentCells[i], roomKey);
+    }
+
+    roomConnectivity.set(resolvedLayer, layerCache);
+    return roomKey;
+  }
+
   const spawnManager = createSpawnManager({
     getCellKey,
     getCellEdgesForLayer,
@@ -115,7 +175,8 @@ export function createProceduralRoomSystem(device, options = {}) {
     roomHeight,
     wallThickness,
     halfRoom,
-    levelHeight
+    levelHeight,
+    getRoomClusterKey
   });
 
   const {
@@ -442,7 +503,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     const cellX = positionToCell(px, roomSize, halfRoom);
     const cellZ = positionToCell(pz, roomSize, halfRoom);
     const layerIndex = positionToLayer(py, levelHeight, floorThickness);
-    return `${layerIndex}:${getCellKey(cellX, cellZ)}`;
+    return getRoomClusterKey(layerIndex, cellX, cellZ);
   }
 
   function getDoorForEdge(layerIndex, ax, az, bx, bz) {

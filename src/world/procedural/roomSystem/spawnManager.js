@@ -7,12 +7,16 @@ export function createSpawnManager({
   roomHeight,
   wallThickness,
   halfRoom,
-  levelHeight
+  levelHeight,
+  getRoomClusterKey
 }) {
   const pendingFighterSpawns = [];
   const discoveredFighterRooms = new Set();
 
   function getFighterRoomKey(layerIndex, x, z) {
+    if (typeof getRoomClusterKey === 'function') {
+      return getRoomClusterKey(layerIndex, x, z);
+    }
     return `${layerIndex}:${getCellKey(x, z)}`;
   }
 
