@@ -264,8 +264,31 @@ export function createFighter(device, options = {}) {
     }
 
     if (Array.isArray(context.activeDoors)) {
-      const door = context.activeDoors.find((entry) => entry?.id === doorId);
-      if (door?.state === 'open') {
+      const matchingDoors = context.activeDoors.filter((entry) => {
+        if (!entry) {
+          return false;
+        }
+        return (
+          entry.id === doorId ||
+          entry.anchor?.id === doorId ||
+          (doorId && typeof entry.id === 'string' && entry.id.startsWith(`${doorId}:`))
+        );
+      });
+
+      if (matchingDoors.length > 0) {
+        let pendingRequest = false;
+        for (const door of matchingDoors) {
+          if (door.state === 'open') {
+            continue;
+          }
+          context.requestDoorOpen(door.id, translation);
+          pendingRequest = true;
+        }
+
+        if (!pendingRequest) {
+          return;
+        }
+
         return;
       }
     }
