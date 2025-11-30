@@ -649,7 +649,7 @@ export function createRoomGeometryBuilder({
       const bothEnclosed = enclosedA && enclosedB;
       const bothBalconies = balconyA && balconyB;
       const mixedBalconyAndEnclosed = (enclosedA && balconyB) || (balconyA && enclosedB);
-      if (bothBalconies) {
+      if (bothBalconies || mixedBalconyAndEnclosed) {
         recordSuppressedBalconyEdge(ax, az, bx, bz, layerIndex);
       }
       return bothEnclosed || bothBalconies || mixedBalconyAndEnclosed;
