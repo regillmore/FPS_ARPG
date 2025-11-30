@@ -310,6 +310,7 @@ export function createFighter(device, options = {}) {
       return false;
     }
 
+    const baseDoorAnchorId = String(doorAnchor.id);
     const matchingDoors = activeDoors.filter((door) => {
       if (!door) {
         return false;
@@ -317,11 +318,15 @@ export function createFighter(device, options = {}) {
 
       const doorId = door.id;
       const anchorId = door.anchor?.id;
+      const anchorRootId = typeof anchorId === 'string' ? anchorId.split(':')[0] : null;
+      const doorRootId = typeof doorId === 'string' ? doorId.split(':')[0] : null;
 
       return (
         anchorId === doorAnchor.id ||
         doorId === doorAnchor.id ||
-        (typeof doorId === 'string' && doorId.startsWith(`${doorAnchor.id}:`))
+        anchorRootId === baseDoorAnchorId ||
+        doorRootId === baseDoorAnchorId ||
+        (typeof doorId === 'string' && doorId.startsWith(`${baseDoorAnchorId}:`))
       );
     });
 
