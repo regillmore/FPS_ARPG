@@ -90,7 +90,7 @@ export function createRoomGeometryBuilder({
   getCellEdgesForLayer,
   getExistingVerticalOpeningStates,
   updateCellVerticalOpeningForLayer,
-  evaluateCellForBarrel,
+  evaluateCellForFighter,
   directionOffsets,
   updateVertexBuffer,
   getLayerIndexForHeight,
@@ -159,8 +159,8 @@ export function createRoomGeometryBuilder({
       updateCellVerticalOpeningForLayer(ax, az, layerIndex);
       updateCellVerticalOpeningForLayer(bx, bz, layerIndex);
 
-      evaluateCellForBarrel(ax, az, layerIndex);
-      evaluateCellForBarrel(bx, bz, layerIndex);
+      evaluateCellForFighter(ax, az, layerIndex);
+      evaluateCellForFighter(bx, bz, layerIndex);
     }
   }
 

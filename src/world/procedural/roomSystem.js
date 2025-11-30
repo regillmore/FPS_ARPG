@@ -118,9 +118,9 @@ export function createProceduralRoomSystem(device, options = {}) {
   });
 
   const {
-    scheduleBarrelSpawnPoint,
-    consumeBarrelSpawnPoints,
-    evaluateCellForBarrel
+    scheduleFighterSpawnPoint,
+    consumeFighterSpawnPoints,
+    evaluateCellForFighter
   } = spawnManager;
 
   const geometryBuilder = createRoomGeometryBuilder({
@@ -148,7 +148,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     getCellEdgesForLayer,
     getExistingVerticalOpeningStates,
     updateCellVerticalOpeningForLayer,
-    evaluateCellForBarrel,
+    evaluateCellForFighter,
     directionOffsets,
     getLayerIndexForHeight,
     getElevatorGateProgress: () => elevatorGateProgress,
@@ -426,6 +426,24 @@ export function createProceduralRoomSystem(device, options = {}) {
     return true;
   }
 
+  function getRoomKeyForPosition(position) {
+    if (!position) {
+      return '';
+    }
+    const px = Number(position[0]);
+    const py = Number(position[1]);
+    const pz = Number(position[2]);
+
+    if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
+      return '';
+    }
+
+    const cellX = positionToCell(px, roomSize, halfRoom);
+    const cellZ = positionToCell(pz, roomSize, halfRoom);
+    const layerIndex = positionToLayer(py, levelHeight, floorThickness);
+    return `${layerIndex}:${getCellKey(cellX, cellZ)}`;
+  }
+
   function update(playerPosition) {
     const px = playerPosition?.[0] ?? 0;
     const py = playerPosition?.[1] ?? 0;
@@ -483,14 +501,15 @@ export function createProceduralRoomSystem(device, options = {}) {
       cellZ: centerCellZ,
       layerIndex: centerLayerIndex
     }),
+    getRoomKeyForPosition,
     isPositionWithinGenerationRadius,
     getElevatorOffset: () => elevatorOffset,
     getElevatorGateProgress: () => elevatorGateProgress,
     setElevatorOffset,
     adjustElevatorOffset,
     setElevatorGateProgress,
-    consumeBarrelSpawnPoints,
-    scheduleBarrelSpawnPoint,
+    consumeFighterSpawnPoints,
+    scheduleFighterSpawnPoint,
     dispose: () => {
       if (vertexBuffer) {
         vertexBuffer.destroy();
