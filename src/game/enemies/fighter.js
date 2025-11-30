@@ -3,7 +3,7 @@ import { resolveCapsuleCollisions } from '../playerCollisions.js';
 
 const FLOATS_PER_VERTEX = 10;
 const HALF_WIDTH = 0.15;
-const HALF_DEPTH = 0.13;
+const HALF_DEPTH = 0.10;
 const BODY_HEIGHT = 1.5;
 const DEFAULT_HEALTH = 50;
 const DEFAULT_SPEED = 2.8;
@@ -245,8 +245,9 @@ function createFighterGeometry(device) {
   const thighLength = BODY_HEIGHT * 0.11;
   const shinLength = BODY_HEIGHT * 0.08;
   const footHeight = BODY_HEIGHT * 0.06;
+  const legOverlap = BODY_HEIGHT * 0.1;
   const hipOffsetX = torsoWidth * 0.35;
-  const hipOriginY = thighLength + shinLength + footHeight;
+  const hipOriginY = thighLength + shinLength + footHeight + legOverlap;
 
   addBoxTemplate(
     legTemplates.left.thigh ?? (legTemplates.left.thigh = []),
