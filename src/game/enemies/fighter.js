@@ -334,7 +334,7 @@ export function createFighter(device, options = {}) {
       return false;
     }
 
-    return matchingDoors.every((door) => {
+    return matchingDoors.some((door) => {
       if (!door) {
         return false;
       }
