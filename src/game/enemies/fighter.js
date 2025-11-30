@@ -191,7 +191,7 @@ export function createFighter(device, options = {}) {
     minZ: LOCAL_BOUNDS.minZ + translation[2],
     maxZ: LOCAL_BOUNDS.maxZ + translation[2]
   };
-  const hitBoxes = [{ bounds }];
+  const hitBoxes = [];
   const maxHealth = resolveInitialHealth(options);
   let currentHealth = maxHealth;
   let isDead = false;
@@ -315,6 +315,13 @@ export function createFighter(device, options = {}) {
       geometry.vertexBuffer.destroy?.();
     }
   };
+
+  hitBoxes.push({
+    bounds,
+    onHit(impact) {
+      fighter.onHit(impact);
+    }
+  });
 
   syncTransform();
   return fighter;
