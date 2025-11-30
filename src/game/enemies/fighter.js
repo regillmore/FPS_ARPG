@@ -36,6 +36,12 @@ const directionOffsets = {
   east: [1, 0],
   west: [-1, 0]
 };
+const oppositeDirections = {
+  north: 'south',
+  south: 'north',
+  east: 'west',
+  west: 'east'
+};
 
 function pushVertex(target, position, normal, color) {
   target.push(
@@ -228,6 +234,73 @@ export function createFighter(device, options = {}) {
       return '';
     }
     return `${cell.layerIndex}:${cell.cellX},${cell.cellZ}`;
+  }
+
+  function parseRoomKey(roomKey) {
+    if (typeof roomKey !== 'string' || roomKey.length === 0) {
+      return null;
+    }
+
+    const [layerPart, cellPart] = roomKey.split(':');
+    if (!cellPart) {
+      return null;
+    }
+
+    const [cellXPart, cellZPart] = cellPart.split(',');
+    const layerIndex = Number(layerPart);
+    const cellX = Number(cellXPart);
+    const cellZ = Number(cellZPart);
+
+    if (!Number.isInteger(layerIndex) || !Number.isInteger(cellX) || !Number.isInteger(cellZ)) {
+      return null;
+    }
+
+    return { layerIndex, cellX, cellZ };
+  }
+
+  function roomsShareOpenWall(roomAKey, roomBKey, nav) {
+    if (!nav || typeof nav.getCellEdges !== 'function') {
+      return false;
+    }
+
+    const roomA = parseRoomKey(roomAKey);
+    const roomB = parseRoomKey(roomBKey);
+    if (!roomA || !roomB || roomA.layerIndex !== roomB.layerIndex) {
+      return false;
+    }
+
+    const deltaX = roomB.cellX - roomA.cellX;
+    const deltaZ = roomB.cellZ - roomA.cellZ;
+    let direction = '';
+
+    if (deltaX === 1 && deltaZ === 0) {
+      direction = 'east';
+    } else if (deltaX === -1 && deltaZ === 0) {
+      direction = 'west';
+    } else if (deltaX === 0 && deltaZ === 1) {
+      direction = 'south';
+    } else if (deltaX === 0 && deltaZ === -1) {
+      direction = 'north';
+    } else {
+      return false;
+    }
+
+    const edgesA = nav.getCellEdges(roomA.layerIndex, roomA.cellX, roomA.cellZ);
+    const edgesB = nav.getCellEdges(roomB.layerIndex, roomB.cellX, roomB.cellZ);
+    if (!edgesA || !edgesB) {
+      return false;
+    }
+
+    const opposite = oppositeDirections[direction];
+    return edgesA[direction] === 'open' && edgesB[opposite] === 'open';
+  }
+
+  function isPlayerInEngagementRoom(playerRoomKey, enemyRoomKey, nav) {
+    if (playerRoomKey === enemyRoomKey) {
+      return true;
+    }
+
+    return roomsShareOpenWall(playerRoomKey, enemyRoomKey, nav);
   }
 
   function clearPath() {
@@ -548,7 +621,13 @@ export function createFighter(device, options = {}) {
     }
 
     if (!isAggro && context.playerRoomKey && fighter.spawnContext?.roomKey) {
-      if (context.playerRoomKey === fighter.spawnContext.roomKey) {
+      if (
+        isPlayerInEngagementRoom(
+          context.playerRoomKey,
+          fighter.spawnContext.roomKey,
+          context.navigation
+        )
+      ) {
         isAggro = true;
       }
     }
