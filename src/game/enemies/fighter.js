@@ -3,17 +3,17 @@ import { resolveCapsuleCollisions } from '../playerCollisions.js';
 
 const FLOATS_PER_VERTEX = 10;
 const HALF_WIDTH = 0.35;
-const HALF_DEPTH = 0.45;
-const NOSE_LENGTH = 0.25;
-const BODY_HEIGHT = 1.2;
+const HALF_DEPTH = 0.32;
+const BODY_HEIGHT = 1.75;
 const DEFAULT_HEALTH = 90;
 const DEFAULT_SPEED = 2.8;
 const DEFAULT_IMPACT_DAMAGE = 6;
 
 const COLORS = Object.freeze({
-  hull: [0.22, 0.62, 0.88],
-  trim: [0.12, 0.16, 0.24],
-  canopy: [0.9, 0.92, 0.95]
+  hull: [0.78, 0.84, 0.9],
+  trim: [0.18, 0.24, 0.32],
+  accent: [0.26, 0.54, 0.84],
+  visor: [0.9, 0.96, 1]
 });
 
 const LOCAL_BOUNDS = Object.freeze({
@@ -22,7 +22,7 @@ const LOCAL_BOUNDS = Object.freeze({
   minY: 0,
   maxY: BODY_HEIGHT,
   minZ: -HALF_DEPTH,
-  maxZ: HALF_DEPTH + NOSE_LENGTH
+  maxZ: HALF_DEPTH
 });
 
 const FIGHTER_COLLISION_RADIUS = Math.max(HALF_WIDTH, HALF_DEPTH);
@@ -30,6 +30,8 @@ const FIGHTER_COLLISION_HALF_HEIGHT = BODY_HEIGHT * 0.5;
 const PATH_REBUILD_INTERVAL = 0.35;
 const WAYPOINT_REACHED_DISTANCE = 0.35;
 const DOOR_OPEN_DISTANCE = 2.5;
+const LEG_SWING_AMPLITUDE = Math.PI / 6;
+const LEG_STILLNESS_DECAY = 6;
 const directionOffsets = {
   north: [0, -1],
   south: [0, 1],
@@ -43,7 +45,7 @@ const oppositeDirections = {
   west: 'east'
 };
 
-function pushVertex(target, position, normal, color) {
+function pushVertex(target, position, normal, color, glow = 0) {
   target.push(
     position[0],
     position[1],
@@ -54,7 +56,7 @@ function pushVertex(target, position, normal, color) {
     color[0],
     color[1],
     color[2],
-    0
+    glow
   );
 }
 
@@ -73,38 +75,226 @@ function addTriangle(target, a, b, c, normal, color) {
   pushVertex(target, c, normal, color);
 }
 
-function createFighterGeometry(device) {
-  const vertices = [];
-  const base = 0;
-  const tipZ = HALF_DEPTH + NOSE_LENGTH;
-  const canopyHeight = BODY_HEIGHT * 0.7;
-  const shoulderHeight = BODY_HEIGHT * 0.45;
+function addBoxVertices(target, min, max, color, glow = 0) {
+  const [minX, minY, minZ] = min;
+  const [maxX, maxY, maxZ] = max;
 
-  const corners = {
-    fl: [HALF_WIDTH, base, HALF_DEPTH],
-    fr: [-HALF_WIDTH, base, HALF_DEPTH],
-    bl: [HALF_WIDTH, base, -HALF_DEPTH],
-    br: [-HALF_WIDTH, base, -HALF_DEPTH],
-    flTop: [HALF_WIDTH, shoulderHeight, HALF_DEPTH * 0.7],
-    frTop: [-HALF_WIDTH, shoulderHeight, HALF_DEPTH * 0.7],
-    blTop: [HALF_WIDTH, shoulderHeight, -HALF_DEPTH * 0.4],
-    brTop: [-HALF_WIDTH, shoulderHeight, -HALF_DEPTH * 0.4],
-    canopy: [0, canopyHeight, HALF_DEPTH * 0.55],
-    nose: [0, shoulderHeight * 0.6, tipZ]
+  addQuad(target, [minX, minY, maxZ], [maxX, minY, maxZ], [maxX, maxY, maxZ], [minX, maxY, maxZ], [0, 0, 1], color);
+  addQuad(target, [maxX, minY, minZ], [minX, minY, minZ], [minX, maxY, minZ], [maxX, maxY, minZ], [0, 0, -1], color);
+  addQuad(target, [minX, minY, minZ], [minX, minY, maxZ], [minX, maxY, maxZ], [minX, maxY, minZ], [-1, 0, 0], color);
+  addQuad(target, [maxX, minY, maxZ], [maxX, minY, minZ], [maxX, maxY, minZ], [maxX, maxY, maxZ], [1, 0, 0], color);
+  addQuad(target, [minX, maxY, maxZ], [maxX, maxY, maxZ], [maxX, maxY, minZ], [minX, maxY, minZ], [0, 1, 0], color, glow);
+  addQuad(target, [minX, minY, minZ], [maxX, minY, minZ], [maxX, minY, maxZ], [minX, minY, maxZ], [0, -1, 0], color);
+}
+
+function addBoxTemplate(target, min, max, color, glow = 0) {
+  const [minX, minY, minZ] = min;
+  const [maxX, maxY, maxZ] = max;
+
+  const faces = [
+    { normal: [0, 0, 1], corners: [
+      [minX, minY, maxZ],
+      [maxX, minY, maxZ],
+      [maxX, maxY, maxZ],
+      [minX, maxY, maxZ]
+    ] },
+    { normal: [0, 0, -1], corners: [
+      [maxX, minY, minZ],
+      [minX, minY, minZ],
+      [minX, maxY, minZ],
+      [maxX, maxY, minZ]
+    ] },
+    { normal: [-1, 0, 0], corners: [
+      [minX, minY, minZ],
+      [minX, minY, maxZ],
+      [minX, maxY, maxZ],
+      [minX, maxY, minZ]
+    ] },
+    { normal: [1, 0, 0], corners: [
+      [maxX, minY, maxZ],
+      [maxX, minY, minZ],
+      [maxX, maxY, minZ],
+      [maxX, maxY, maxZ]
+    ] },
+    { normal: [0, 1, 0], corners: [
+      [minX, maxY, maxZ],
+      [maxX, maxY, maxZ],
+      [maxX, maxY, minZ],
+      [minX, maxY, minZ]
+    ] },
+    { normal: [0, -1, 0], corners: [
+      [minX, minY, minZ],
+      [maxX, minY, minZ],
+      [maxX, minY, maxZ],
+      [minX, minY, maxZ]
+    ] }
+  ];
+
+  for (const face of faces) {
+    const [a, b, c, d] = face.corners;
+    target.push(
+      { position: [...a], normal: [...face.normal], color, glow },
+      { position: [...b], normal: [...face.normal], color, glow },
+      { position: [...c], normal: [...face.normal], color, glow },
+      { position: [...a], normal: [...face.normal], color, glow },
+      { position: [...c], normal: [...face.normal], color, glow },
+      { position: [...d], normal: [...face.normal], color, glow }
+    );
+  }
+}
+
+function applyTransform(position, rotation, translation) {
+  const x = position[0];
+  const y = position[1];
+  const z = position[2];
+  return [
+    rotation[0] * x + rotation[1] * y + rotation[2] * z + translation[0],
+    rotation[3] * x + rotation[4] * y + rotation[5] * z + translation[1],
+    rotation[6] * x + rotation[7] * y + rotation[8] * z + translation[2]
+  ];
+}
+
+function composeLegTransform(angle, origin) {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return {
+    rotation: [1, 0, 0, 0, c, -s, 0, s, c],
+    translation: origin
   };
+}
 
-  addQuad(vertices, corners.fl, corners.fr, corners.br, corners.bl, [0, -1, 0], COLORS.trim);
-  addQuad(vertices, corners.fl, corners.flTop, corners.blTop, corners.bl, [1, 0, 0], COLORS.hull);
-  addQuad(vertices, corners.br, corners.brTop, corners.frTop, corners.fr, [-1, 0, 0], COLORS.hull);
-  addQuad(vertices, corners.bl, corners.blTop, corners.brTop, corners.br, [0, 0, -1], COLORS.trim);
-  addQuad(vertices, corners.flTop, corners.frTop, corners.brTop, corners.blTop, [0, 1, 0], COLORS.hull);
-  addTriangle(vertices, corners.flTop, corners.frTop, corners.nose, [0, 0.35, 1], COLORS.hull);
-  addTriangle(vertices, corners.brTop, corners.blTop, corners.nose, [0, 0.2, 1], COLORS.trim);
-  addTriangle(vertices, corners.flTop, corners.nose, corners.blTop, [0.35, 0.1, 0.94], COLORS.trim);
-  addTriangle(vertices, corners.frTop, corners.brTop, corners.nose, [-0.35, 0.1, 0.94], COLORS.trim);
-  addTriangle(vertices, corners.flTop, corners.canopy, corners.frTop, [0, 0.8, 0.6], COLORS.canopy);
+function writeTemplate(target, offset, template, transform) {
+  let cursor = offset;
+  for (const vert of template) {
+    const transformedPosition = applyTransform(vert.position, transform.rotation, transform.translation);
+    const transformedNormal = applyTransform(vert.normal, transform.rotation, [0, 0, 0]);
+    target[cursor + 0] = transformedPosition[0];
+    target[cursor + 1] = transformedPosition[1];
+    target[cursor + 2] = transformedPosition[2];
+    target[cursor + 3] = transformedNormal[0];
+    target[cursor + 4] = transformedNormal[1];
+    target[cursor + 5] = transformedNormal[2];
+    target[cursor + 6] = vert.color[0];
+    target[cursor + 7] = vert.color[1];
+    target[cursor + 8] = vert.color[2];
+    target[cursor + 9] = vert.glow;
+    cursor += FLOATS_PER_VERTEX;
+  }
+}
 
-  const vertexData = new Float32Array(vertices);
+function createFighterGeometry(device) {
+  const staticVertices = [];
+  const legTemplates = { left: [], right: [] };
+
+  const torsoHeight = BODY_HEIGHT * 0.55;
+  const hipHeight = BODY_HEIGHT * 0.2;
+  const headHeight = BODY_HEIGHT * 0.2;
+  const shoulderHeight = hipHeight + torsoHeight - BODY_HEIGHT * 0.08;
+  const torsoWidth = HALF_WIDTH * 1.6;
+  const torsoDepth = HALF_DEPTH * 1.4;
+  const armLength = BODY_HEIGHT * 0.45;
+  const armThickness = HALF_WIDTH * 0.35;
+  const visorGlow = 0.4;
+
+  addBoxVertices(
+    staticVertices,
+    [-torsoWidth * 0.5, hipHeight, -torsoDepth * 0.5],
+    [torsoWidth * 0.5, hipHeight + torsoHeight, torsoDepth * 0.5],
+    COLORS.hull
+  );
+
+  addBoxVertices(
+    staticVertices,
+    [
+      -torsoWidth * 0.4,
+      shoulderHeight,
+      -torsoDepth * 0.45
+    ],
+    [
+      torsoWidth * 0.4,
+      shoulderHeight + headHeight,
+      torsoDepth * 0.2
+    ],
+    COLORS.trim
+  );
+
+  addBoxVertices(
+    staticVertices,
+    [-torsoWidth * 0.18, shoulderHeight + headHeight * 0.35, torsoDepth * 0.2],
+    [torsoWidth * 0.18, shoulderHeight + headHeight * 0.7, torsoDepth * 0.45],
+    COLORS.visor,
+    visorGlow
+  );
+
+  addBoxVertices(
+    staticVertices,
+    [torsoWidth * 0.5, shoulderHeight - armThickness * 0.5, -armThickness],
+    [torsoWidth * 0.5 + armLength, shoulderHeight + armThickness * 0.5, armThickness],
+    COLORS.trim
+  );
+
+  addBoxVertices(
+    staticVertices,
+    [-torsoWidth * 0.5 - armLength, shoulderHeight - armThickness * 0.5, -armThickness],
+    [-torsoWidth * 0.5, shoulderHeight + armThickness * 0.5, armThickness],
+    COLORS.trim
+  );
+
+  const legWidth = HALF_WIDTH * 0.45;
+  const legDepth = HALF_DEPTH * 0.6;
+  const legHeight = BODY_HEIGHT * 0.65;
+  const footHeight = BODY_HEIGHT * 0.08;
+  const hipOffsetX = torsoWidth * 0.35;
+  const hipOriginY = hipHeight;
+
+  addBoxTemplate(
+    legTemplates.left,
+    [-legWidth, 0, -legDepth],
+    [legWidth, legHeight, legDepth],
+    COLORS.trim
+  );
+  addBoxTemplate(
+    legTemplates.left,
+    [-legWidth * 0.8, -footHeight, -legDepth * 1.1],
+    [legWidth * 0.8, 0, legDepth * 1.3],
+    COLORS.accent
+  );
+
+  addBoxTemplate(
+    legTemplates.right,
+    [-legWidth, 0, -legDepth],
+    [legWidth, legHeight, legDepth],
+    COLORS.trim
+  );
+  addBoxTemplate(
+    legTemplates.right,
+    [-legWidth * 0.8, -footHeight, -legDepth * 1.1],
+    [legWidth * 0.8, 0, legDepth * 1.3],
+    COLORS.accent
+  );
+
+  const staticFloatCount = staticVertices.length;
+  const legFloatCount = legTemplates.left.length * FLOATS_PER_VERTEX;
+  const vertexData = new Float32Array(staticFloatCount + legFloatCount * 2);
+
+  vertexData.set(staticVertices, 0);
+
+  const leftOffset = staticFloatCount;
+  const rightOffset = staticFloatCount + legFloatCount;
+
+  writeTemplate(
+    vertexData,
+    leftOffset,
+    legTemplates.left,
+    composeLegTransform(0, [hipOffsetX, hipOriginY, 0])
+  );
+
+  writeTemplate(
+    vertexData,
+    rightOffset,
+    legTemplates.right,
+    composeLegTransform(0, [-hipOffsetX, hipOriginY, 0])
+  );
   const vertexBuffer = device.createBuffer({
     size: vertexData.byteLength,
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
@@ -114,9 +304,27 @@ function createFighterGeometry(device) {
   new Float32Array(vertexBuffer.getMappedRange()).set(vertexData);
   vertexBuffer.unmap();
 
+  function updateLegPose(leftAngle, rightAngle) {
+    writeTemplate(vertexData, leftOffset, legTemplates.left, composeLegTransform(leftAngle, [hipOffsetX, hipOriginY, 0]));
+    writeTemplate(vertexData, rightOffset, legTemplates.right, composeLegTransform(rightAngle, [-hipOffsetX, hipOriginY, 0]));
+
+    device.queue.writeBuffer(
+      vertexBuffer,
+      leftOffset * Float32Array.BYTES_PER_ELEMENT,
+      vertexData.subarray(leftOffset, leftOffset + legFloatCount)
+    );
+
+    device.queue.writeBuffer(
+      vertexBuffer,
+      rightOffset * Float32Array.BYTES_PER_ELEMENT,
+      vertexData.subarray(rightOffset, rightOffset + legFloatCount)
+    );
+  }
+
   return {
     vertexBuffer,
-    vertexCount: vertexData.length / FLOATS_PER_VERTEX
+    vertexCount: vertexData.length / FLOATS_PER_VERTEX,
+    updateLegPose
   };
 }
 
@@ -229,6 +437,9 @@ export function createFighter(device, options = {}) {
     layerIndex: null,
     rebuildTimer: 0
   };
+  let legPhase = Math.random() * Math.PI * 2;
+  let legMotion = 0;
+  let legsUpdatedThisFrame = false;
 
   function layeredCellKey(cell) {
     if (!cell) {
@@ -614,6 +825,8 @@ export function createFighter(device, options = {}) {
     } else {
       normalizeForward(forward, directionX, directionZ);
     }
+
+    animateLegs(deltaTime, movedDistance);
   }
 
   function followPath(deltaTime, context) {
@@ -660,6 +873,8 @@ export function createFighter(device, options = {}) {
       normalizeForward(forward, movedX, movedZ);
     }
 
+    animateLegs(deltaTime, movedDistance);
+
     return true;
   }
 
@@ -697,8 +912,35 @@ export function createFighter(device, options = {}) {
     return { ...lastUpdateContext, ...context };
   }
 
+  function animateLegs(deltaTime, movedDistance = 0) {
+    legsUpdatedThisFrame = true;
+    const dt = Math.max(Number(deltaTime) || 0, 0);
+    const speed = Number.isFinite(options.speed) && options.speed > 0 ? options.speed : DEFAULT_SPEED;
+    const normalizedRate = dt > 1e-6 ? Math.min(movedDistance / (dt * speed), 1.5) : 0;
+    const targetMotion = movedDistance > 1e-4 ? Math.min(1, normalizedRate + 0.15) : 0;
+    const blendRate = movedDistance > 1e-4 ? 10 : LEG_STILLNESS_DECAY;
+    legMotion += (targetMotion - legMotion) * Math.min(blendRate * dt, 1);
+
+    if (legMotion > 1e-3) {
+      const frequency = 5.5 + normalizedRate * 3;
+      legPhase += dt * frequency;
+    }
+
+    if (!Number.isFinite(legPhase)) {
+      legPhase = 0;
+    } else if (legPhase > Math.PI * 2) {
+      legPhase %= Math.PI * 2;
+    }
+
+    const swingAngle = Math.sin(legPhase) * LEG_SWING_AMPLITUDE * legMotion;
+    geometry.updateLegPose?.(swingAngle, -swingAngle);
+  }
+
   function seekPlayer(deltaTime, context) {
+    legsUpdatedThisFrame = false;
+
     if (!context || !context.playerPosition) {
+      animateLegs(deltaTime, 0);
       return;
     }
 
@@ -716,6 +958,7 @@ export function createFighter(device, options = {}) {
     }
 
     if (!isAggro) {
+      animateLegs(deltaTime, 0);
       return;
     }
 
@@ -749,6 +992,10 @@ export function createFighter(device, options = {}) {
 
     if (!followedPath) {
       moveTowards(context.playerPosition, deltaTime, context);
+    }
+
+    if (!legsUpdatedThisFrame) {
+      animateLegs(deltaTime, 0);
     }
   }
 
