@@ -5,6 +5,7 @@ const DEFAULT_DOOR_COLOR = [0.62, 0.7, 0.82];
 const MAX_SWING_RADIANS = Math.PI * 0.55;
 const OPEN_SPEED = 2.8;
 const CLOSE_SPEED = 2.1;
+const OPENER_MEMORY_DURATION = 3.0;
 
 function clamp01(value) {
   if (!Number.isFinite(value)) {
@@ -227,6 +228,7 @@ export function createDoorManager(device) {
       const openAmount = clamp01(previous?.openAmount ?? 0);
       const state = previous?.state ?? 'closed';
       const swingDirection = previous?.swingDirection ?? 1;
+      const openerMemory = previous?.openerMemory ?? 0;
 
       const door = {
         id,
@@ -241,7 +243,8 @@ export function createDoorManager(device) {
         lastOpenerPosition: previous?.lastOpenerPosition ?? null,
         color: anchor.color ?? DEFAULT_DOOR_COLOR,
         leafWidth,
-        swingDirection
+        swingDirection,
+        openerMemory
       };
 
       updateDoorTransforms(door);
@@ -329,6 +332,7 @@ export function createDoorManager(device) {
     }
 
     door.lastOpenerPosition = playerPosition ?? null;
+    door.openerMemory = OPENER_MEMORY_DURATION;
 
     const anchor = door.anchor;
     const distanceFromPlane =
@@ -361,6 +365,12 @@ export function createDoorManager(device) {
       }
 
       const nearDoor = (() => {
+        if (door.openerMemory > 0) {
+          door.openerMemory = Math.max(0, door.openerMemory - deltaTime);
+        } else if (door.lastOpenerPosition) {
+          door.lastOpenerPosition = null;
+        }
+
         const checkNear = (position) => {
           if (!position) {
             return false;
@@ -372,7 +382,9 @@ export function createDoorManager(device) {
           return horizontalDistanceSq <= closeDistanceSq && Math.abs(dy) <= door.anchor.height * 0.75;
         };
 
-        return checkNear(door.lastOpenerPosition) || checkNear(playerPosition);
+        return (
+          (door.openerMemory > 0 && checkNear(door.lastOpenerPosition)) || checkNear(playerPosition)
+        );
       })();
 
       if (door.state === 'opening') {
