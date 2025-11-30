@@ -2,17 +2,17 @@ import { mat4FromRotationTranslation } from '../../math.js';
 import { resolveCapsuleCollisions } from '../playerCollisions.js';
 
 const FLOATS_PER_VERTEX = 10;
-const HALF_WIDTH = 0.35;
-const HALF_DEPTH = 0.32;
-const BODY_HEIGHT = 1.75;
-const DEFAULT_HEALTH = 90;
+const HALF_WIDTH = 0.15;
+const HALF_DEPTH = 0.13;
+const BODY_HEIGHT = 1.5;
+const DEFAULT_HEALTH = 50;
 const DEFAULT_SPEED = 2.8;
 const DEFAULT_IMPACT_DAMAGE = 6;
 
 const COLORS = Object.freeze({
   hull: [0.78, 0.84, 0.9],
   trim: [0.18, 0.24, 0.32],
-  accent: [0.26, 0.54, 0.84],
+  accent: [0.78, 0.84, 0.9],
   visor: [0.9, 0.96, 1]
 });
 
@@ -186,15 +186,15 @@ function createFighterGeometry(device) {
   const staticVertices = [];
   const legTemplates = { left: [], right: [] };
 
-  const torsoHeight = BODY_HEIGHT * 0.55;
-  const hipHeight = BODY_HEIGHT * 0.2;
+  const torsoHeight = BODY_HEIGHT * 0.25;
+  const hipHeight = BODY_HEIGHT * 0.3;
   const headHeight = BODY_HEIGHT * 0.2;
-  const shoulderHeight = hipHeight + torsoHeight - BODY_HEIGHT * 0.08;
-  const torsoWidth = HALF_WIDTH * 1.6;
+  const shoulderHeight = hipHeight + torsoHeight;
+  const torsoWidth = HALF_WIDTH * 1.3;
   const torsoDepth = HALF_DEPTH * 1.4;
-  const armLength = BODY_HEIGHT * 0.45;
-  const armThickness = HALF_WIDTH * 0.35;
-  const visorGlow = 0.4;
+  const armLength = BODY_HEIGHT * 0.25;
+  const armThickness = HALF_WIDTH * 0.4;
+  const visorGlow = 1.0;
 
   addBoxVertices(
     staticVertices,
@@ -240,12 +240,12 @@ function createFighterGeometry(device) {
     COLORS.trim
   );
 
-  const legWidth = HALF_WIDTH * 0.45;
-  const legDepth = HALF_DEPTH * 0.6;
-  const legHeight = BODY_HEIGHT * 0.65;
-  const footHeight = BODY_HEIGHT * 0.08;
+  const legWidth = HALF_WIDTH * 0.35;
+  const legDepth = HALF_DEPTH * 0.4;
+  const legHeight = BODY_HEIGHT * 0.08;
+  const footHeight = BODY_HEIGHT * 0.25;
   const hipOffsetX = torsoWidth * 0.35;
-  const hipOriginY = hipHeight;
+  const hipOriginY = footHeight;
 
   addBoxTemplate(
     legTemplates.left,
