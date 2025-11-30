@@ -15,6 +15,150 @@ export function createEnemyManager(device, managerOptions = {}) {
   const shouldRetainEnemy =
     typeof managerOptions.shouldRetainEnemy === 'function' ? managerOptions.shouldRetainEnemy : null;
 
+  const oppositeDirections = {
+    north: 'south',
+    south: 'north',
+    east: 'west',
+    west: 'east'
+  };
+
+  function parseRoomKey(roomKey) {
+    if (typeof roomKey !== 'string' || roomKey.length === 0) {
+      return null;
+    }
+
+    const [layerPart, cellPart] = roomKey.split(':');
+    if (!cellPart) {
+      return null;
+    }
+
+    const [cellXPart, cellZPart] = cellPart.split(',');
+    const layerIndex = Number(layerPart);
+    const cellX = Number(cellXPart);
+    const cellZ = Number(cellZPart);
+
+    if (!Number.isInteger(layerIndex) || !Number.isInteger(cellX) || !Number.isInteger(cellZ)) {
+      return null;
+    }
+
+    return { layerIndex, cellX, cellZ };
+  }
+
+  function roomsShareOpenWall(roomAKey, roomBKey, nav, activeDoors = null) {
+    if (!nav || typeof nav.getCellEdges !== 'function') {
+      return false;
+    }
+
+    const roomA = parseRoomKey(roomAKey);
+    const roomB = parseRoomKey(roomBKey);
+    if (!roomA || !roomB || roomA.layerIndex !== roomB.layerIndex) {
+      return false;
+    }
+
+    const deltaX = roomB.cellX - roomA.cellX;
+    const deltaZ = roomB.cellZ - roomA.cellZ;
+    let direction = '';
+
+    if (deltaX === 1 && deltaZ === 0) {
+      direction = 'east';
+    } else if (deltaX === -1 && deltaZ === 0) {
+      direction = 'west';
+    } else if (deltaX === 0 && deltaZ === 1) {
+      direction = 'south';
+    } else if (deltaX === 0 && deltaZ === -1) {
+      direction = 'north';
+    } else {
+      return false;
+    }
+
+    const edgesA = nav.getCellEdges(roomA.layerIndex, roomA.cellX, roomA.cellZ);
+    const edgesB = nav.getCellEdges(roomB.layerIndex, roomB.cellX, roomB.cellZ);
+    if (!edgesA || !edgesB) {
+      return false;
+    }
+
+    const opposite = oppositeDirections[direction];
+
+    if (edgesA[direction] === 'open' && edgesB[opposite] === 'open') {
+      return true;
+    }
+
+    const isDoorEdge = edgesA[direction] === 'doorway' && edgesB[opposite] === 'doorway';
+    if (!isDoorEdge || !Array.isArray(activeDoors)) {
+      return false;
+    }
+
+    const doorAnchor = typeof nav.getDoorBetween === 'function'
+      ? nav.getDoorBetween(roomA.layerIndex, roomA.cellX, roomA.cellZ, roomB.cellX, roomB.cellZ)
+      : null;
+
+    if (!doorAnchor?.id) {
+      return false;
+    }
+
+    const baseDoorAnchorId = String(doorAnchor.id);
+    const matchingDoors = activeDoors.filter((door) => {
+      if (!door) {
+        return false;
+      }
+
+      const doorId = door.id;
+      const anchorId = door.anchor?.id;
+      const anchorRootId = typeof anchorId === 'string' ? anchorId.split(':')[0] : null;
+      const doorRootId = typeof doorId === 'string' ? doorId.split(':')[0] : null;
+
+      return (
+        anchorId === doorAnchor.id ||
+        doorId === doorAnchor.id ||
+        anchorRootId === baseDoorAnchorId ||
+        doorRootId === baseDoorAnchorId ||
+        (typeof doorId === 'string' && doorId.startsWith(`${baseDoorAnchorId}:`))
+      );
+    });
+
+    if (matchingDoors.length === 0) {
+      return false;
+    }
+
+    return matchingDoors.some((door) => {
+      if (!door) {
+        return false;
+      }
+
+      if (door.state === 'open') {
+        return true;
+      }
+
+      const openAmount = Number(door.openAmount);
+      return Number.isFinite(openAmount) && openAmount >= 0.9;
+    });
+  }
+
+  function alertNearbyIdleFighters(source, context) {
+    if (!source?.spawnContext?.roomKey || !context?.navigation) {
+      return;
+    }
+
+    for (const enemy of enemies) {
+      if (!enemy || enemy === source || enemy.type !== 'fighter') {
+        continue;
+      }
+
+      if (enemy.isAggressive) {
+        continue;
+      }
+
+      const enemyRoomKey = enemy.spawnContext?.roomKey;
+      if (!enemyRoomKey) {
+        continue;
+      }
+
+      if (roomsShareOpenWall(source.spawnContext.roomKey, enemyRoomKey, context.navigation, context.activeDoors)) {
+        enemy.startAggro?.(context);
+      }
+    }
+  }
+
   function addEnemy(enemy) {
     if (!enemy) {
       return null;
@@ -130,6 +274,9 @@ export function createEnemyManager(device, managerOptions = {}) {
           } catch (error) {
             console.error('Error while handling fighter damage callback:', error);
           }
+        }
+        if (details?.wasAggressive === false) {
+          alertNearbyIdleFighters(details.enemy, details.context);
         }
         if (onEnemyDamaged) {
           try {
