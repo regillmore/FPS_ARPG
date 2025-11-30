@@ -278,7 +278,8 @@ export function createRoomGeometryBuilder({
     floorColor,
     wallColor,
     accentColor,
-    bounds
+    bounds,
+    suppressedDirections
   ) {
     if (!direction) {
       return;
@@ -312,6 +313,8 @@ export function createRoomGeometryBuilder({
     let deckMaxX = maxX;
     let deckMinZ = minZ;
     let deckMaxZ = maxZ;
+
+    const suppressedDirectionSet = suppressedDirections ?? new Set();
 
     const attachesToNegativeSide =
       direction === 'north' || direction === 'south'
@@ -376,26 +379,68 @@ export function createRoomGeometryBuilder({
       const railMaxY = Math.min(deckMaxY + railHeight, baseY + roomHeight - 0.1);
 
       const sides = [];
+      const forceNorthRail = suppressedDirectionSet.has('north');
+      const forceSouthRail = suppressedDirectionSet.has('south');
+      const forceEastRail = suppressedDirectionSet.has('east');
+      const forceWestRail = suppressedDirectionSet.has('west');
       if (direction === 'north' || direction === 'south') {
         const attachToEast = !attachToWest;
-        if (!attachToWest) {
+        if (!attachToWest || forceWestRail) {
           sides.push([deckMinX, railMinY, deckMinZ, Math.min(deckMinX + railThickness, deckMaxX), railMaxY, deckMaxZ]);
         }
-        if (!attachToEast) {
+        if (!attachToEast || forceEastRail) {
           sides.push([Math.max(deckMaxX - railThickness, deckMinX), railMinY, deckMinZ, deckMaxX, railMaxY, deckMaxZ]);
         }
         const wallAlignedZ = direction === 'south' ? deckMinZ : Math.max(deckMaxZ - railThickness, deckMinZ);
         sides.push([deckMinX, railMinY, wallAlignedZ, deckMaxX, railMaxY, Math.min(wallAlignedZ + railThickness, deckMaxZ)]);
+        if (forceNorthRail && direction === 'north') {
+          sides.push([
+            deckMinX,
+            railMinY,
+            deckMinZ,
+            deckMaxX,
+            railMaxY,
+            Math.min(deckMinZ + railThickness, deckMaxZ)
+          ]);
+        } else if (forceSouthRail && direction === 'south') {
+          sides.push([
+            deckMinX,
+            railMinY,
+            Math.max(deckMaxZ - railThickness, deckMinZ),
+            deckMaxX,
+            railMaxY,
+            deckMaxZ
+          ]);
+        }
       } else {
         const attachToSouth = attachToNorth === null ? false : !attachToNorth;
-        if (!attachToNorth) {
+        if (!attachToNorth || forceNorthRail) {
           sides.push([deckMinX, railMinY, deckMinZ, deckMaxX, railMaxY, Math.min(deckMinZ + railThickness, deckMaxZ)]);
         }
-        if (!attachToSouth) {
+        if (!attachToSouth || forceSouthRail) {
           sides.push([deckMinX, railMinY, Math.max(deckMaxZ - railThickness, deckMinZ), deckMaxX, railMaxY, deckMaxZ]);
         }
         const wallAlignedX = direction === 'east' ? deckMinX : Math.max(deckMaxX - railThickness, deckMinX);
         sides.push([wallAlignedX, railMinY, deckMinZ, Math.min(wallAlignedX + railThickness, deckMaxX), railMaxY, deckMaxZ]);
+        if (forceEastRail && direction === 'east') {
+          sides.push([
+            Math.max(deckMaxX - railThickness, deckMinX),
+            railMinY,
+            deckMinZ,
+            deckMaxX,
+            railMaxY,
+            deckMaxZ
+          ]);
+        } else if (forceWestRail && direction === 'west') {
+          sides.push([
+            deckMinX,
+            railMinY,
+            deckMinZ,
+            Math.min(deckMinX + railThickness, deckMaxX),
+            railMaxY,
+            deckMaxZ
+          ]);
+        }
       }
 
       for (let i = 0; i < sides.length; i += 1) {
@@ -463,8 +508,13 @@ export function createRoomGeometryBuilder({
         ? getLayerIndexForHeight(elevatorOffset)
         : 0;
     const fullyEnclosedCache = new Map();
+    const suppressedBalconyEdgesByCell = new Map();
     const layerProfilesCache = new Map();
     const layerSeedCache = new Map();
+
+    function getLayeredCellKey(layerIndex, x, z) {
+      return `${layerIndex}:${x},${z}`;
+    }
 
     function getLayerProfilesCached(layerIndex) {
       if (!layerProfilesCache.has(layerIndex)) {
@@ -565,6 +615,30 @@ export function createRoomGeometryBuilder({
       return enclosed;
     }
 
+    function recordSuppressedBalconyEdge(ax, az, bx, bz, layerIndex) {
+      const keyA = getLayeredCellKey(layerIndex, ax, az);
+      const keyB = getLayeredCellKey(layerIndex, bx, bz);
+      const deltaX = bx - ax;
+      const deltaZ = bz - az;
+
+      if (Math.abs(deltaX) + Math.abs(deltaZ) !== 1) {
+        return;
+      }
+
+      const directionFromA = deltaX === 1 ? 'east' : deltaX === -1 ? 'west' : deltaZ === 1 ? 'south' : 'north';
+      const directionFromB = deltaX === 1 ? 'west' : deltaX === -1 ? 'east' : deltaZ === 1 ? 'north' : 'south';
+
+      if (!suppressedBalconyEdgesByCell.has(keyA)) {
+        suppressedBalconyEdgesByCell.set(keyA, new Set());
+      }
+      if (!suppressedBalconyEdgesByCell.has(keyB)) {
+        suppressedBalconyEdgesByCell.set(keyB, new Set());
+      }
+
+      suppressedBalconyEdgesByCell.get(keyA).add(directionFromA);
+      suppressedBalconyEdgesByCell.get(keyB).add(directionFromB);
+    }
+
     function shouldSkipSolidWallBetweenRooms(ax, az, bx, bz, layerIndex) {
       const edgesA = getCellEdgesForLayer(layerIndex, ax, az);
       const edgesB = getCellEdgesForLayer(layerIndex, bx, bz);
@@ -575,6 +649,9 @@ export function createRoomGeometryBuilder({
       const bothEnclosed = enclosedA && enclosedB;
       const bothBalconies = balconyA && balconyB;
       const mixedBalconyAndEnclosed = (enclosedA && balconyB) || (balconyA && enclosedB);
+      if (bothBalconies || mixedBalconyAndEnclosed) {
+        recordSuppressedBalconyEdge(ax, az, bx, bz, layerIndex);
+      }
       return bothEnclosed || bothBalconies || mixedBalconyAndEnclosed;
     }
 
@@ -1018,6 +1095,8 @@ export function createRoomGeometryBuilder({
               );
               edges.roomType = 'hallwayBridge';
             } else if (!isOrigin && balconyDirection && !hasVerticalOpeningFromAbove) {
+              const suppressedDirections =
+                suppressedBalconyEdgesByCell.get(getLayeredCellKey(layerIndex, gx, gz)) ?? null;
               addDoorwayBalcony(
                 vertices,
                 balconyDirection,
@@ -1035,7 +1114,8 @@ export function createRoomGeometryBuilder({
                 profile.floorColor,
                 profile.wallColor,
                 profile.accentColor,
-                bounds
+                bounds,
+                suppressedDirections
               );
               edges.roomType = 'balcony';
             } else if (
