@@ -215,6 +215,7 @@ export function createFighter(device, options = {}) {
   let currentHealth = maxHealth;
   let isDead = false;
   let isAggro = false;
+  let lastUpdateContext = null;
 
   const onDeath = typeof options.onDeath === 'function' ? options.onDeath : null;
   const onDamaged = typeof options.onDamaged === 'function' ? options.onDamaged : null;
@@ -668,6 +669,34 @@ export function createFighter(device, options = {}) {
     writeTranslatedBounds(bounds, translation);
   }
 
+  function startAggro(context) {
+    if (!isAggro) {
+      isAggro = true;
+      if (context && !context.navigation && lastUpdateContext?.navigation) {
+        context.navigation = lastUpdateContext.navigation;
+      }
+      if (context && !context.activeDoors && lastUpdateContext?.activeDoors) {
+        context.activeDoors = lastUpdateContext.activeDoors;
+      }
+    }
+  }
+
+  function mergeDamageContext(context) {
+    if (!context && !lastUpdateContext) {
+      return {};
+    }
+
+    if (!lastUpdateContext) {
+      return { ...context };
+    }
+
+    if (!context) {
+      return { ...lastUpdateContext };
+    }
+
+    return { ...lastUpdateContext, ...context };
+  }
+
   function seekPlayer(deltaTime, context) {
     if (!context || !context.playerPosition) {
       return;
@@ -682,7 +711,7 @@ export function createFighter(device, options = {}) {
           context.activeDoors
         )
       ) {
-        isAggro = true;
+        startAggro(context);
       }
     }
 
@@ -733,11 +762,20 @@ export function createFighter(device, options = {}) {
       return;
     }
 
+    const wasAggro = isAggro;
+    const damageContext = mergeDamageContext(context);
+    startAggro(damageContext);
     currentHealth = Math.max(currentHealth - value, 0);
 
     if (onDamaged) {
       try {
-        onDamaged({ enemy: fighter, damage: value, remainingHealth: currentHealth, context });
+        onDamaged({
+          enemy: fighter,
+          damage: value,
+          remainingHealth: currentHealth,
+          context: damageContext,
+          wasAggressive: wasAggro
+        });
       } catch (error) {
         console.error('Error while handling fighter damage callback:', error);
       }
@@ -780,10 +818,12 @@ export function createFighter(device, options = {}) {
       if (!Number.isFinite(dt) || dt <= 0) {
         return;
       }
+      lastUpdateContext = context ?? null;
       seekPlayer(dt, context);
       syncTransform();
     },
     takeDamage,
+    startAggro,
     onHit(impact) {
       if (isDead) {
         return;
