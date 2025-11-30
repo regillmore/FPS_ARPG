@@ -94,12 +94,14 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
   const diagnosticsState = {
     disableLights: false,
     disableEnemies: false,
+    pacifyEnemies: false,
     showFramerate: false
   };
 
   const diagnosticsElements = {
     disableLightsToggle: pauseMenu.querySelector('[data-diagnostic-control="disable-lights"]'),
     disableEnemiesToggle: pauseMenu.querySelector('[data-diagnostic-control="disable-enemies"]'),
+    pacifyEnemiesToggle: pauseMenu.querySelector('[data-diagnostic-control="pacify-enemies"]'),
     showFramerateToggle: pauseMenu.querySelector('[data-diagnostic-control="show-framerate"]'),
     lightingStatus: pauseMenu.querySelector('[data-diagnostic-role="lighting-status"]'),
     enemyStatus: pauseMenu.querySelector('[data-diagnostic-role="enemy-status"]'),
@@ -273,6 +275,9 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     if (diagnosticsElements.disableEnemiesToggle) {
       diagnosticsElements.disableEnemiesToggle.checked = Boolean(diagnosticsState.disableEnemies);
     }
+    if (diagnosticsElements.pacifyEnemiesToggle) {
+      diagnosticsElements.pacifyEnemiesToggle.checked = Boolean(diagnosticsState.pacifyEnemies);
+    }
     if (diagnosticsElements.showFramerateToggle) {
       diagnosticsElements.showFramerateToggle.checked = Boolean(diagnosticsState.showFramerate);
     }
@@ -284,7 +289,9 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
     if (diagnosticsElements.enemyStatus) {
       diagnosticsElements.enemyStatus.textContent = diagnosticsState.disableEnemies
         ? 'Enemy AI, collision, and rendering are muted.'
-        : 'Enemy AI and rendering are active.';
+        : diagnosticsState.pacifyEnemies
+          ? 'Enemies are present but will not pursue or attack.'
+          : 'Enemy AI and rendering are active.';
     }
     if (diagnosticsElements.framerateStatus) {
       diagnosticsElements.framerateStatus.textContent = diagnosticsState.showFramerate
@@ -1253,6 +1260,12 @@ export function setupPauseMenu({ canvas, overlay, pauseMenu, itemPopover }) {
 
   diagnosticsElements.disableEnemiesToggle?.addEventListener('change', (event) => {
     diagnosticsState.disableEnemies = Boolean(event.currentTarget?.checked);
+    updateDiagnosticsUi();
+    emitDiagnosticsChange();
+  });
+
+  diagnosticsElements.pacifyEnemiesToggle?.addEventListener('change', (event) => {
+    diagnosticsState.pacifyEnemies = Boolean(event.currentTarget?.checked);
     updateDiagnosticsUi();
     emitDiagnosticsChange();
   });

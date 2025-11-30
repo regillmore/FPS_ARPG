@@ -261,6 +261,7 @@ export async function initializeGame({
       activeDoors: typeof doorManager.getDoors === 'function' ? doorManager.getDoors() : [],
       requestDoorOpen: typeof doorManager.requestOpen === 'function' ? doorManager.requestOpen : null,
       navigation: navigationHelper,
+      pacifyEnemies,
       playerLayerIndex: layerResolver ? layerResolver(controller.position[1]) : null,
       playerRoomKey:
         typeof roomSystem.getRoomKeyForPosition === 'function'
@@ -504,6 +505,7 @@ export async function initializeGame({
         : null;
     let disableDynamicLights = Boolean(initialDiagnostics?.disableLights);
     let disableEnemies = Boolean(initialDiagnostics?.disableEnemies);
+    let pacifyEnemies = Boolean(initialDiagnostics?.pacifyEnemies);
     let showFramerate = Boolean(initialDiagnostics?.showFramerate);
     let showUnvisitedMinimapRooms = Boolean(initialOptions?.showUnvisitedMinimapRooms);
     const resolveFramerateCap = (value) => {
@@ -525,6 +527,7 @@ export async function initializeGame({
     window.addEventListener('game-diagnostics-change', (event) => {
       disableDynamicLights = Boolean(event?.detail?.disableLights);
       disableEnemies = Boolean(event?.detail?.disableEnemies);
+      pacifyEnemies = Boolean(event?.detail?.pacifyEnemies);
       showFramerate = Boolean(event?.detail?.showFramerate);
       framerateDisplay?.setVisible?.(showFramerate);
     });
@@ -811,6 +814,7 @@ export async function initializeGame({
           enemyUpdateContext.doorColliders = doorHitBoxes;
           enemyUpdateContext.activeDoors = activeDoors;
           enemyUpdateContext.requestDoorOpen = doorManager.requestOpen;
+          enemyUpdateContext.pacifyEnemies = pacifyEnemies;
           enemyUpdateContext.playerLayerIndex = layerResolver
             ? layerResolver(controller.position[1])
             : null;
