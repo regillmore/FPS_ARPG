@@ -2,31 +2,29 @@ import { mat4FromRotationTranslation } from '../../math.js';
 import { resolveCapsuleCollisions } from '../playerCollisions.js';
 
 const FLOATS_PER_VERTEX = 10;
-const HALF_WIDTH = 0.35;
-const HALF_DEPTH = 0.45;
-const NOSE_LENGTH = 0.25;
-const BODY_HEIGHT = 1.2;
+const BASE_SHOULDER_HALF_WIDTH = 0.7;
+const BASE_HALF_DEPTH = 0.45;
+const BASE_HEIGHT = 1.65;
+const DEFAULT_SCALE = 1;
 const DEFAULT_HEALTH = 90;
 const DEFAULT_SPEED = 2.8;
 const DEFAULT_IMPACT_DAMAGE = 6;
 
 const COLORS = Object.freeze({
-  hull: [0.22, 0.62, 0.88],
-  trim: [0.12, 0.16, 0.24],
-  canopy: [0.9, 0.92, 0.95]
+  primary: [0.58, 0.62, 0.68],
+  accent: [0.77, 0.37, 0.22],
+  shadow: [0.08, 0.09, 0.11]
 });
 
-const LOCAL_BOUNDS = Object.freeze({
-  minX: -HALF_WIDTH,
-  maxX: HALF_WIDTH,
+const BASE_BOUNDS = Object.freeze({
+  minX: -BASE_SHOULDER_HALF_WIDTH,
+  maxX: BASE_SHOULDER_HALF_WIDTH,
   minY: 0,
-  maxY: BODY_HEIGHT,
-  minZ: -HALF_DEPTH,
-  maxZ: HALF_DEPTH + NOSE_LENGTH
+  maxY: BASE_HEIGHT,
+  minZ: -BASE_HALF_DEPTH,
+  maxZ: BASE_HALF_DEPTH
 });
 
-const FIGHTER_COLLISION_RADIUS = Math.max(HALF_WIDTH, HALF_DEPTH);
-const FIGHTER_COLLISION_HALF_HEIGHT = BODY_HEIGHT * 0.5;
 const PATH_REBUILD_INTERVAL = 0.35;
 const WAYPOINT_REACHED_DISTANCE = 0.35;
 const DOOR_OPEN_DISTANCE = 2.5;
@@ -42,6 +40,42 @@ const oppositeDirections = {
   east: 'west',
   west: 'east'
 };
+
+function sanitizeColor(color, fallback) {
+  if (!color) {
+    return fallback;
+  }
+
+  const source = Array.isArray(color) ? color : color.color ?? color.primary ?? null;
+  if (!Array.isArray(source) || source.length < 3) {
+    return fallback;
+  }
+
+  const sanitized = [Number(source[0]), Number(source[1]), Number(source[2])];
+  if (sanitized.some((value) => !Number.isFinite(value))) {
+    return fallback;
+  }
+
+  return sanitized;
+}
+
+function resolvePalette(options = {}) {
+  const palette = options.colors ?? options.palette ?? options;
+
+  const primary = sanitizeColor(palette.primaryColor ?? palette.primary, COLORS.primary);
+  const accent = sanitizeColor(palette.accentColor ?? palette.accent, COLORS.accent);
+  const shadow = sanitizeColor(palette.shadowColor ?? palette.shadow, COLORS.shadow);
+
+  return { primary, accent, shadow };
+}
+
+function resolveScale(options = {}) {
+  const scale = Number(options.scale ?? options.sizeScale ?? options.size ?? DEFAULT_SCALE);
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return DEFAULT_SCALE;
+  }
+  return scale;
+}
 
 function pushVertex(target, position, normal, color) {
   target.push(
@@ -67,42 +101,98 @@ function addQuad(target, a, b, c, d, normal, color) {
   pushVertex(target, d, normal, color);
 }
 
-function addTriangle(target, a, b, c, normal, color) {
-  pushVertex(target, a, normal, color);
-  pushVertex(target, b, normal, color);
-  pushVertex(target, c, normal, color);
-}
-
-function createFighterGeometry(device) {
-  const vertices = [];
-  const base = 0;
-  const tipZ = HALF_DEPTH + NOSE_LENGTH;
-  const canopyHeight = BODY_HEIGHT * 0.7;
-  const shoulderHeight = BODY_HEIGHT * 0.45;
+function addBox(target, center, size, color) {
+  const [cx, cy, cz] = center;
+  const hx = size[0] * 0.5;
+  const hy = size[1] * 0.5;
+  const hz = size[2] * 0.5;
 
   const corners = {
-    fl: [HALF_WIDTH, base, HALF_DEPTH],
-    fr: [-HALF_WIDTH, base, HALF_DEPTH],
-    bl: [HALF_WIDTH, base, -HALF_DEPTH],
-    br: [-HALF_WIDTH, base, -HALF_DEPTH],
-    flTop: [HALF_WIDTH, shoulderHeight, HALF_DEPTH * 0.7],
-    frTop: [-HALF_WIDTH, shoulderHeight, HALF_DEPTH * 0.7],
-    blTop: [HALF_WIDTH, shoulderHeight, -HALF_DEPTH * 0.4],
-    brTop: [-HALF_WIDTH, shoulderHeight, -HALF_DEPTH * 0.4],
-    canopy: [0, canopyHeight, HALF_DEPTH * 0.55],
-    nose: [0, shoulderHeight * 0.6, tipZ]
+    ftl: [cx - hx, cy + hy, cz + hz],
+    ftr: [cx + hx, cy + hy, cz + hz],
+    fbl: [cx - hx, cy - hy, cz + hz],
+    fbr: [cx + hx, cy - hy, cz + hz],
+    btl: [cx - hx, cy + hy, cz - hz],
+    btr: [cx + hx, cy + hy, cz - hz],
+    bbl: [cx - hx, cy - hy, cz - hz],
+    bbr: [cx + hx, cy - hy, cz - hz]
   };
 
-  addQuad(vertices, corners.fl, corners.fr, corners.br, corners.bl, [0, -1, 0], COLORS.trim);
-  addQuad(vertices, corners.fl, corners.flTop, corners.blTop, corners.bl, [1, 0, 0], COLORS.hull);
-  addQuad(vertices, corners.br, corners.brTop, corners.frTop, corners.fr, [-1, 0, 0], COLORS.hull);
-  addQuad(vertices, corners.bl, corners.blTop, corners.brTop, corners.br, [0, 0, -1], COLORS.trim);
-  addQuad(vertices, corners.flTop, corners.frTop, corners.brTop, corners.blTop, [0, 1, 0], COLORS.hull);
-  addTriangle(vertices, corners.flTop, corners.frTop, corners.nose, [0, 0.35, 1], COLORS.hull);
-  addTriangle(vertices, corners.brTop, corners.blTop, corners.nose, [0, 0.2, 1], COLORS.trim);
-  addTriangle(vertices, corners.flTop, corners.nose, corners.blTop, [0.35, 0.1, 0.94], COLORS.trim);
-  addTriangle(vertices, corners.frTop, corners.brTop, corners.nose, [-0.35, 0.1, 0.94], COLORS.trim);
-  addTriangle(vertices, corners.flTop, corners.canopy, corners.frTop, [0, 0.8, 0.6], COLORS.canopy);
+  addQuad(target, corners.fbl, corners.fbr, corners.ftr, corners.ftl, [0, 0, 1], color);
+  addQuad(target, corners.bbr, corners.bbl, corners.btl, corners.btr, [0, 0, -1], color);
+  addQuad(target, corners.bbl, corners.fbl, corners.ftl, corners.btl, [-1, 0, 0], color);
+  addQuad(target, corners.fbr, corners.bbr, corners.btr, corners.ftr, [1, 0, 0], color);
+  addQuad(target, corners.ftl, corners.ftr, corners.btr, corners.btl, [0, 1, 0], color);
+  addQuad(target, corners.bbl, corners.bbr, corners.fbr, corners.fbl, [0, -1, 0], color);
+}
+
+function addShoulder(target, palette, scale, direction = 1) {
+  const baseCenter = [0.38 * direction * scale, 1.05 * scale, 0];
+  const baseSize = [0.55 * scale, 0.28 * scale, 0.48 * scale];
+  addBox(target, baseCenter, baseSize, palette.primary);
+
+  const accentCenter = [0.38 * direction * scale, 1.09 * scale, 0.16 * scale];
+  const accentSize = [0.57 * scale, 0.1 * scale, 0.22 * scale];
+  addBox(target, accentCenter, accentSize, palette.accent);
+
+  const underPlateCenter = [0.38 * direction * scale, 0.92 * scale, -0.12 * scale];
+  const underPlateSize = [0.46 * scale, 0.12 * scale, 0.32 * scale];
+  addBox(target, underPlateCenter, underPlateSize, palette.shadow);
+}
+
+function addHelm(target, palette, scale) {
+  const helmCenter = [0, 1.45 * scale, 0];
+  const helmSize = [0.42 * scale, 0.36 * scale, 0.34 * scale];
+  addBox(target, helmCenter, helmSize, palette.primary);
+
+  const visorCenter = [0, 1.43 * scale, 0.2 * scale];
+  const visorSize = [0.44 * scale, 0.14 * scale, 0.12 * scale];
+  addBox(target, visorCenter, visorSize, palette.accent);
+
+  const crownCenter = [0, 1.6 * scale, 0];
+  const crownSize = [0.18 * scale, 0.08 * scale, 0.24 * scale];
+  addBox(target, crownCenter, crownSize, palette.shadow);
+}
+
+function addChest(target, palette, scale) {
+  const cuirassCenter = [0, 0.72 * scale, 0];
+  const cuirassSize = [0.62 * scale, 0.9 * scale, 0.44 * scale];
+  addBox(target, cuirassCenter, cuirassSize, palette.primary);
+
+  const innerShellCenter = [0, 0.7 * scale, 0];
+  const innerShellSize = [0.52 * scale, 0.78 * scale, 0.36 * scale];
+  addBox(target, innerShellCenter, innerShellSize, palette.shadow);
+
+  const chestStripeCenter = [0, 0.78 * scale, 0.27 * scale];
+  const chestStripeSize = [0.68 * scale, 0.16 * scale, 0.08 * scale];
+  addBox(target, chestStripeCenter, chestStripeSize, palette.accent);
+
+  const collarCenter = [0, 1.12 * scale, 0];
+  const collarSize = [0.7 * scale, 0.08 * scale, 0.36 * scale];
+  addBox(target, collarCenter, collarSize, palette.shadow);
+}
+
+function buildArmorSet(target, palette, scale) {
+  addChest(target, palette, scale);
+  addShoulder(target, palette, scale, 1);
+  addShoulder(target, palette, scale, -1);
+  addHelm(target, palette, scale);
+}
+
+function createBounds(scale) {
+  return {
+    minX: BASE_BOUNDS.minX * scale,
+    maxX: BASE_BOUNDS.maxX * scale,
+    minY: BASE_BOUNDS.minY * scale,
+    maxY: BASE_BOUNDS.maxY * scale,
+    minZ: BASE_BOUNDS.minZ * scale,
+    maxZ: BASE_BOUNDS.maxZ * scale
+  };
+}
+
+function createFighterGeometry(device, palette, scale) {
+  const vertices = [];
+  buildArmorSet(vertices, palette, scale);
 
   const vertexData = new Float32Array(vertices);
   const vertexBuffer = device.createBuffer({
@@ -152,13 +242,13 @@ function resolveImpactDamage(impact) {
   return value;
 }
 
-function writeTranslatedBounds(target, translation) {
-  target.minX = LOCAL_BOUNDS.minX + translation[0];
-  target.maxX = LOCAL_BOUNDS.maxX + translation[0];
-  target.minY = LOCAL_BOUNDS.minY + translation[1];
-  target.maxY = LOCAL_BOUNDS.maxY + translation[1];
-  target.minZ = LOCAL_BOUNDS.minZ + translation[2];
-  target.maxZ = LOCAL_BOUNDS.maxZ + translation[2];
+function writeTranslatedBounds(target, translation, boundsTemplate) {
+  target.minX = boundsTemplate.minX + translation[0];
+  target.maxX = boundsTemplate.maxX + translation[0];
+  target.minY = boundsTemplate.minY + translation[1];
+  target.maxY = boundsTemplate.maxY + translation[1];
+  target.minZ = boundsTemplate.minZ + translation[2];
+  target.maxZ = boundsTemplate.maxZ + translation[2];
 }
 
 function normalizeForward(out, x, z) {
@@ -196,19 +286,30 @@ export function createFighter(device, options = {}) {
     throw new Error('A GPUDevice is required to create a fighter enemy.');
   }
 
-  const geometry = createFighterGeometry(device);
+  const scale = resolveScale(options);
+  const palette = resolvePalette(options);
+  const localBounds = createBounds(scale);
+  const collisionRadius = Math.max(
+    Math.abs(localBounds.minX),
+    localBounds.maxX,
+    Math.abs(localBounds.minZ),
+    localBounds.maxZ
+  );
+  const collisionHalfHeight = localBounds.maxY * 0.5;
+
+  const geometry = createFighterGeometry(device, palette, scale);
   const translation = resolvePosition(options);
   const modelMatrix = new Float32Array(16);
   const forward = new Float32Array([0, 0, 1]);
   const right = new Float32Array(3);
   const up = new Float32Array([0, 1, 0]);
   const bounds = {
-    minX: LOCAL_BOUNDS.minX + translation[0],
-    maxX: LOCAL_BOUNDS.maxX + translation[0],
-    minY: LOCAL_BOUNDS.minY + translation[1],
-    maxY: LOCAL_BOUNDS.maxY + translation[1],
-    minZ: LOCAL_BOUNDS.minZ + translation[2],
-    maxZ: LOCAL_BOUNDS.maxZ + translation[2]
+    minX: localBounds.minX + translation[0],
+    maxX: localBounds.maxX + translation[0],
+    minY: localBounds.minY + translation[1],
+    maxY: localBounds.maxY + translation[1],
+    minZ: localBounds.minZ + translation[2],
+    maxZ: localBounds.maxZ + translation[2]
   };
   const hitBoxes = [];
   const maxHealth = resolveInitialHealth(options);
@@ -393,18 +494,18 @@ export function createFighter(device, options = {}) {
     }
 
     collisionPosition[0] = translation[0];
-    collisionPosition[1] = translation[1] + FIGHTER_COLLISION_HALF_HEIGHT;
+    collisionPosition[1] = translation[1] + collisionHalfHeight;
     collisionPosition[2] = translation[2];
 
     resolveCapsuleCollisions(
       collisionPosition,
       colliders,
-      FIGHTER_COLLISION_RADIUS,
-      FIGHTER_COLLISION_HALF_HEIGHT
+      collisionRadius,
+      collisionHalfHeight
     );
 
     translation[0] = collisionPosition[0];
-    translation[1] = collisionPosition[1] - FIGHTER_COLLISION_HALF_HEIGHT;
+    translation[1] = collisionPosition[1] - collisionHalfHeight;
     translation[2] = collisionPosition[2];
 
     return colliders;
@@ -666,7 +767,7 @@ export function createFighter(device, options = {}) {
   function syncTransform() {
     computeRight(right, forward);
     mat4FromRotationTranslation(modelMatrix, right, up, forward, translation);
-    writeTranslatedBounds(bounds, translation);
+    writeTranslatedBounds(bounds, translation, localBounds);
   }
 
   function startAggro(context) {
