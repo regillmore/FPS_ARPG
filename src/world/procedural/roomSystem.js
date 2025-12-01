@@ -7,7 +7,6 @@ import {
   DEFAULT_GENERATION_RADIUS,
   DEFAULT_ROOM_HEIGHT,
   DEFAULT_ROOM_SIZE,
-  DEFAULT_VERTICAL_LAYER_PADDING,
   DEFAULT_WALL_THICKNESS,
   VERTEX_STRIDE
 } from './constants.js';
@@ -49,10 +48,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     1,
     Math.floor(options.generationRadius ?? DEFAULT_GENERATION_RADIUS)
   );
-  const verticalLayerPadding = Math.max(
-    1,
-    Math.floor(options.verticalLayerPadding ?? DEFAULT_VERTICAL_LAYER_PADDING)
-  );
   const floorOpeningMarginRatio = Math.min(
     0.45,
     Math.max(0.05, options.floorOpeningMarginRatio ?? DEFAULT_FLOOR_OPENING_MARGIN_RATIO)
@@ -60,9 +55,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   const floorOpeningMargin = roomSize * floorOpeningMarginRatio;
   const halfRoom = roomSize * 0.5;
   const levelHeight = roomHeight + floorThickness;
-  let centerLayerIndex = Math.floor(options.initialLayer ?? 0);
-  let minActiveLayer = centerLayerIndex - verticalLayerPadding;
-  let maxActiveLayer = centerLayerIndex + verticalLayerPadding;
+  let centerLayerIndex = options.initialLayer;
   const visitedCells = new Map();
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
@@ -75,8 +68,8 @@ export function createProceduralRoomSystem(device, options = {}) {
   const bounds = {
     minX: -halfRoom,
     maxX: halfRoom,
-    minY: minActiveLayer * levelHeight - floorThickness,
-    maxY: maxActiveLayer * levelHeight + roomHeight,
+    minY: -floorThickness,
+    maxY: roomHeight,
     minZ: -halfRoom,
     maxZ: halfRoom
   };
@@ -98,9 +91,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     getLayerProfiles,
     getCellProfileForLayer,
     getExistingCellEdgesForLayer,
-    getCellEdgesForLayer,
-    getExistingVerticalOpeningStates,
-    updateCellVerticalOpeningForLayer
+    getCellEdgesForLayer
   } = cellState;
 
   const spawnManager = createSpawnManager({
@@ -306,13 +297,6 @@ export function createProceduralRoomSystem(device, options = {}) {
       return false;
     }
 
-    const effectiveMinLayer = minActiveLayer - verticalPadding;
-    const effectiveMaxLayer = maxActiveLayer + verticalPadding;
-
-    if (layerIndex < effectiveMinLayer || layerIndex > effectiveMaxLayer) {
-      return false;
-    }
-
     return true;
   }
 
@@ -401,16 +385,12 @@ export function createProceduralRoomSystem(device, options = {}) {
     const cellX = positionToCell(px, roomSize, halfRoom);
     const cellZ = positionToCell(pz, roomSize, halfRoom);
     const layerIndex = positionToLayer(py, levelHeight, floorThickness);
-    const desiredMinLayer = layerIndex - verticalLayerPadding;
-    const desiredMaxLayer = layerIndex + verticalLayerPadding;
 
     const needsRebuild =
       vertexBuffer === null ||
       cellX !== centerCellX ||
       cellZ !== centerCellZ ||
-      layerIndex !== centerLayerIndex ||
-      desiredMinLayer !== minActiveLayer ||
-      desiredMaxLayer !== maxActiveLayer;
+      layerIndex !== centerLayerIndex;
 
     if (!needsRebuild) {
       markCellVisited(layerIndex, cellX, cellZ);
@@ -420,8 +400,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     centerCellX = cellX;
     centerCellZ = cellZ;
     centerLayerIndex = layerIndex;
-    minActiveLayer = desiredMinLayer;
-    maxActiveLayer = desiredMaxLayer;
     buildGeometryForCenter(cellX, cellZ);
     markCellVisited(layerIndex, cellX, cellZ);
     return true;
