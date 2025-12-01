@@ -66,12 +66,6 @@ export async function initializeGame({
       generationRadius: 5,
       initialLayer: 0
     });
-    const layerResolver =
-      typeof roomSystem.getLayerIndexForHeight === 'function'
-        ? roomSystem.getLayerIndexForHeight
-        : null;
-    const levelHeight =
-      typeof roomSystem.getLevelHeight === 'function' ? roomSystem.getLevelHeight() : null;
     const navigationHelper = typeof roomSystem.getNavigationHelper === 'function'
       ? roomSystem.getNavigationHelper()
       : null;
@@ -274,7 +268,6 @@ export async function initializeGame({
       requestDoorOpen: typeof doorManager.requestOpen === 'function' ? doorManager.requestOpen : null,
       navigation: navigationHelper,
       pacifyEnemies,
-      playerLayerIndex: layerResolver ? layerResolver(controller.position[1]) : null,
       playerRoomKey:
         typeof roomSystem.getRoomKeyForPosition === 'function'
           ? roomSystem.getRoomKeyForPosition(controller.position)
@@ -796,9 +789,6 @@ export async function initializeGame({
           enemyUpdateContext.activeDoors = activeDoors;
           enemyUpdateContext.requestDoorOpen = doorManager.requestOpen;
           enemyUpdateContext.pacifyEnemies = pacifyEnemies;
-          enemyUpdateContext.playerLayerIndex = layerResolver
-            ? layerResolver(controller.position[1])
-            : null;
           enemyUpdateContext.playerRoomKey =
             typeof roomSystem.getRoomKeyForPosition === 'function'
               ? roomSystem.getRoomKeyForPosition(controller.position)
@@ -1124,33 +1114,26 @@ export async function initializeGame({
           : null;
 
       if (minimapSnapshot) {
-        if (layerResolver && Number.isFinite(minimapSnapshot.layerIndex)) {
-          const minimapEnemies = [];
+        const minimapEnemies = [];
 
-          for (const enemy of enemies) {
-            const position = enemy?.position;
-            if (!position) {
-              continue;
-            }
-
-            const enemyLayer = layerResolver(position[1]);
-            if (enemyLayer !== minimapSnapshot.layerIndex) {
-              continue;
-            }
-
-            minimapEnemies.push({
-              x: position[0],
-              y: position[1],
-              z: position[2]
-            });
+        for (const enemy of enemies) {
+          const position = enemy?.position;
+          if (!position) {
+            continue;
           }
 
-          minimapState = {
-            snapshot: minimapSnapshot,
-            enemies: minimapEnemies,
-            playerYaw: controller.yaw
-          };
+          minimapEnemies.push({
+            x: position[0],
+            y: position[1],
+            z: position[2]
+          });
         }
+
+        minimapState = {
+          snapshot: minimapSnapshot,
+          enemies: minimapEnemies,
+          playerYaw: controller.yaw
+        };
       }
 
       hudController?.updateWorldSpaceUI?.({
