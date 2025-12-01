@@ -488,7 +488,6 @@ export function createFighter(device, options = {}) {
     waypointIndex: 0,
     lastPlayerCellKey: '',
     lastEnemyCellKey: '',
-    layerIndex: null,
     rebuildTimer: 0
   };
   let legPhase = Math.random() * Math.PI * 2;
@@ -841,7 +840,6 @@ export function createFighter(device, options = {}) {
     pathState.waypointIndex = 0;
     pathState.lastPlayerCellKey = layeredCellKey(playerCell);
     pathState.lastEnemyCellKey = layeredCellKey(enemyCell);
-    pathState.layerIndex = enemyCell.layerIndex;
     pathState.rebuildTimer = PATH_REBUILD_INTERVAL;
     return true;
   }
@@ -1024,12 +1022,11 @@ export function createFighter(device, options = {}) {
       const enemyCell = navigation.positionToCell(translation);
       const playerCell = navigation.positionToCell(context.playerPosition);
 
-      if (enemyCell && playerCell && enemyCell.layerIndex === playerCell.layerIndex) {
+      if (enemyCell && playerCell) {
         const enemyKey = layeredCellKey(enemyCell);
         const playerKey = layeredCellKey(playerCell);
         const needsRebuild =
           pathState.waypoints.length === 0 ||
-          pathState.layerIndex !== enemyCell.layerIndex ||
           pathState.lastEnemyCellKey !== enemyKey ||
           pathState.lastPlayerCellKey !== playerKey ||
           pathState.rebuildTimer <= 0;
