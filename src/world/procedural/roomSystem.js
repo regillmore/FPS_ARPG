@@ -145,7 +145,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   const { buildGeometryForCenter } = geometryBuilder;
 
   function markCellVisited(x, z) {
-    if (!getExistingCellEdgesForLayer(x, z)) {
+    if (!getExistingCellEdgesForLayer(0, x, z)) {
       return;
     }
 
@@ -162,7 +162,7 @@ export function createProceduralRoomSystem(device, options = {}) {
       processed.add(cellKey);
       visitedCells.add(cellKey);
 
-      const cellEdges = getExistingCellEdgesForLayer(currentX, currentZ);
+      const cellEdges = getExistingCellEdgesForLayer(0, currentX, currentZ);
       if (!cellEdges) {
         continue;
       }
@@ -175,7 +175,7 @@ export function createProceduralRoomSystem(device, options = {}) {
         const offset = directionOffsets[direction];
         const neighborX = currentX + offset[0];
         const neighborZ = currentZ + offset[1];
-        const neighborEdges = getExistingCellEdgesForLayer(neighborX, neighborZ);
+        const neighborEdges = getExistingCellEdgesForLayer(0, neighborX, neighborZ);
         if (!neighborEdges) {
           continue;
         }
@@ -208,7 +208,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     const cells = [];
     for (let gx = cellX - clampedRadius; gx <= cellX + clampedRadius; gx += 1) {
       for (let gz = cellZ - clampedRadius; gz <= cellZ + clampedRadius; gz += 1) {
-        const edges = getExistingCellEdgesForLayer(gx, gz);
+        const edges = getExistingCellEdgesForLayer(0, gx, gz);
         if (!edges) {
           continue;
         }
@@ -296,7 +296,7 @@ export function createProceduralRoomSystem(device, options = {}) {
   }
 
   function getCellEdgeSnapshot(layerIndex = 0, cellX, cellZ) {
-    const edges = getExistingCellEdgesForLayer(cellX, cellZ);
+    const edges = getExistingCellEdgesForLayer(layerIndex, cellX, cellZ);
     if (!edges) {
       return null;
     }

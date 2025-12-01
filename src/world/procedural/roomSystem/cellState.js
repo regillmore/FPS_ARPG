@@ -40,7 +40,7 @@ export function createCellState(worldSeed) {
     return profile;
   }
 
-  function getExistingCellEdgesForLayer(x, z) {
+  function getExistingCellEdgesForLayer(layerIndex, x, z) {
     const key = getCellKey(x, z);
     const perLayer = cellLayerEdgeStates.get(key);
     if (!perLayer) {
