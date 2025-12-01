@@ -75,7 +75,6 @@ export function createRoomGeometryBuilder({
   singleDoorWidth,
   doubleDoorWidth,
   clampedDoorHeight,
-  getCenterLayerIndex,
   getCellProfileForLayer,
   getLayerProfiles,
   getLayerSeed,
@@ -110,11 +109,11 @@ export function createRoomGeometryBuilder({
         }
       }
     } else if (typeof layerTypes === 'string') {
-      effectiveLayerTypes.set(getCenterLayerIndex(), layerTypes);
+      effectiveLayerTypes.set(0, layerTypes);
     }
     const dx = bx - ax;
     const dz = bz - az;
-    let baseType = effectiveLayerTypes.get(getCenterLayerIndex());
+    let baseType = effectiveLayerTypes.get(0);
     if (baseType === undefined) {
       const first = effectiveLayerTypes.values().next();
       baseType = first.done ? 'solid' : first.value;

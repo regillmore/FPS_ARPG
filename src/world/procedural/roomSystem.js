@@ -55,7 +55,6 @@ export function createProceduralRoomSystem(device, options = {}) {
   const floorOpeningMargin = roomSize * floorOpeningMarginRatio;
   const halfRoom = roomSize * 0.5;
   const levelHeight = roomHeight + floorThickness;
-  let centerLayerIndex = options.initialLayer;
   const visitedCells = new Map();
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
@@ -128,7 +127,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     doubleDoorWidth,
     clampedDoorHeight,
     getActiveLayerRange: () => ({ min: minActiveLayer, max: maxActiveLayer }),
-    getCenterLayerIndex: () => centerLayerIndex,
     getCellProfileForLayer,
     getLayerProfiles,
     getLayerSeed,
@@ -211,7 +209,7 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   function getLayerIndexForHeight(height) {
     const value = Number.isFinite(height) ? height : 0;
-    return positionToLayer(value, levelHeight, floorThickness);
+    return 0;
   }
 
   function getMinimapSnapshot(playerPosition, options = {}) {
@@ -226,7 +224,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     const resolvedRadius = Number.isFinite(options.radius) ? Math.floor(options.radius) : 3;
     const clampedRadius = Math.max(1, Math.min(resolvedRadius, generationRadius));
     const showUnvisitedRooms = Boolean(options.showUnvisitedRooms);
-    const layerIndex = getLayerIndexForHeight(py);
+    const layerIndex = 0;
     const cellX = positionToCell(px, roomSize, halfRoom);
     const cellZ = positionToCell(pz, roomSize, halfRoom);
 
@@ -276,18 +274,13 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
 
     const horizontalPaddingValue = Number(options.horizontalPadding);
-    const verticalPaddingValue = Number(options.verticalPadding);
     const horizontalPadding = Number.isFinite(horizontalPaddingValue)
       ? Math.max(0, Math.floor(horizontalPaddingValue))
-      : 0;
-    const verticalPadding = Number.isFinite(verticalPaddingValue)
-      ? Math.max(0, Math.floor(verticalPaddingValue))
       : 0;
 
     const effectiveRadius = generationRadius + horizontalPadding;
     const cellX = positionToCell(px, roomSize, halfRoom);
     const cellZ = positionToCell(pz, roomSize, halfRoom);
-    const layerIndex = positionToLayer(py, levelHeight, floorThickness);
 
     if (Math.abs(cellX - centerCellX) > effectiveRadius) {
       return false;
@@ -314,7 +307,7 @@ export function createProceduralRoomSystem(device, options = {}) {
 
     const cellX = positionToCell(px, roomSize, halfRoom);
     const cellZ = positionToCell(pz, roomSize, halfRoom);
-    const layerIndex = positionToLayer(py, levelHeight, floorThickness);
+    const layerIndex = 0;
     return `${layerIndex}:${getCellKey(cellX, cellZ)}`;
   }
 
@@ -389,8 +382,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     const needsRebuild =
       vertexBuffer === null ||
       cellX !== centerCellX ||
-      cellZ !== centerCellZ ||
-      layerIndex !== centerLayerIndex;
+      cellZ !== centerCellZ;
 
     if (!needsRebuild) {
       markCellVisited(layerIndex, cellX, cellZ);
@@ -399,7 +391,6 @@ export function createProceduralRoomSystem(device, options = {}) {
 
     centerCellX = cellX;
     centerCellZ = cellZ;
-    centerLayerIndex = layerIndex;
     buildGeometryForCenter(cellX, cellZ);
     markCellVisited(layerIndex, cellX, cellZ);
     return true;
@@ -424,8 +415,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     getGenerationRadius: () => generationRadius,
     getActiveCenter: () => ({
       cellX: centerCellX,
-      cellZ: centerCellZ,
-      layerIndex: centerLayerIndex
+      cellZ: centerCellZ
     }),
     getRoomKeyForPosition,
     getNavigationHelper,
