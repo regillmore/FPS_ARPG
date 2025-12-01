@@ -250,6 +250,19 @@ export async function initializeGame({
 
     const controller = new FirstPersonController(canvas);
     pauseControls?.setController?.(controller);
+    const initialDiagnostics =
+      typeof pauseControls?.getDiagnosticsState === 'function'
+        ? pauseControls.getDiagnosticsState()
+        : null;
+    const initialOptions =
+      typeof pauseControls?.getOptionsState === 'function'
+        ? pauseControls.getOptionsState()
+        : null;
+    let disableDynamicLights = Boolean(initialDiagnostics?.disableLights);
+    let disableEnemies = Boolean(initialDiagnostics?.disableEnemies);
+    let pacifyEnemies = Boolean(initialDiagnostics?.pacifyEnemies);
+    let showFramerate = Boolean(initialDiagnostics?.showFramerate);
+    let showUnvisitedMinimapRooms = Boolean(initialOptions?.showUnvisitedMinimapRooms);
     const enemyUpdateContext = {
       playerPosition: controller.position,
       playerRadius: PLAYER_COLLISION_RADIUS,
@@ -495,19 +508,6 @@ export async function initializeGame({
     const worldUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
     const weaponUniformData = new Float32Array(UNIFORM_FLOAT_COUNT);
     const activeLightsScratch = [];
-    const initialDiagnostics =
-      typeof pauseControls?.getDiagnosticsState === 'function'
-        ? pauseControls.getDiagnosticsState()
-        : null;
-    const initialOptions =
-      typeof pauseControls?.getOptionsState === 'function'
-        ? pauseControls.getOptionsState()
-        : null;
-    let disableDynamicLights = Boolean(initialDiagnostics?.disableLights);
-    let disableEnemies = Boolean(initialDiagnostics?.disableEnemies);
-    let pacifyEnemies = Boolean(initialDiagnostics?.pacifyEnemies);
-    let showFramerate = Boolean(initialDiagnostics?.showFramerate);
-    let showUnvisitedMinimapRooms = Boolean(initialOptions?.showUnvisitedMinimapRooms);
     const resolveFramerateCap = (value) => {
       const numericValue = Number(value);
       if (!Number.isFinite(numericValue) || numericValue <= 0) {
