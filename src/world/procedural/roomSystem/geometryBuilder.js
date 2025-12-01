@@ -484,11 +484,6 @@ export function createRoomGeometryBuilder({
           profile.floorColor,
           profile.ceilingColor,
           bounds,
-          openFloor,
-          holeMinX,
-          holeMaxX,
-          holeMinZ,
-          holeMaxZ,
           colliders
         );
 

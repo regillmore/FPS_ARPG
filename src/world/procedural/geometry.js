@@ -46,12 +46,7 @@ export function addHorizontalSection(
   maxZ,
   normal,
   color,
-  bounds,
-  hasHole,
-  holeMinX,
-  holeMaxX,
-  holeMinZ,
-  holeMaxZ
+  bounds
 ) {
   const isUpward = normal[1] >= 0;
 
@@ -72,26 +67,8 @@ export function addHorizontalSection(
     ];
   }
 
-  if (!hasHole || holeMinX >= holeMaxX || holeMinZ >= holeMaxZ) {
-    addQuad(vertices, createCorners(minX, maxX, minZ, maxZ), normal, color, bounds);
-    return;
-  }
-
-  if (holeMinX > minX) {
-    addQuad(vertices, createCorners(minX, holeMinX, minZ, maxZ), normal, color, bounds);
-  }
-
-  if (holeMaxX < maxX) {
-    addQuad(vertices, createCorners(holeMaxX, maxX, minZ, maxZ), normal, color, bounds);
-  }
-
-  if (holeMinZ > minZ) {
-    addQuad(vertices, createCorners(holeMinX, holeMaxX, minZ, holeMinZ), normal, color, bounds);
-  }
-
-  if (holeMaxZ < maxZ) {
-    addQuad(vertices, createCorners(holeMinX, holeMaxX, holeMaxZ, maxZ), normal, color, bounds);
-  }
+  addQuad(vertices, createCorners(minX, maxX, minZ, maxZ), normal, color, bounds);
+  return;
 }
 
 export function addCollider(colliders, minX, minY, minZ, maxX, maxY, maxZ) {
@@ -108,12 +85,7 @@ export function addSlabColliders(
   minZ,
   maxZ,
   minY,
-  maxY,
-  hasHole,
-  holeMinX,
-  holeMaxX,
-  holeMinZ,
-  holeMaxZ
+  maxY
 ) {
   if (!colliders) {
     return;
@@ -123,27 +95,8 @@ export function addSlabColliders(
     return;
   }
 
-  const holeValid = hasHole && holeMinX < holeMaxX && holeMinZ < holeMaxZ;
-  if (!holeValid) {
-    addCollider(colliders, minX, minY, minZ, maxX, maxY, maxZ);
-    return;
-  }
-
-  if (holeMinX > minX) {
-    addCollider(colliders, minX, minY, minZ, holeMinX, maxY, maxZ);
-  }
-
-  if (holeMaxX < maxX) {
-    addCollider(colliders, holeMaxX, minY, minZ, maxX, maxY, maxZ);
-  }
-
-  if (holeMinZ > minZ) {
-    addCollider(colliders, holeMinX, minY, minZ, holeMaxX, maxY, holeMinZ);
-  }
-
-  if (holeMaxZ < maxZ) {
-    addCollider(colliders, holeMinX, minY, holeMaxZ, holeMaxX, maxY, maxZ);
-  }
+  addCollider(colliders, minX, minY, minZ, maxX, maxY, maxZ);
+  return;
 }
 
 export function addFloorSlab(
@@ -157,15 +110,9 @@ export function addFloorSlab(
   topColor,
   bottomColor,
   bounds,
-  hasHole,
-  holeMinX,
-  holeMaxX,
-  holeMinZ,
-  holeMaxZ,
   colliders
 ) {
   const effectiveThickness = Math.max(thickness, 0);
-  const holeValid = hasHole && holeMinX < holeMaxX && holeMinZ < holeMaxZ;
 
   if (effectiveThickness <= 1e-4) {
     const colliderMinY = topY - Math.max(0.05, effectiveThickness);
@@ -176,12 +123,7 @@ export function addFloorSlab(
       minZ,
       maxZ,
       colliderMinY,
-      topY,
-      holeValid,
-      holeMinX,
-      holeMaxX,
-      holeMinZ,
-      holeMaxZ
+      topY
     );
 
     addHorizontalSection(
@@ -193,12 +135,7 @@ export function addFloorSlab(
       maxZ,
       [0, 1, 0],
       topColor,
-      bounds,
-      holeValid,
-      holeMinX,
-      holeMaxX,
-      holeMinZ,
-      holeMaxZ
+      bounds
     );
     addHorizontalSection(
       vertices,
@@ -209,12 +146,7 @@ export function addFloorSlab(
       maxZ,
       [0, -1, 0],
       bottomColor,
-      bounds,
-      holeValid,
-      holeMinX,
-      holeMaxX,
-      holeMinZ,
-      holeMaxZ
+      bounds
     );
     return;
   }
@@ -231,12 +163,7 @@ export function addFloorSlab(
     maxZ,
     [0, 1, 0],
     topColor,
-    bounds,
-    holeValid,
-    holeMinX,
-    holeMaxX,
-    holeMinZ,
-    holeMaxZ
+    bounds
   );
 
   addHorizontalSection(
@@ -248,12 +175,7 @@ export function addFloorSlab(
     maxZ,
     [0, -1, 0],
     bottomColor,
-    bounds,
-    holeValid,
-    holeMinX,
-    holeMaxX,
-    holeMinZ,
-    holeMaxZ
+    bounds
   );
 
   const outer = {
@@ -279,33 +201,8 @@ export function addFloorSlab(
     minZ,
     maxZ,
     bottomY,
-    topY,
-    holeValid,
-    holeMinX,
-    holeMaxX,
-    holeMinZ,
-    holeMaxZ
+    topY
   );
-
-  if (!holeValid) {
-    return;
-  }
-
-  const inner = {
-    nbl: [holeMinX, bottomY, holeMinZ],
-    nbr: [holeMaxX, bottomY, holeMinZ],
-    ntl: [holeMinX, topY, holeMinZ],
-    ntr: [holeMaxX, topY, holeMinZ],
-    fbl: [holeMinX, bottomY, holeMaxZ],
-    fbr: [holeMaxX, bottomY, holeMaxZ],
-    ftl: [holeMinX, topY, holeMaxZ],
-    ftr: [holeMaxX, topY, holeMaxZ]
-  };
-
-  addQuad(vertices, [inner.fbl, inner.nbl, inner.ntl, inner.ftl], [1, 0, 0], sideColor, bounds);
-  addQuad(vertices, [inner.nbr, inner.fbr, inner.ftr, inner.ntr], [-1, 0, 0], sideColor, bounds);
-  addQuad(vertices, [inner.nbl, inner.nbr, inner.ntr, inner.ntl], [0, 0, 1], sideColor, bounds);
-  addQuad(vertices, [inner.fbr, inner.fbl, inner.ftl, inner.ftr], [0, 0, -1], sideColor, bounds);
 }
 
 export function addBox(vertices, minX, minY, minZ, maxX, maxY, maxZ, color, bounds) {
