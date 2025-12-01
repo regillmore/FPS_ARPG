@@ -22,6 +22,25 @@ export function createEnemyManager(device, managerOptions = {}) {
     west: 'east'
   };
 
+  function getEnemyLayerIndex(enemy) {
+    if (!enemy) {
+      return null;
+    }
+
+    const spawnLayerIndex = enemy.spawnContext?.layerIndex;
+    if (Number.isInteger(spawnLayerIndex)) {
+      return spawnLayerIndex;
+    }
+
+    const roomKey = enemy.spawnContext?.roomKey;
+    const parsedRoom = typeof roomKey === 'string' ? parseRoomKey(roomKey) : null;
+    if (parsedRoom && Number.isInteger(parsedRoom.layerIndex)) {
+      return parsedRoom.layerIndex;
+    }
+
+    return null;
+  }
+
   function parseRoomKey(roomKey) {
     if (typeof roomKey !== 'string' || roomKey.length === 0) {
       return null;
@@ -306,6 +325,10 @@ export function createEnemyManager(device, managerOptions = {}) {
   }
 
   function update(deltaTime, context = null) {
+    const playerLayerIndex = Number.isInteger(context?.playerLayerIndex)
+      ? context.playerLayerIndex
+      : null;
+
     for (let i = enemies.length - 1; i >= 0; i -= 1) {
       const enemy = enemies[i];
       if (!enemy) {
@@ -313,11 +336,19 @@ export function createEnemyManager(device, managerOptions = {}) {
         continue;
       }
 
-      const wasAggro = enemy.isAggressive;
-      enemy.update?.(deltaTime, context);
+      const enemyLayerIndex = getEnemyLayerIndex(enemy);
+      const shouldSkipUpdate =
+        playerLayerIndex !== null &&
+        enemyLayerIndex !== null &&
+        enemyLayerIndex !== playerLayerIndex;
 
-      if (!wasAggro && enemy.type === 'fighter' && enemy.isAggressive) {
-        alertNearbyIdleFighters(enemy, context);
+      const wasAggro = enemy.isAggressive;
+      if (!shouldSkipUpdate) {
+        enemy.update?.(deltaTime, context);
+
+        if (!wasAggro && enemy.type === 'fighter' && enemy.isAggressive) {
+          alertNearbyIdleFighters(enemy, context);
+        }
       }
 
       if (!shouldRetainEnemy) {
