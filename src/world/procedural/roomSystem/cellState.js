@@ -106,88 +106,12 @@ export function createCellState(worldSeed) {
     return edges;
   }
 
-  function getExistingVerticalOpeningStates(key) {
-    return cellVerticalOpenings.get(key) ?? null;
-  }
-
-  function getVerticalOpeningStates(key) {
-    let openings = cellVerticalOpenings.get(key);
-    if (!openings) {
-      openings = new Map();
-      cellVerticalOpenings.set(key, openings);
-    }
-    return openings;
-  }
-
-  function updateCellVerticalOpeningForLayer(x, z, layerIndex) {
-    const key = getCellKey(x, z);
-    const perLayer = cellLayerEdgeStates.get(key);
-    const edges = perLayer ? perLayer.get(layerIndex) : null;
-
-    let doorwayCount = 0;
-    let openEdge = false;
-    let closedCount = 0;
-    let doubleDoorway = false;
-    let doorwayDirection = null;
-
-    if (edges) {
-      const edgeStates = [edges.north, edges.south, edges.east, edges.west];
-      for (let i = 0; i < edgeStates.length; i += 1) {
-        const state = edgeStates[i];
-        if (state === 'doorway') {
-          doorwayCount += 1;
-        } else if (state === 'open') {
-          openEdge = true;
-        } else {
-          closedCount += 1;
-        }
-      }
-
-      if (doorwayCount === 1 && !openEdge) {
-        const directions = ['north', 'south', 'east', 'west'];
-        for (let i = 0; i < directions.length; i += 1) {
-          const direction = directions[i];
-          if (edges[direction] !== 'doorway') {
-            continue;
-          }
-          doorwayDirection = direction;
-          const offset = directionOffsets[direction];
-          if (!offset) {
-            continue;
-          }
-          const neighborX = x + offset[0];
-          const neighborZ = z + offset[1];
-          const layerSeed = getLayerSeed(layerIndex);
-          doubleDoorway =
-            isOriginHallwayDoorway(x, z, neighborX, neighborZ) ||
-            randomFloatForEdge(x, z, neighborX, neighborZ, 29, layerSeed) < 0.5;
-          break;
-        }
-      }
-    }
-
-    const hasBalcony = doorwayCount === 1 && closedCount >= 3 && !openEdge && !doubleDoorway;
-    const shouldOpen = isElevatorCell(x, z);
-    const openings = getVerticalOpeningStates(key);
-    openings.set(layerIndex, shouldOpen);
-
-    if (edges) {
-      edges.balconyDirection = hasBalcony ? doorwayDirection : null;
-      if (edges.roomType === 'balcony' && !hasBalcony) {
-        edges.roomType = null;
-      }
-    }
-  }
-
   return {
     getCellKey,
     getLayerSeed,
     getLayerProfiles,
     getCellProfileForLayer,
     getExistingCellEdgesForLayer,
-    getCellEdgesForLayer,
-    getExistingVerticalOpeningStates,
-    getVerticalOpeningStates,
-    updateCellVerticalOpeningForLayer
+    getCellEdgesForLayer
   };
 }

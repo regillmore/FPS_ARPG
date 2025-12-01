@@ -63,11 +63,6 @@ export function createProceduralRoomSystem(device, options = {}) {
   let centerLayerIndex = Math.floor(options.initialLayer ?? 0);
   let minActiveLayer = centerLayerIndex - verticalLayerPadding;
   let maxActiveLayer = centerLayerIndex + verticalLayerPadding;
-  let elevatorOffset = 0;
-  let elevatorGateProgress = 0;
-  let elevatorPanel = null;
-  let elevatorBounds = null;
-  let persistentOriginElevator = null;
   const visitedCells = new Map();
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
@@ -147,32 +142,8 @@ export function createProceduralRoomSystem(device, options = {}) {
     getLayerProfiles,
     getLayerSeed,
     getCellEdgesForLayer,
-    getExistingVerticalOpeningStates,
-    updateCellVerticalOpeningForLayer,
     evaluateCellForFighter,
     directionOffsets,
-    getLayerIndexForHeight,
-    getElevatorGateProgress: () => elevatorGateProgress,
-    getElevatorOffset: () => elevatorOffset,
-    setElevatorPanel: (panel) => {
-      if (!panel) {
-        elevatorPanel = null;
-        return;
-      }
-      const bounds = panel.bounds ?? {};
-      elevatorPanel = {
-        center: panel.center ?? null,
-        color: panel.color ?? null,
-        bounds: {
-          minX: bounds.minX,
-          maxX: bounds.maxX,
-          minY: bounds.minY,
-          maxY: bounds.maxY,
-          minZ: bounds.minZ,
-          maxZ: bounds.maxZ
-        }
-      };
-    },
     updateVertexBuffer: (vertexArray) => {
       const buffer = device.createBuffer({
         size: vertexArray.byteLength,
@@ -186,32 +157,6 @@ export function createProceduralRoomSystem(device, options = {}) {
       }
       vertexBuffer = buffer;
       vertexCount = vertexArray.length / VERTEX_STRIDE;
-    },
-    setElevatorBounds: (bounds) => {
-      if (!bounds) {
-        elevatorBounds = null;
-        return;
-      }
-      elevatorBounds = {
-        minX: bounds.minX,
-        maxX: bounds.maxX,
-        minZ: bounds.minZ,
-        maxZ: bounds.maxZ,
-        floorY: bounds.floorY,
-        canopyMinX: bounds.canopyMinX,
-        canopyMaxX: bounds.canopyMaxX,
-        canopyMinZ: bounds.canopyMinZ,
-        canopyMaxZ: bounds.canopyMaxZ,
-        canopyMinY: bounds.canopyMinY,
-        canopyMaxY: bounds.canopyMaxY
-      };
-
-      const centerX = (Number(bounds.minX) + Number(bounds.maxX)) * 0.5;
-      const centerZ = (Number(bounds.minZ) + Number(bounds.maxZ)) * 0.5;
-      const layerIndex = getLayerIndexForHeight(elevatorOffset);
-      if (Number.isFinite(centerX) && Number.isFinite(centerZ) && Number.isFinite(layerIndex)) {
-        persistentOriginElevator = { x: centerX, z: centerZ, layerIndex };
-      }
     }
   });
 
@@ -306,36 +251,13 @@ export function createProceduralRoomSystem(device, options = {}) {
           continue;
         }
         const key = getCellKey(gx, gz);
-        const verticalOpeningStates = getExistingVerticalOpeningStates(key);
         cells.push({
           x: gx,
           z: gz,
           edges,
-          verticalOpening:
-            verticalOpeningStates && verticalOpeningStates instanceof Map
-              ? verticalOpeningStates.get(layerIndex) ?? false
-              : false,
           roomType: edges.roomType ?? null
         });
       }
-    }
-
-    let originElevator = null;
-    const elevatorLayerIndex = getLayerIndexForHeight(elevatorOffset);
-    if (elevatorBounds) {
-      const centerX = (Number(elevatorBounds.minX) + Number(elevatorBounds.maxX)) * 0.5;
-      const centerZ = (Number(elevatorBounds.minZ) + Number(elevatorBounds.maxZ)) * 0.5;
-      if (Number.isFinite(centerX) && Number.isFinite(centerZ)) {
-        originElevator = { x: centerX, z: centerZ, layerIndex: elevatorLayerIndex };
-      }
-    }
-
-    if (!originElevator && persistentOriginElevator) {
-      originElevator = {
-        x: persistentOriginElevator.x,
-        z: persistentOriginElevator.z,
-        layerIndex: persistentOriginElevator.layerIndex
-      };
     }
 
     return {
@@ -345,7 +267,6 @@ export function createProceduralRoomSystem(device, options = {}) {
       cellSize: roomSize,
       halfCellSize: halfRoom,
       playerPosition: [px, py, pz],
-      originElevator,
       cells
     };
   }
@@ -392,38 +313,6 @@ export function createProceduralRoomSystem(device, options = {}) {
       return false;
     }
 
-    return true;
-  }
-
-  function setElevatorOffset(offset) {
-    if (!Number.isFinite(offset) || Math.abs(offset - elevatorOffset) < 1e-4) {
-      return false;
-    }
-    elevatorOffset = offset;
-    buildGeometryForCenter(centerCellX, centerCellZ);
-    return true;
-  }
-
-  function adjustElevatorOffset(delta) {
-    if (!Number.isFinite(delta) || Math.abs(delta) < 1e-6) {
-      return false;
-    }
-    const target = elevatorOffset + delta;
-    return setElevatorOffset(target);
-  }
-
-  function setElevatorGateProgress(progress) {
-    if (!Number.isFinite(progress)) {
-      return false;
-    }
-
-    const clamped = Math.min(Math.max(progress, 0), 1);
-    if (Math.abs(clamped - elevatorGateProgress) < 1e-4) {
-      return false;
-    }
-
-    elevatorGateProgress = clamped;
-    buildGeometryForCenter(centerCellX, centerCellZ);
     return true;
   }
 
@@ -555,8 +444,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     getMinimapSnapshot,
     getDecorativeLights: () => decorativeLights,
     getGenerationRadius: () => generationRadius,
-    getElevatorPanel: () => elevatorPanel,
-    getElevatorBounds: () => elevatorBounds,
     getActiveCenter: () => ({
       cellX: centerCellX,
       cellZ: centerCellZ,
@@ -565,11 +452,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     getRoomKeyForPosition,
     getNavigationHelper,
     isPositionWithinGenerationRadius,
-    getElevatorOffset: () => elevatorOffset,
-    getElevatorGateProgress: () => elevatorGateProgress,
-    setElevatorOffset,
-    adjustElevatorOffset,
-    setElevatorGateProgress,
     consumeFighterSpawnPoints,
     scheduleFighterSpawnPoint,
     dispose: () => {

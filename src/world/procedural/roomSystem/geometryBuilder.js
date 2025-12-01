@@ -1,8 +1,6 @@
 import { mixColors } from '../color.js';
 import { createEdgeKey, determineEdgeType } from '../profile.js';
-import {
-  addFloorSlab
-} from '../geometry.js';
+import { addFloorSlab } from '../geometry.js';
 import { addCagedElectricWallLight } from '../decorations.js';
 import { randomFloatForEdge } from '../random.js';
 import { buildDoorwayAlongX, buildDoorwayAlongZ, buildSolidWallAlongX, buildSolidWallAlongZ } from '../walls.js';
