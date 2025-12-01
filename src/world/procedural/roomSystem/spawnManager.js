@@ -35,7 +35,7 @@ export function createSpawnManager({
       return;
     }
 
-    const edges = getCellEdgesForLayer(layerIndex, x, z);
+    const edges = getCellEdgesForLayer(x, z);
     if (!edges) {
       return;
     }

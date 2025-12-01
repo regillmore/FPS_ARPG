@@ -120,8 +120,8 @@ export function createRoomGeometryBuilder({
     }
 
     const type = effectiveLayerTypes.get(0) ?? baseType;
-    const edgesA = getCellEdgesForLayer(0, ax, az);
-    const edgesB = getCellEdgesForLayer(0, bx, bz);
+    const edgesA = getCellEdgesForLayer(ax, az);
+    const edgesB = getCellEdgesForLayer(bx, bz);
 
     if (dx === 1 && dz === 0) {
       edgesA.east = type;
@@ -422,7 +422,7 @@ export function createRoomGeometryBuilder({
         const openFloor = false;
         const profile = profilePerLayer.get(0);
 
-        const edges = getCellEdgesForLayer(0, gx, gz);
+        const edges = getCellEdgesForLayer(gx, gz);
         if (edges) {
           const entries = [
             ['north', edges.north],

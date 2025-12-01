@@ -60,14 +60,14 @@ export function createCellState(worldSeed) {
     };
   }
 
-  function getCellEdgesForLayer(layerIndex, x, z) {
+  function getCellEdgesForLayer(x, z) {
     const key = getCellKey(x, z);
     let perLayer = cellLayerEdgeStates.get(key);
     if (!perLayer) {
       perLayer = new Map();
       cellLayerEdgeStates.set(key, perLayer);
     }
-    let edges = perLayer.get(layerIndex);
+    let edges = perLayer.get(0);
     if (!edges) {
       edges = {
         north: null,
@@ -77,7 +77,7 @@ export function createCellState(worldSeed) {
         roomType: null,
         balconyDirection: null
       };
-      perLayer.set(layerIndex, edges);
+      perLayer.set(0, edges);
     }
     return edges;
   }
