@@ -24,20 +24,6 @@ function getCellKey(x, z) {
   return `${x},${z}`;
 }
 
-function formatFloorLabel(layerIndex) {
-  if (!Number.isFinite(layerIndex)) {
-    return DEFAULT_FLOOR_LABEL;
-  }
-  const normalized = Math.trunc(layerIndex);
-  if (normalized === 0) {
-    return 'G';
-  }
-  if (normalized < 0) {
-    return `B${Math.abs(normalized)}`;
-  }
-  return String(normalized);
-}
-
 function ensureCanvasSize(canvas, root) {
   if (!canvas || !root) {
     return null;
@@ -411,10 +397,7 @@ export function createMinimap(options = {}) {
         return;
       }
       drawMinimap(ctx, canvasSize, data ?? {});
-      const label = formatFloorLabel(data?.snapshot?.layerIndex);
-      if (floorLabel.textContent !== label) {
-        floorLabel.textContent = label;
-      }
+      floorLabel.textContent = DEFAULT_FLOOR_LABEL;
     },
     destroy() {
       root.remove();

@@ -351,16 +351,11 @@ export function createDoorManager(device) {
     return true;
   }
 
-  function update(deltaTime, playerPosition, activeLayerIndex) {
+  function update(deltaTime, playerPosition) {
     const closeDistanceSq = 30.0;
-    const hasLayerConstraint = Number.isFinite(activeLayerIndex);
 
     for (const door of doors) {
       if (!door || !door.center) {
-        continue;
-      }
-
-      if (hasLayerConstraint && door.anchor?.layerIndex !== activeLayerIndex) {
         continue;
       }
 
