@@ -40,7 +40,6 @@ import {
   createLightGatherer,
   writeUniformData
 } from './rendering/renderUtils.js';
-import { createElevatorController } from './elevator/elevatorController.js';
 
 export async function initializeGame({
   canvas,
@@ -545,19 +544,6 @@ export async function initializeGame({
       disableLightsRef: () => disableDynamicLights
     });
 
-    const elevatorController = createElevatorController({
-      roomSystem,
-      controller,
-      layerResolver,
-      levelHeight
-    });
-
-    window.addEventListener('keydown', (event) => elevatorController.handleControl(event, true));
-    window.addEventListener('keyup', (event) => elevatorController.handleControl(event, false));
-    window.addEventListener('blur', () => {
-      elevatorController.handleBlur();
-    });
-
     const weaponForward = new Float32Array(3);
     const weaponRight = new Float32Array(3);
     const weaponUp = new Float32Array(3);
@@ -596,11 +582,6 @@ export async function initializeGame({
       }
 
       let geometryChanged = false;
-      const elevatorResult = elevatorController.update(deltaTime, {
-        isPaused,
-        worldItems
-      });
-      geometryChanged = elevatorResult.geometryChanged || geometryChanged;
 
       geometryChanged = roomSystem.update(controller.position) || geometryChanged;
       if (geometryChanged) {
@@ -949,99 +930,62 @@ export async function initializeGame({
         overlayController?.hideUsePrompt?.();
         hudController?.setReticleAccentOverride?.(null);
       } else {
-        const elevatorPanel =
-          typeof roomSystem.getElevatorPanel === 'function' ? roomSystem.getElevatorPanel() : null;
-        let elevatorPromptActive = false;
         let storageChestPromptActive = false;
         let doorPromptActive = false;
 
-        if (elevatorPanel?.bounds && elevatorPanel.center) {
-          const dx = controller.position[0] - elevatorPanel.center[0];
-          const dz = controller.position[2] - elevatorPanel.center[2];
-          const horizontalDistanceSq = dx * dx + dz * dz;
-          if (horizontalDistanceSq <= ITEM_INTERACTION_DISTANCE_SQ) {
-            const verticalDistance = Math.abs(controller.position[1] - elevatorPanel.center[1]);
-            if (verticalDistance <= ITEM_INTERACTION_VERTICAL_LIMIT) {
-              const hit = traceRayAABB(eye, viewDirection, ITEM_AIM_MAX_DISTANCE, elevatorPanel.bounds);
-              if (hit) {
-                elevatorPromptActive = true;
-                const reticleColor = elevatorPanel.color ?? [0.75, 0.9, 1];
-                const promptColor = floatColorToCss(reticleColor, 'rgb(200, 230, 255)');
-                hudController?.setReticleAccentOverride?.(reticleColor);
-                overlayController?.showPersistentUsePrompt?.(
-                  `Press ${PICKUP_USE_KEY} to return to the ground floor`,
-                  promptColor
-                );
+        let highlightedDoor = null;
+        let closestDoorDistance = Infinity;
 
-                if (usePressedThisFrame) {
-                  elevatorController.requestReturnToGround();
-                  overlayController?.showTemporaryUsePrompt?.(
-                    'Returning elevator to ground floor',
-                    promptColor,
-                    PICKUP_PROMPT_SUCCESS_DURATION * 0.6
-                  );
-                }
-              }
+        if (Array.isArray(activeDoors)) {
+          for (const door of activeDoors) {
+            if (!door || door.state === 'open' || !door.interactionBounds || !door.center) {
+              continue;
+            }
+
+            const dx = controller.position[0] - door.center[0];
+            const dz = controller.position[2] - door.center[2];
+            const horizontalDistanceSq = dx * dx + dz * dz;
+            if (horizontalDistanceSq > ITEM_INTERACTION_DISTANCE_SQ) {
+              continue;
+            }
+            const verticalDistance = Math.abs(controller.position[1] - door.center[1]);
+            if (verticalDistance > ITEM_INTERACTION_VERTICAL_LIMIT) {
+              continue;
+            }
+
+            const hit = traceRayAABB(eye, viewDirection, ITEM_AIM_MAX_DISTANCE, door.interactionBounds);
+            if (!hit) {
+              continue;
+            }
+
+            if (hit.distance < closestDoorDistance) {
+              closestDoorDistance = hit.distance;
+              highlightedDoor = door;
             }
           }
         }
 
-        if (!elevatorPromptActive) {
-          let highlightedDoor = null;
-          let closestDoorDistance = Infinity;
+        if (highlightedDoor) {
+          doorPromptActive = true;
+          const accentColor = highlightedDoor.color ?? [0.75, 0.88, 1];
+          const promptColor = floatColorToCss(accentColor, 'rgb(200, 230, 255)');
+          hudController?.setReticleAccentOverride?.(accentColor);
+          overlayController?.showPersistentUsePrompt?.(
+            `Press ${PICKUP_USE_KEY} to open the door`,
+            promptColor
+          );
 
-          if (Array.isArray(activeDoors)) {
-            for (const door of activeDoors) {
-              if (!door || door.state === 'open' || !door.interactionBounds || !door.center) {
-                continue;
-              }
-
-              const dx = controller.position[0] - door.center[0];
-              const dz = controller.position[2] - door.center[2];
-              const horizontalDistanceSq = dx * dx + dz * dz;
-              if (horizontalDistanceSq > ITEM_INTERACTION_DISTANCE_SQ) {
-                continue;
-              }
-
-              const verticalDistance = Math.abs(controller.position[1] - door.center[1]);
-              if (verticalDistance > ITEM_INTERACTION_VERTICAL_LIMIT) {
-                continue;
-              }
-
-              const hit = traceRayAABB(eye, viewDirection, ITEM_AIM_MAX_DISTANCE, door.interactionBounds);
-              if (!hit) {
-                continue;
-              }
-
-              if (hit.distance < closestDoorDistance) {
-                closestDoorDistance = hit.distance;
-                highlightedDoor = door;
-              }
-            }
-          }
-
-          if (highlightedDoor) {
-            doorPromptActive = true;
-            const accentColor = highlightedDoor.color ?? [0.75, 0.88, 1];
-            const promptColor = floatColorToCss(accentColor, 'rgb(200, 230, 255)');
-            hudController?.setReticleAccentOverride?.(accentColor);
-            overlayController?.showPersistentUsePrompt?.(
-              `Press ${PICKUP_USE_KEY} to open the door`,
-              promptColor
+          if (usePressedThisFrame) {
+            doorManager.requestOpen(highlightedDoor.id, controller.position);
+            overlayController?.showTemporaryUsePrompt?.(
+              'Opening door',
+              promptColor,
+              PICKUP_PROMPT_SUCCESS_DURATION * 0.6
             );
-
-            if (usePressedThisFrame) {
-              doorManager.requestOpen(highlightedDoor.id, controller.position);
-              overlayController?.showTemporaryUsePrompt?.(
-                'Opening door',
-                promptColor,
-                PICKUP_PROMPT_SUCCESS_DURATION * 0.6
-              );
-            }
           }
         }
 
-        if (!elevatorPromptActive && !doorPromptActive) {
+        if (!doorPromptActive) {
           let highlightedPickup = null;
           let closestPickupDistance = Infinity;
 
@@ -1203,7 +1147,6 @@ export async function initializeGame({
 
           minimapState = {
             snapshot: minimapSnapshot,
-            originElevator: minimapSnapshot.originElevator,
             enemies: minimapEnemies,
             playerYaw: controller.yaw
           };
