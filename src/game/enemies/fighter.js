@@ -516,7 +516,7 @@ export function createFighter(device, options = {}) {
     const cellX = Number(cellXPart);
     const cellZ = Number(cellZPart);
 
-    if (!Number.isInteger(layerIndex) || !Number.isInteger(cellX) || !Number.isInteger(cellZ)) {
+    if (!Number.isInteger(cellX) || !Number.isInteger(cellZ)) {
       return null;
     }
 
@@ -550,8 +550,8 @@ export function createFighter(device, options = {}) {
       return false;
     }
 
-    const edgesA = nav.getCellEdges(roomA.layerIndex, roomA.cellX, roomA.cellZ);
-    const edgesB = nav.getCellEdges(roomB.layerIndex, roomB.cellX, roomB.cellZ);
+    const edgesA = nav.getCellEdges(0, roomA.cellX, roomA.cellZ);
+    const edgesB = nav.getCellEdges(0, roomB.cellX, roomB.cellZ);
     if (!edgesA || !edgesB) {
       return false;
     }
@@ -568,7 +568,7 @@ export function createFighter(device, options = {}) {
     }
 
     const doorAnchor = typeof nav.getDoorBetween === 'function'
-      ? nav.getDoorBetween(roomA.layerIndex, roomA.cellX, roomA.cellZ, roomB.cellX, roomB.cellZ)
+      ? nav.getDoorBetween(0, roomA.cellX, roomA.cellZ, roomB.cellX, roomB.cellZ)
       : null;
 
     if (!doorAnchor?.id) {
@@ -739,7 +739,7 @@ export function createFighter(device, options = {}) {
       }
 
       const edges = typeof nav.getCellEdges === 'function'
-        ? nav.getCellEdges(cell.layerIndex, cell.cellX, cell.cellZ)
+        ? nav.getCellEdges(0, cell.cellX, cell.cellZ)
         : null;
       if (!edges) {
         continue;
@@ -754,7 +754,7 @@ export function createFighter(device, options = {}) {
         const neighbor = {
           cellX: cell.cellX + offset[0],
           cellZ: cell.cellZ + offset[1],
-          layerIndex: cell.layerIndex
+          layerIndex: 0
         };
         if (
           Math.abs(neighbor.cellX - startCell.cellX) > searchRadius ||
@@ -816,16 +816,16 @@ export function createFighter(device, options = {}) {
       const deltaZ = to.cellZ - from.cellZ;
       const direction = deltaX === 1 ? 'east' : deltaX === -1 ? 'west' : deltaZ === 1 ? 'south' : 'north';
       const edges = typeof nav.getCellEdges === 'function'
-        ? nav.getCellEdges(from.layerIndex, from.cellX, from.cellZ)
+        ? nav.getCellEdges(0, from.cellX, from.cellZ)
         : null;
       const edgeState = edges ? edges[direction] : null;
       const door = edgeState === 'doorway'
-        ? nav.getDoorBetween?.(from.layerIndex, from.cellX, from.cellZ, to.cellX, to.cellZ)
+        ? nav.getDoorBetween?.(0, from.cellX, from.cellZ, to.cellX, to.cellZ)
         : null;
 
       const waypointPosition = door?.center
         ? [door.center[0], translation[1], door.center[2]]
-        : nav.getRoomCenter?.(to.cellX, to.cellZ, to.layerIndex) ?? [
+        : nav.getRoomCenter?.(to.cellX, to.cellZ, 0) ?? [
             translation[0],
             translation[1],
             translation[2]

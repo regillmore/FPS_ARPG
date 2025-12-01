@@ -37,7 +37,7 @@ export function createEnemyManager(device, managerOptions = {}) {
     const cellX = Number(cellXPart);
     const cellZ = Number(cellZPart);
 
-    if (!Number.isInteger(layerIndex) || !Number.isInteger(cellX) || !Number.isInteger(cellZ)) {
+    if (!Number.isInteger(cellX) || !Number.isInteger(cellZ)) {
       return null;
     }
 
@@ -51,7 +51,7 @@ export function createEnemyManager(device, managerOptions = {}) {
 
     const roomA = parseRoomKey(roomAKey);
     const roomB = parseRoomKey(roomBKey);
-    if (!roomA || !roomB || roomA.layerIndex !== roomB.layerIndex) {
+    if (!roomA || !roomB) {
       return false;
     }
 
@@ -71,8 +71,8 @@ export function createEnemyManager(device, managerOptions = {}) {
       return false;
     }
 
-    const edgesA = nav.getCellEdges(roomA.layerIndex, roomA.cellX, roomA.cellZ);
-    const edgesB = nav.getCellEdges(roomB.layerIndex, roomB.cellX, roomB.cellZ);
+    const edgesA = nav.getCellEdges(0, roomA.cellX, roomA.cellZ);
+    const edgesB = nav.getCellEdges(0, roomB.cellX, roomB.cellZ);
     if (!edgesA || !edgesB) {
       return false;
     }
@@ -89,7 +89,7 @@ export function createEnemyManager(device, managerOptions = {}) {
     }
 
     const doorAnchor = typeof nav.getDoorBetween === 'function'
-      ? nav.getDoorBetween(roomA.layerIndex, roomA.cellX, roomA.cellZ, roomB.cellX, roomB.cellZ)
+      ? nav.getDoorBetween(0, roomA.cellX, roomA.cellZ, roomB.cellX, roomB.cellZ)
       : null;
 
     if (!doorAnchor?.id) {
