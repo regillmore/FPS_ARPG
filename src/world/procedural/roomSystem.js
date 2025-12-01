@@ -10,7 +10,7 @@ import {
   DEFAULT_WALL_THICKNESS,
   VERTEX_STRIDE
 } from './constants.js';
-import { positionToCell, positionToLayer } from './spatial.js';
+import { positionToCell } from './spatial.js';
 import { createCellState } from './roomSystem/cellState.js';
 import { createEdgeKey } from './profile.js';
 import { createSpawnManager } from './roomSystem/spawnManager.js';
@@ -209,11 +209,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
   }
 
-  function getLayerIndexForHeight(height) {
-    const value = Number.isFinite(height) ? height : 0;
-    return positionToLayer(value, levelHeight, floorThickness);
-  }
-
   function getMinimapSnapshot(playerPosition, options = {}) {
     if (!playerPosition) {
       return null;
@@ -226,7 +221,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     const resolvedRadius = Number.isFinite(options.radius) ? Math.floor(options.radius) : 3;
     const clampedRadius = Math.max(1, Math.min(resolvedRadius, generationRadius));
     const showUnvisitedRooms = Boolean(options.showUnvisitedRooms);
-    const layerIndex = getLayerIndexForHeight(py);
+    const layerIndex = 0;
     const cellX = positionToCell(px, roomSize, halfRoom);
     const cellZ = positionToCell(pz, roomSize, halfRoom);
 
@@ -287,7 +282,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     const effectiveRadius = generationRadius + horizontalPadding;
     const cellX = positionToCell(px, roomSize, halfRoom);
     const cellZ = positionToCell(pz, roomSize, halfRoom);
-    const layerIndex = positionToLayer(py, levelHeight, floorThickness);
 
     if (Math.abs(cellX - centerCellX) > effectiveRadius) {
       return false;
@@ -314,7 +308,7 @@ export function createProceduralRoomSystem(device, options = {}) {
 
     const cellX = positionToCell(px, roomSize, halfRoom);
     const cellZ = positionToCell(pz, roomSize, halfRoom);
-    const layerIndex = positionToLayer(py, levelHeight, floorThickness);
+    const layerIndex = 0;
     return `${layerIndex}:${getCellKey(cellX, cellZ)}`;
   }
 
@@ -357,7 +351,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     return {
       cellX: positionToCell(px, roomSize, halfRoom),
       cellZ: positionToCell(pz, roomSize, halfRoom),
-      layerIndex: positionToLayer(py, levelHeight, floorThickness)
+      layerIndex: 0
     };
   }
 
@@ -384,7 +378,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     const pz = playerPosition?.[2] ?? 0;
     const cellX = positionToCell(px, roomSize, halfRoom);
     const cellZ = positionToCell(pz, roomSize, halfRoom);
-    const layerIndex = positionToLayer(py, levelHeight, floorThickness);
+    const layerIndex = 0;
 
     const needsRebuild =
       vertexBuffer === null ||
@@ -417,7 +411,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     getStorageChests: () => storageChests,
     getGeometry: () => ({ vertexBuffer, vertexCount, bounds }),
     getSeed: () => worldSeed,
-    getLayerIndexForHeight,
     getLevelHeight: () => levelHeight,
     getMinimapSnapshot,
     getDecorativeLights: () => decorativeLights,

@@ -1,29 +1,5 @@
 import { createCellProfile } from '../profile.js';
-import { hashValue, randomFloatForEdge } from '../random.js';
-
-function isElevatorCell(x, z) {
-  return x === 0 && z === 0;
-}
-
-const directionOffsets = Object.freeze({
-  north: Object.freeze([0, -1]),
-  south: Object.freeze([0, 1]),
-  east: Object.freeze([1, 0]),
-  west: Object.freeze([-1, 0])
-});
-
-function isOriginHallwayDoorway(ax, az, bx, bz) {
-  const originInvolved = isElevatorCell(ax, az) || isElevatorCell(bx, bz);
-  if (!originInvolved || (ax === bx && az === bz)) {
-    return false;
-  }
-
-  if (ax === bx && Math.abs(az - bz) === 1) {
-    return true;
-  }
-
-  return false;
-}
+import { hashValue } from '../random.js';
 
 export function createCellState(worldSeed) {
   const layerSeeds = new Map();
