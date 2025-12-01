@@ -530,7 +530,7 @@ export function createFighter(device, options = {}) {
 
     const roomA = parseRoomKey(roomAKey);
     const roomB = parseRoomKey(roomBKey);
-    if (!roomA || !roomB || roomA.layerIndex !== roomB.layerIndex) {
+    if (!roomA || !roomB) {
       return false;
     }
 
@@ -797,7 +797,7 @@ export function createFighter(device, options = {}) {
   }
 
   function rebuildPath(nav, enemyCell, playerCell, playerPosition) {
-    if (!nav || !enemyCell || !playerCell || enemyCell.layerIndex !== playerCell.layerIndex) {
+    if (!nav || !enemyCell || !playerCell) {
       clearPath();
       return false;
     }
