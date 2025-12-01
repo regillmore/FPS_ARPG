@@ -48,17 +48,10 @@ export function createProceduralRoomSystem(device, options = {}) {
     1,
     Math.floor(options.generationRadius ?? DEFAULT_GENERATION_RADIUS)
   );
-  const floorOpeningMarginRatio = Math.min(
-    0.45,
-    Math.max(0.05, options.floorOpeningMarginRatio ?? DEFAULT_FLOOR_OPENING_MARGIN_RATIO)
-  );
-  const floorOpeningMargin = roomSize * floorOpeningMarginRatio;
+
   const halfRoom = roomSize * 0.5;
   const levelHeight = roomHeight + floorThickness;
-  const minActiveLayer = 0;
-  const maxActiveLayer = 0;
   const visitedCells = new Set();
-
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
   const clampedDoorHeight = Math.min(
@@ -121,14 +114,12 @@ export function createProceduralRoomSystem(device, options = {}) {
     roomHeight,
     levelHeight,
     floorThickness,
-    floorOpeningMargin,
     wallThickness,
     halfRoom,
     generationRadius,
     singleDoorWidth,
     doubleDoorWidth,
     clampedDoorHeight,
-    getActiveLayerRange: () => ({ min: minActiveLayer, max: maxActiveLayer }),
     getCellProfileForLayer,
     getLayerProfiles,
     getLayerSeed,

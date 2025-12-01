@@ -46,7 +46,7 @@ export function createCellState(worldSeed) {
     if (!perLayer) {
       return null;
     }
-    const edges = perLayer.get(layerIndex);
+    const edges = perLayer.get(0);
     if (!edges) {
       return null;
     }
