@@ -516,19 +516,16 @@ export function createRoomGeometryBuilder({
       }
     }
 
-    const lowestLayerBottom = -floorThickness;
-    const highestLayerTop = roomHeight;
-
     if (!Number.isFinite(bounds.minX)) {
       bounds.minX = cx * roomSize - halfRoom;
       bounds.maxX = cx * roomSize + halfRoom;
-      bounds.minY = lowestLayerBottom;
-      bounds.maxY = highestLayerTop;
+      bounds.minY = -floorThickness;
+      bounds.maxY = roomHeight;
       bounds.minZ = cz * roomSize - halfRoom;
       bounds.maxZ = cz * roomSize + halfRoom;
     } else {
-      bounds.minY = Math.min(bounds.minY, lowestLayerBottom);
-      bounds.maxY = Math.max(bounds.maxY, highestLayerTop);
+      bounds.minY = Math.min(bounds.minY, -floorThickness);
+      bounds.maxY = Math.max(bounds.maxY, roomHeight);
     }
 
     const vertexArray = new Float32Array(vertices);
