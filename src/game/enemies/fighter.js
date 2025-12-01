@@ -939,6 +939,10 @@ export function createFighter(device, options = {}) {
   }
 
   function startAggro(context) {
+    if (context?.pacifyEnemies) {
+      return;
+    }
+
     if (!isAggro) {
       isAggro = true;
       if (context && !context.navigation && lastUpdateContext?.navigation) {
@@ -994,6 +998,13 @@ export function createFighter(device, options = {}) {
     legsUpdatedThisFrame = false;
 
     if (!context || !context.playerPosition) {
+      animateLegs(deltaTime, 0);
+      return;
+    }
+
+    if (context.pacifyEnemies) {
+      isAggro = false;
+      clearPath();
       animateLegs(deltaTime, 0);
       return;
     }
