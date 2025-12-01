@@ -22,45 +22,25 @@ export function createEnemyManager(device, managerOptions = {}) {
     west: 'east'
   };
 
-  function getEnemyLayerIndex(enemy) {
-    if (!enemy) {
-      return null;
-    }
-
-    const spawnLayerIndex = enemy.spawnContext?.layerIndex;
-    if (Number.isInteger(spawnLayerIndex)) {
-      return spawnLayerIndex;
-    }
-
-    const roomKey = enemy.spawnContext?.roomKey;
-    const parsedRoom = typeof roomKey === 'string' ? parseRoomKey(roomKey) : null;
-    if (parsedRoom && Number.isInteger(parsedRoom.layerIndex)) {
-      return parsedRoom.layerIndex;
-    }
-
-    return null;
-  }
-
   function parseRoomKey(roomKey) {
     if (typeof roomKey !== 'string' || roomKey.length === 0) {
       return null;
     }
 
-    const [layerPart, cellPart] = roomKey.split(':');
+    const [cellPart] = roomKey.split(':');
     if (!cellPart) {
       return null;
     }
 
     const [cellXPart, cellZPart] = cellPart.split(',');
-    const layerIndex = Number(layerPart);
     const cellX = Number(cellXPart);
     const cellZ = Number(cellZPart);
 
-    if (!Number.isInteger(layerIndex) || !Number.isInteger(cellX) || !Number.isInteger(cellZ)) {
+    if (!Number.isInteger(cellX) || !Number.isInteger(cellZ)) {
       return null;
     }
 
-    return { layerIndex, cellX, cellZ };
+    return { cellX, cellZ };
   }
 
   function roomsShareOpenWall(roomAKey, roomBKey, nav, activeDoors = null) {
@@ -70,7 +50,7 @@ export function createEnemyManager(device, managerOptions = {}) {
 
     const roomA = parseRoomKey(roomAKey);
     const roomB = parseRoomKey(roomBKey);
-    if (!roomA || !roomB || roomA.layerIndex !== roomB.layerIndex) {
+    if (!roomA || !roomB ) {
       return false;
     }
 
@@ -90,8 +70,8 @@ export function createEnemyManager(device, managerOptions = {}) {
       return false;
     }
 
-    const edgesA = nav.getCellEdges(roomA.layerIndex, roomA.cellX, roomA.cellZ);
-    const edgesB = nav.getCellEdges(roomB.layerIndex, roomB.cellX, roomB.cellZ);
+    const edgesA = nav.getCellEdges(0, roomA.cellX, roomA.cellZ);
+    const edgesB = nav.getCellEdges(0, roomB.cellX, roomB.cellZ);
     if (!edgesA || !edgesB) {
       return false;
     }
@@ -108,7 +88,7 @@ export function createEnemyManager(device, managerOptions = {}) {
     }
 
     const doorAnchor = typeof nav.getDoorBetween === 'function'
-      ? nav.getDoorBetween(roomA.layerIndex, roomA.cellX, roomA.cellZ, roomB.cellX, roomB.cellZ)
+      ? nav.getDoorBetween(0, roomA.cellX, roomA.cellZ, roomB.cellX, roomB.cellZ)
       : null;
 
     if (!doorAnchor?.id) {
@@ -325,9 +305,6 @@ export function createEnemyManager(device, managerOptions = {}) {
   }
 
   function update(deltaTime, context = null) {
-    const playerLayerIndex = Number.isInteger(context?.playerLayerIndex)
-      ? context.playerLayerIndex
-      : null;
 
     for (let i = enemies.length - 1; i >= 0; i -= 1) {
       const enemy = enemies[i];
@@ -336,19 +313,11 @@ export function createEnemyManager(device, managerOptions = {}) {
         continue;
       }
 
-      const enemyLayerIndex = getEnemyLayerIndex(enemy);
-      const shouldSkipUpdate =
-        playerLayerIndex !== null &&
-        enemyLayerIndex !== null &&
-        enemyLayerIndex !== playerLayerIndex;
-
       const wasAggro = enemy.isAggressive;
-      if (!shouldSkipUpdate) {
-        enemy.update?.(deltaTime, context);
+      enemy.update?.(deltaTime, context);
 
-        if (!wasAggro && enemy.type === 'fighter' && enemy.isAggressive) {
-          alertNearbyIdleFighters(enemy, context);
-        }
+      if (!wasAggro && enemy.type === 'fighter' && enemy.isAggressive) {
+        alertNearbyIdleFighters(enemy, context);
       }
 
       if (!shouldRetainEnemy) {
