@@ -10,7 +10,7 @@ import {
   DEFAULT_WALL_THICKNESS,
   VERTEX_STRIDE
 } from './constants.js';
-import { positionToCell, positionToLayer } from './spatial.js';
+import { positionToCell } from './spatial.js';
 import { createCellState } from './roomSystem/cellState.js';
 import { createEdgeKey } from './profile.js';
 import { createSpawnManager } from './roomSystem/spawnManager.js';
@@ -55,7 +55,9 @@ export function createProceduralRoomSystem(device, options = {}) {
   const floorOpeningMargin = roomSize * floorOpeningMarginRatio;
   const halfRoom = roomSize * 0.5;
   const levelHeight = roomHeight + floorThickness;
-  const visitedCells = new Map();
+  const minActiveLayer = 0;
+  const maxActiveLayer = 0;
+  const visitedCells = new Set();
 
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
@@ -151,21 +153,11 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   const { buildGeometryForCenter } = geometryBuilder;
 
-  function getVisitedCellsForLayer(layerIndex) {
-    let layerVisited = visitedCells.get(layerIndex);
-    if (!layerVisited) {
-      layerVisited = new Set();
-      visitedCells.set(layerIndex, layerVisited);
-    }
-    return layerVisited;
-  }
-
-  function markCellVisited(layerIndex, x, z) {
-    if (!getExistingCellEdgesForLayer(layerIndex, x, z)) {
+  function markCellVisited(x, z) {
+    if (!getExistingCellEdgesForLayer(0, x, z)) {
       return;
     }
 
-    const layerVisited = getVisitedCellsForLayer(layerIndex);
     const traversalStack = [[x, z]];
     const processed = new Set();
 
@@ -177,9 +169,9 @@ export function createProceduralRoomSystem(device, options = {}) {
       }
 
       processed.add(cellKey);
-      layerVisited.add(cellKey);
+      visitedCells.add(cellKey);
 
-      const cellEdges = getExistingCellEdgesForLayer(layerIndex, currentX, currentZ);
+      const cellEdges = getExistingCellEdgesForLayer(0, currentX, currentZ);
       if (!cellEdges) {
         continue;
       }
@@ -192,7 +184,7 @@ export function createProceduralRoomSystem(device, options = {}) {
         const offset = directionOffsets[direction];
         const neighborX = currentX + offset[0];
         const neighborZ = currentZ + offset[1];
-        const neighborEdges = getExistingCellEdgesForLayer(layerIndex, neighborX, neighborZ);
+        const neighborEdges = getExistingCellEdgesForLayer(0, neighborX, neighborZ);
         if (!neighborEdges) {
           continue;
         }
@@ -207,11 +199,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
   }
 
-  function getLayerIndexForHeight(height) {
-    const value = Number.isFinite(height) ? height : 0;
-    return 0;
-  }
-
   function getMinimapSnapshot(playerPosition, options = {}) {
     if (!playerPosition) {
       return null;
@@ -224,19 +211,17 @@ export function createProceduralRoomSystem(device, options = {}) {
     const resolvedRadius = Number.isFinite(options.radius) ? Math.floor(options.radius) : 3;
     const clampedRadius = Math.max(1, Math.min(resolvedRadius, generationRadius));
     const showUnvisitedRooms = Boolean(options.showUnvisitedRooms);
-    const layerIndex = 0;
     const cellX = positionToCell(px, roomSize, halfRoom);
     const cellZ = positionToCell(pz, roomSize, halfRoom);
 
     const cells = [];
-    const visited = visitedCells.get(layerIndex);
     for (let gx = cellX - clampedRadius; gx <= cellX + clampedRadius; gx += 1) {
       for (let gz = cellZ - clampedRadius; gz <= cellZ + clampedRadius; gz += 1) {
-        const edges = getExistingCellEdgesForLayer(layerIndex, gx, gz);
+        const edges = getExistingCellEdgesForLayer(0, gx, gz);
         if (!edges) {
           continue;
         }
-        if (!showUnvisitedRooms && visited && !visited.has(getCellKey(gx, gz))) {
+        if (!showUnvisitedRooms && !visitedCells.has(getCellKey(gx, gz))) {
           continue;
         }
         const key = getCellKey(gx, gz);
@@ -250,7 +235,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
 
     return {
-      layerIndex,
+      layerIndex: 0,
       cell: { x: cellX, z: cellZ },
       radius: clampedRadius,
       cellSize: roomSize,
@@ -307,11 +292,10 @@ export function createProceduralRoomSystem(device, options = {}) {
 
     const cellX = positionToCell(px, roomSize, halfRoom);
     const cellZ = positionToCell(pz, roomSize, halfRoom);
-    const layerIndex = 0;
-    return `${layerIndex}:${getCellKey(cellX, cellZ)}`;
+    return `0:${getCellKey(cellX, cellZ)}`;
   }
 
-  function getDoorForEdge(layerIndex, ax, az, bx, bz) {
+  function getDoorForEdge(layerIndex = 0, ax, az, bx, bz) {
     if (!Array.isArray(doors)) {
       return null;
     }
@@ -320,7 +304,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     return doors.find((door) => door.id === id) ?? null;
   }
 
-  function getCellEdgeSnapshot(layerIndex, cellX, cellZ) {
+  function getCellEdgeSnapshot(layerIndex = 0, cellX, cellZ) {
     const edges = getExistingCellEdgesForLayer(layerIndex, cellX, cellZ);
     if (!edges) {
       return null;
@@ -350,7 +334,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     return {
       cellX: positionToCell(px, roomSize, halfRoom),
       cellZ: positionToCell(pz, roomSize, halfRoom),
-      layerIndex: positionToLayer(py, levelHeight, floorThickness)
+      layerIndex: 0
     };
   }
 
@@ -373,11 +357,9 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   function update(playerPosition) {
     const px = playerPosition?.[0] ?? 0;
-    const py = playerPosition?.[1] ?? 0;
     const pz = playerPosition?.[2] ?? 0;
     const cellX = positionToCell(px, roomSize, halfRoom);
     const cellZ = positionToCell(pz, roomSize, halfRoom);
-    const layerIndex = positionToLayer(py, levelHeight, floorThickness);
 
     const needsRebuild =
       vertexBuffer === null ||
@@ -385,14 +367,14 @@ export function createProceduralRoomSystem(device, options = {}) {
       cellZ !== centerCellZ;
 
     if (!needsRebuild) {
-      markCellVisited(layerIndex, cellX, cellZ);
+      markCellVisited(cellX, cellZ);
       return false;
     }
 
     centerCellX = cellX;
     centerCellZ = cellZ;
     buildGeometryForCenter(cellX, cellZ);
-    markCellVisited(layerIndex, cellX, cellZ);
+    markCellVisited(cellX, cellZ);
     return true;
   }
 
@@ -408,7 +390,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     getStorageChests: () => storageChests,
     getGeometry: () => ({ vertexBuffer, vertexCount, bounds }),
     getSeed: () => worldSeed,
-    getLayerIndexForHeight,
     getLevelHeight: () => levelHeight,
     getMinimapSnapshot,
     getDecorativeLights: () => decorativeLights,
