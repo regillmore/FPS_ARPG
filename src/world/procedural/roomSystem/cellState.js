@@ -33,7 +33,7 @@ export function createCellState(worldSeed) {
     const key = getCellKey(x, z);
     let profile = profiles.get(key);
     if (!profile) {
-      profile = createCellProfile(x, z, getLayerSeed(0));
+      profile = createCellProfile(x, z, getLayerSeed());
       profiles.set(key, profile);
     }
     return profile;
