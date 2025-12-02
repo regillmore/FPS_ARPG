@@ -825,7 +825,7 @@ export function createFighter(device, options = {}) {
 
       const waypointPosition = door?.center
         ? [door.center[0], translation[1], door.center[2]]
-        : nav.getRoomCenter?.(to.cellX, to.cellZ, 0) ?? [
+        : nav.getRoomCenter?.(to.cellX, to.cellZ) ?? [
             translation[0],
             translation[1],
             translation[2]

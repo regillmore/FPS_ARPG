@@ -2,7 +2,6 @@ import {
   DEFAULT_DOOR_HEIGHT,
   DEFAULT_DOOR_WIDTH,
   DEFAULT_DOUBLE_DOOR_WIDTH,
-  DEFAULT_FLOOR_OPENING_MARGIN_RATIO,
   DEFAULT_FLOOR_THICKNESS,
   DEFAULT_GENERATION_RADIUS,
   DEFAULT_ROOM_HEIGHT,
@@ -226,7 +225,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
 
     return {
-      layerIndex: 0,
       cell: { x: cellX, z: cellZ },
       radius: clampedRadius,
       cellSize: roomSize,
@@ -338,9 +336,9 @@ export function createProceduralRoomSystem(device, options = {}) {
       positionToCell: positionToCellCoords,
       getCellEdges: getCellEdgeSnapshot,
       getDoorBetween: getDoorForEdge,
-      getRoomCenter: (cellX, cellZ, layerIndex = 0) => [
+      getRoomCenter: (cellX, cellZ) => [
         cellX * roomSize,
-        layerIndex * levelHeight,
+        0,
         cellZ * roomSize
       ]
     };
