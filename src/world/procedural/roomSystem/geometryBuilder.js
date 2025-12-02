@@ -209,7 +209,7 @@ export function createRoomGeometryBuilder({
       for (let gz = cz - generationRadius; gz <= cz + generationRadius; gz += 1) {
         const key = `${gx},${gz}`;
         const profilePerLayer = new Map();
-        profilePerLayer.set(0, getCellProfileForLayer(0, gx, gz));
+        profilePerLayer.set(0, getCellProfileForLayer(gx, gz));
 
         const centerX = gx * roomSize;
         const centerZ = gz * roomSize;
@@ -243,7 +243,7 @@ export function createRoomGeometryBuilder({
           const profiles = getLayerProfiles(0);
           const seed = getLayerSeed(0);
           edgeTypes.set(0, determineEdgeType(gx, gz, nx, nz, profiles, seed));
-          neighborProfiles.set(0, getCellProfileForLayer(0, nx, nz));
+          neighborProfiles.set(0, getCellProfileForLayer(nx, nz));
 
           const forcedState = getForcedOriginEdgeState(gx, gz, nx, nz);
           if (forcedState) {

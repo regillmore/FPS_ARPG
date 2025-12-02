@@ -5,36 +5,35 @@ export function createCellState(worldSeed) {
   const layerSeeds = new Map();
   const layerCellProfiles = new Map();
   const cellLayerEdgeStates = new Map();
-  const cellVerticalOpenings = new Map();
 
   function getCellKey(x, z) {
     return `${x},${z}`;
   }
 
   function getLayerSeed(layerIndex) {
-    let seed = layerSeeds.get(layerIndex);
+    let seed = layerSeeds.get(0);
     if (seed === undefined) {
-      seed = hashValue(layerIndex, worldSeed) >>> 0;
-      layerSeeds.set(layerIndex, seed);
+      seed = hashValue(0, worldSeed) >>> 0;
+      layerSeeds.set(0, seed);
     }
     return seed;
   }
 
   function getLayerProfiles(layerIndex) {
-    let profiles = layerCellProfiles.get(layerIndex);
+    let profiles = layerCellProfiles.get(0);
     if (!profiles) {
       profiles = new Map();
-      layerCellProfiles.set(layerIndex, profiles);
+      layerCellProfiles.set(0, profiles);
     }
     return profiles;
   }
 
-  function getCellProfileForLayer(layerIndex, x, z) {
-    const profiles = getLayerProfiles(layerIndex);
+  function getCellProfileForLayer(x, z) {
+    const profiles = getLayerProfiles(0);
     const key = getCellKey(x, z);
     let profile = profiles.get(key);
     if (!profile) {
-      profile = createCellProfile(x, z, getLayerSeed(layerIndex));
+      profile = createCellProfile(x, z, getLayerSeed(0));
       profiles.set(key, profile);
     }
     return profile;
