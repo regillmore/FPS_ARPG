@@ -10,7 +10,7 @@ export function createCellState(worldSeed) {
     return `${x},${z}`;
   }
 
-  function getLayerSeed(layerIndex) {
+  function getLayerSeed() {
     let seed = layerSeeds.get(0);
     if (seed === undefined) {
       seed = hashValue(0, worldSeed) >>> 0;
@@ -19,7 +19,7 @@ export function createCellState(worldSeed) {
     return seed;
   }
 
-  function getLayerProfiles(layerIndex) {
+  function getLayerProfiles() {
     let profiles = layerCellProfiles.get(0);
     if (!profiles) {
       profiles = new Map();

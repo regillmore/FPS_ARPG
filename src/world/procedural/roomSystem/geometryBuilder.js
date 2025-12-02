@@ -240,8 +240,8 @@ export function createRoomGeometryBuilder({
 
           const edgeTypes = new Map();
           const neighborProfiles = new Map();
-          const profiles = getLayerProfiles(0);
-          const seed = getLayerSeed(0);
+          const profiles = getLayerProfiles();
+          const seed = getLayerSeed();
           edgeTypes.set(0, determineEdgeType(gx, gz, nx, nz, profiles, seed));
           neighborProfiles.set(0, getCellProfileForLayer(nx, nz));
 
