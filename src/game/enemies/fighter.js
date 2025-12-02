@@ -242,12 +242,11 @@ function createFighterGeometry(device) {
 
   const legWidth = HALF_WIDTH * 0.35;
   const legDepth = HALF_DEPTH * 0.4;
-  const thighLength = BODY_HEIGHT * 0.11;
-  const shinLength = BODY_HEIGHT * 0.08;
+  const thighLength = BODY_HEIGHT * 0.15;
+  const shinLength = BODY_HEIGHT * 0.12;
   const footHeight = BODY_HEIGHT * 0.06;
-  const legOverlap = BODY_HEIGHT * 0.1;
   const hipOffsetX = torsoWidth * 0.35;
-  const hipOriginY = thighLength + shinLength + footHeight + legOverlap;
+  const hipOriginY = thighLength + shinLength + footHeight;
 
   addBoxTemplate(
     legTemplates.left.thigh ?? (legTemplates.left.thigh = []),
@@ -996,6 +995,13 @@ export function createFighter(device, options = {}) {
     legsUpdatedThisFrame = false;
 
     if (!context || !context.playerPosition) {
+      animateLegs(deltaTime, 0);
+      return;
+    }
+
+    if (context.pacifyEnemies) {
+      isAggro = false;
+      clearPath();
       animateLegs(deltaTime, 0);
       return;
     }
