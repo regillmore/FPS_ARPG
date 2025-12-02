@@ -29,7 +29,7 @@ export function createCellState(worldSeed) {
   }
 
   function getCellProfileForLayer(x, z) {
-    const profiles = getLayerProfiles(0);
+    const profiles = getLayerProfiles();
     const key = getCellKey(x, z);
     let profile = profiles.get(key);
     if (!profile) {
