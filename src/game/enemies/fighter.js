@@ -937,6 +937,10 @@ export function createFighter(device, options = {}) {
   }
 
   function startAggro(context) {
+    if (context?.pacifyEnemies) {
+      return;
+    }
+
     if (!isAggro) {
       isAggro = true;
       if (context && !context.navigation && lastUpdateContext?.navigation) {
