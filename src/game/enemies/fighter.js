@@ -550,8 +550,8 @@ export function createFighter(device, options = {}) {
       return false;
     }
 
-    const edgesA = nav.getCellEdges(0, roomA.cellX, roomA.cellZ);
-    const edgesB = nav.getCellEdges(0, roomB.cellX, roomB.cellZ);
+    const edgesA = nav.getCellEdges(roomA.cellX, roomA.cellZ);
+    const edgesB = nav.getCellEdges(roomB.cellX, roomB.cellZ);
     if (!edgesA || !edgesB) {
       return false;
     }
@@ -739,7 +739,7 @@ export function createFighter(device, options = {}) {
       }
 
       const edges = typeof nav.getCellEdges === 'function'
-        ? nav.getCellEdges(0, cell.cellX, cell.cellZ)
+        ? nav.getCellEdges(cell.cellX, cell.cellZ)
         : null;
       if (!edges) {
         continue;
@@ -816,7 +816,7 @@ export function createFighter(device, options = {}) {
       const deltaZ = to.cellZ - from.cellZ;
       const direction = deltaX === 1 ? 'east' : deltaX === -1 ? 'west' : deltaZ === 1 ? 'south' : 'north';
       const edges = typeof nav.getCellEdges === 'function'
-        ? nav.getCellEdges(0, from.cellX, from.cellZ)
+        ? nav.getCellEdges(from.cellX, from.cellZ)
         : null;
       const edgeState = edges ? edges[direction] : null;
       const door = edgeState === 'doorway'

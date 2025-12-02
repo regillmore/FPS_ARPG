@@ -293,7 +293,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     return doors.find((door) => door.id === id) ?? null;
   }
 
-  function getCellEdgeSnapshot(layerIndex = 0, cellX, cellZ) {
+  function getCellEdgeSnapshot(cellX, cellZ) {
     const edges = getExistingCellEdgesForLayer(cellX, cellZ);
     if (!edges) {
       return null;

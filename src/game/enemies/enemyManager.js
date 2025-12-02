@@ -71,8 +71,8 @@ export function createEnemyManager(device, managerOptions = {}) {
       return false;
     }
 
-    const edgesA = nav.getCellEdges(0, roomA.cellX, roomA.cellZ);
-    const edgesB = nav.getCellEdges(0, roomB.cellX, roomB.cellZ);
+    const edgesA = nav.getCellEdges(roomA.cellX, roomA.cellZ);
+    const edgesB = nav.getCellEdges(roomB.cellX, roomB.cellZ);
     if (!edgesA || !edgesB) {
       return false;
     }
