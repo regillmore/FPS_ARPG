@@ -92,42 +92,54 @@ function addBoxTemplate(target, min, max, color, glow = 0) {
   const [maxX, maxY, maxZ] = max;
 
   const faces = [
-    { normal: [0, 0, 1], corners: [
-      [minX, minY, maxZ],
-      [maxX, minY, maxZ],
-      [maxX, maxY, maxZ],
-      [minX, maxY, maxZ]
-    ] },
-    { normal: [0, 0, -1], corners: [
-      [maxX, minY, minZ],
-      [minX, minY, minZ],
-      [minX, maxY, minZ],
-      [maxX, maxY, minZ]
-    ] },
-    { normal: [-1, 0, 0], corners: [
-      [minX, minY, minZ],
-      [minX, minY, maxZ],
-      [minX, maxY, maxZ],
-      [minX, maxY, minZ]
-    ] },
-    { normal: [1, 0, 0], corners: [
-      [maxX, minY, maxZ],
-      [maxX, minY, minZ],
-      [maxX, maxY, minZ],
-      [maxX, maxY, maxZ]
-    ] },
-    { normal: [0, 1, 0], corners: [
-      [minX, maxY, maxZ],
-      [maxX, maxY, maxZ],
-      [maxX, maxY, minZ],
-      [minX, maxY, minZ]
-    ] },
-    { normal: [0, -1, 0], corners: [
-      [minX, minY, minZ],
-      [maxX, minY, minZ],
-      [maxX, minY, maxZ],
-      [minX, minY, maxZ]
-    ] }
+    {
+      normal: [0, 0, 1], corners: [
+        [minX, minY, maxZ],
+        [maxX, minY, maxZ],
+        [maxX, maxY, maxZ],
+        [minX, maxY, maxZ]
+      ]
+    },
+    {
+      normal: [0, 0, -1], corners: [
+        [maxX, minY, minZ],
+        [minX, minY, minZ],
+        [minX, maxY, minZ],
+        [maxX, maxY, minZ]
+      ]
+    },
+    {
+      normal: [-1, 0, 0], corners: [
+        [minX, minY, minZ],
+        [minX, minY, maxZ],
+        [minX, maxY, maxZ],
+        [minX, maxY, minZ]
+      ]
+    },
+    {
+      normal: [1, 0, 0], corners: [
+        [maxX, minY, maxZ],
+        [maxX, minY, minZ],
+        [maxX, maxY, minZ],
+        [maxX, maxY, maxZ]
+      ]
+    },
+    {
+      normal: [0, 1, 0], corners: [
+        [minX, maxY, maxZ],
+        [maxX, maxY, maxZ],
+        [maxX, maxY, minZ],
+        [minX, maxY, minZ]
+      ]
+    },
+    {
+      normal: [0, -1, 0], corners: [
+        [minX, minY, minZ],
+        [maxX, minY, minZ],
+        [maxX, minY, maxZ],
+        [minX, minY, maxZ]
+      ]
+    }
   ];
 
   for (const face of faces) {
@@ -450,6 +462,60 @@ function computeRight(out, forward) {
   out[0] /= length;
   out[2] /= length;
   return out;
+}
+
+function rayIntersectsBox(origin, direction, maxDistance, box) {
+  const dirX = direction[0];
+  const dirY = direction[1];
+  const dirZ = direction[2];
+
+  const minX = box.minX;
+  const minY = box.minY;
+  const minZ = box.minZ;
+  const maxX = box.maxX;
+  const maxY = box.maxY;
+  const maxZ = box.maxZ;
+
+  let tMin = 0;
+  let tMax = maxDistance;
+
+  if (Math.abs(dirX) < 1e-6) {
+    if (origin[0] < minX || origin[0] > maxX) return false;
+  } else {
+    const invDirX = 1 / dirX;
+    let t1 = (minX - origin[0]) * invDirX;
+    let t2 = (maxX - origin[0]) * invDirX;
+    if (t1 > t2) { const temp = t1; t1 = t2; t2 = temp; }
+    tMin = Math.max(tMin, t1);
+    tMax = Math.min(tMax, t2);
+    if (tMin > tMax) return false;
+  }
+
+  if (Math.abs(dirY) < 1e-6) {
+    if (origin[1] < minY || origin[1] > maxY) return false;
+  } else {
+    const invDirY = 1 / dirY;
+    let t1 = (minY - origin[1]) * invDirY;
+    let t2 = (maxY - origin[1]) * invDirY;
+    if (t1 > t2) { const temp = t1; t1 = t2; t2 = temp; }
+    tMin = Math.max(tMin, t1);
+    tMax = Math.min(tMax, t2);
+    if (tMin > tMax) return false;
+  }
+
+  if (Math.abs(dirZ) < 1e-6) {
+    if (origin[2] < minZ || origin[2] > maxZ) return false;
+  } else {
+    const invDirZ = 1 / dirZ;
+    let t1 = (minZ - origin[2]) * invDirZ;
+    let t2 = (maxZ - origin[2]) * invDirZ;
+    if (t1 > t2) { const temp = t1; t1 = t2; t2 = temp; }
+    tMin = Math.max(tMin, t1);
+    tMax = Math.min(tMax, t2);
+    if (tMin > tMax) return false;
+  }
+
+  return true;
 }
 
 export function createFighter(device, options = {}) {
@@ -825,10 +891,10 @@ export function createFighter(device, options = {}) {
       const waypointPosition = door?.center
         ? [door.center[0], translation[1], door.center[2]]
         : nav.getRoomCenter?.(to.cellX, to.cellZ) ?? [
-            translation[0],
-            translation[1],
-            translation[2]
-          ];
+          translation[0],
+          translation[1],
+          translation[2]
+        ];
 
       waypoints.push({ position: waypointPosition, doorId: door?.id ?? null });
     }
@@ -991,6 +1057,34 @@ export function createFighter(device, options = {}) {
     geometry.updateLegPose?.(swingAngle, -swingAngle, legMotion);
   }
 
+  function checkLineOfSight(target, context) {
+    const colliders = gatherColliders(context);
+    if (colliders.length === 0) {
+      return true;
+    }
+
+    const origin = [translation[0], translation[1] + FIGHTER_COLLISION_HALF_HEIGHT, translation[2]];
+    const targetCenter = [target[0], target[1] + FIGHTER_COLLISION_HALF_HEIGHT, target[2]];
+
+    const vecX = targetCenter[0] - origin[0];
+    const vecY = targetCenter[1] - origin[1];
+    const vecZ = targetCenter[2] - origin[2];
+    const dist = Math.hypot(vecX, vecY, vecZ);
+
+    if (dist < 1e-4) {
+      return true;
+    }
+
+    const dir = [vecX / dist, vecY / dist, vecZ / dist];
+
+    for (const collider of colliders) {
+      if (rayIntersectsBox(origin, dir, dist, collider)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   function seekPlayer(deltaTime, context) {
     legsUpdatedThisFrame = false;
 
@@ -1021,6 +1115,15 @@ export function createFighter(device, options = {}) {
 
     if (!isAggro) {
       animateLegs(deltaTime, 0);
+      return;
+    }
+
+    if (checkLineOfSight(context.playerPosition, context)) {
+      clearPath();
+      moveTowards(context.playerPosition, deltaTime, context);
+      if (!legsUpdatedThisFrame) {
+        animateLegs(deltaTime, 0);
+      }
       return;
     }
 
