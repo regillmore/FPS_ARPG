@@ -793,6 +793,13 @@ export async function initializeGame({
             typeof roomSystem.getRoomKeyForPosition === 'function'
               ? roomSystem.getRoomKeyForPosition(controller.position)
               : '';
+          const newlyVisitedRooms =
+            typeof roomSystem.consumeNewlyVisitedRoomKeys === 'function'
+              ? roomSystem.consumeNewlyVisitedRoomKeys()
+              : [];
+          if (newlyVisitedRooms.length > 0) {
+            enemyManager.startAggroForRooms?.(newlyVisitedRooms, enemyUpdateContext);
+          }
           enemyManager.update(deltaTime, enemyUpdateContext);
         }
         if (primaryFireCooldown > 0) {

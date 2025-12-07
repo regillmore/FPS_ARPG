@@ -285,9 +285,6 @@ export function createEnemyManager(device, managerOptions = {}) {
             console.error('Error while handling fighter damage callback:', error);
           }
         }
-        if (details?.wasAggressive === false) {
-          alertNearbyIdleFighters(details.enemy, details.context);
-        }
         if (onEnemyDamaged) {
           try {
             onEnemyDamaged(details);
@@ -344,6 +341,40 @@ export function createEnemyManager(device, managerOptions = {}) {
     return enemies;
   }
 
+  function startAggroForRooms(roomKeys, context = null) {
+    if (!roomKeys || roomKeys.length === 0) {
+      return 0;
+    }
+
+    const targets = new Set();
+
+    for (const key of roomKeys) {
+      if (typeof key === 'string' && key.length > 0) {
+        targets.add(key);
+      }
+    }
+
+    if (targets.size === 0) {
+      return 0;
+    }
+
+    let activated = 0;
+
+    for (const enemy of enemies) {
+      const enemyRoomKey = enemy?.spawnContext?.roomKey;
+      if (!enemy || !enemyRoomKey || !targets.has(enemyRoomKey)) {
+        continue;
+      }
+
+      enemy.startAggro?.(context);
+      if (enemy.isAggressive) {
+        activated += 1;
+      }
+    }
+
+    return activated;
+  }
+
   function getHitBoxes() {
     scratchHitBoxes.length = 0;
 
@@ -398,6 +429,7 @@ export function createEnemyManager(device, managerOptions = {}) {
     spawnBarrel,
     spawnFighter,
     update,
+    startAggroForRooms,
     getEnemies,
     getHitBoxes,
     removeEnemy,

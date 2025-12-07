@@ -1100,19 +1100,6 @@ export function createFighter(device, options = {}) {
       return;
     }
 
-    if (!isAggro && context.playerRoomKey && fighter.spawnContext?.roomKey) {
-      if (
-        isPlayerInEngagementRoom(
-          context.playerRoomKey,
-          fighter.spawnContext.roomKey,
-          context.navigation,
-          context.activeDoors
-        )
-      ) {
-        startAggro(context);
-      }
-    }
-
     if (!isAggro) {
       animateLegs(deltaTime, 0);
       return;
@@ -1175,7 +1162,6 @@ export function createFighter(device, options = {}) {
 
     const wasAggro = isAggro;
     const damageContext = mergeDamageContext(context);
-    startAggro(damageContext);
     currentHealth = Math.max(currentHealth - value, 0);
 
     if (onDamaged) {
