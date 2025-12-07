@@ -98,6 +98,29 @@ function buildVisibleCellSet(snapshot) {
   return visibleCells;
 }
 
+function drawOriginWaypoint(ctx, transform, dpr) {
+  if (!ctx || !transform) {
+    return;
+  }
+
+  const originCenter = transform.toCanvas(0, 0);
+  const radius = Math.max(9 * dpr, 6.4);
+
+  ctx.fillStyle = ORIGIN_WAYPOINT_FILL;
+  ctx.strokeStyle = ORIGIN_WAYPOINT_STROKE;
+  ctx.lineWidth = Math.max(1.8 * dpr, 1.2);
+  ctx.beginPath();
+  ctx.arc(originCenter.x, originCenter.y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = ORIGIN_WAYPOINT_TEXT;
+  ctx.font = `bold ${Math.max(10 * dpr, 7)}px Inter, system-ui, -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('H', originCenter.x, originCenter.y);
+}
+
 function isEnemyVisibleOnMinimap(enemy, snapshot, visibleCells) {
   if (!snapshot || !visibleCells || visibleCells.size === 0) {
     return true;
@@ -334,12 +357,12 @@ function drawMinimap(ctx, canvasSize, data) {
   const enemies = Array.isArray(data?.enemies) ? data.enemies : [];
   const transform = snapshot
     ? createTransform(snapshot, {
-        centerX,
-        centerY,
-        radius: clipRadius,
-        margin: clipMargin,
-        dpr
-      })
+      centerX,
+      centerY,
+      radius: clipRadius,
+      margin: clipMargin,
+      dpr
+    })
     : null;
 
   const visibleCells = buildVisibleCellSet(snapshot);
@@ -347,6 +370,7 @@ function drawMinimap(ctx, canvasSize, data) {
 
   drawCells(ctx, snapshot, transform, dpr);
   drawEdges(ctx, snapshot, transform, dpr);
+  drawOriginWaypoint(ctx, transform, dpr);
   drawEnemies(ctx, snapshot, transform, visibleEnemies, dpr);
   drawPlayer(ctx, playerYaw, dpr, centerX, centerY);
 
