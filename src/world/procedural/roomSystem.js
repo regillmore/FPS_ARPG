@@ -367,6 +367,57 @@ export function createProceduralRoomSystem(device, options = {}) {
     return true;
   }
 
+  function parseAnchorCellPair(anchorId) {
+    if (typeof anchorId !== 'string') {
+      return null;
+    }
+
+    const [edgeKey] = anchorId.split('@');
+    const [a, b] = edgeKey ? edgeKey.split(':') : [];
+    const [ax, az] = a ? a.split(',').map((value) => Number.parseInt(value, 10)) : [];
+    const [bx, bz] = b ? b.split(',').map((value) => Number.parseInt(value, 10)) : [];
+
+    if (!Number.isInteger(ax) || !Number.isInteger(az) || !Number.isInteger(bx) || !Number.isInteger(bz)) {
+      return null;
+    }
+
+    return {
+      a: { x: ax, z: az },
+      b: { x: bx, z: bz }
+    };
+  }
+
+  function revealCellsForDoorAnchor(anchor, openerPosition) {
+    const anchorId = anchor?.id ?? null;
+    const cellPair = parseAnchorCellPair(anchorId);
+    if (!cellPair) {
+      return;
+    }
+
+    const openerCell = positionToCellCoords(openerPosition);
+    const openerKey = openerCell ? getCellKey(openerCell.cellX, openerCell.cellZ) : null;
+
+    const target = (() => {
+      if (openerKey === getCellKey(cellPair.a.x, cellPair.a.z)) {
+        return cellPair.b;
+      }
+      if (openerKey === getCellKey(cellPair.b.x, cellPair.b.z)) {
+        return cellPair.a;
+      }
+      if (!visitedCells.has(getCellKey(cellPair.a.x, cellPair.a.z))) {
+        return cellPair.a;
+      }
+      if (!visitedCells.has(getCellKey(cellPair.b.x, cellPair.b.z))) {
+        return cellPair.b;
+      }
+      return null;
+    })();
+
+    if (target) {
+      markCellVisited(target.x, target.z);
+    }
+  }
+
   buildGeometryForCenter(centerCellX, centerCellZ);
 
   return {
@@ -389,6 +440,7 @@ export function createProceduralRoomSystem(device, options = {}) {
     }),
     getRoomKeyForPosition,
     getNavigationHelper,
+    revealCellsForDoorAnchor,
     isPositionWithinGenerationRadius,
     consumeFighterSpawnPoints,
     scheduleFighterSpawnPoint,

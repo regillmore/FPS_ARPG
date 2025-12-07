@@ -966,7 +966,10 @@ export async function initializeGame({
           );
 
           if (usePressedThisFrame) {
-            doorManager.requestOpen(highlightedDoor.id, controller.position);
+            const doorOpening = doorManager.requestOpen(highlightedDoor.id, controller.position);
+            if (doorOpening) {
+              roomSystem?.revealCellsForDoorAnchor?.(highlightedDoor.anchor, controller.position);
+            }
             overlayController?.showTemporaryUsePrompt?.(
               'Opening door',
               promptColor,
