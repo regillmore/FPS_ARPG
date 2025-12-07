@@ -793,6 +793,10 @@ export async function initializeGame({
             typeof roomSystem.getRoomKeyForPosition === 'function'
               ? roomSystem.getRoomKeyForPosition(controller.position)
               : '';
+          const newlyVisitedRooms =
+            typeof roomSystem.consumeNewlyVisitedRoomKeys === 'function'
+              ? roomSystem.consumeNewlyVisitedRoomKeys()
+              : [];
           if (newlyVisitedRooms.length > 0) {
             enemyManager.startAggroForRooms?.(newlyVisitedRooms, enemyUpdateContext);
           }
@@ -1118,11 +1122,6 @@ export async function initializeGame({
               showUnvisitedRooms: showUnvisitedMinimapRooms
             })
           : null;
-
-      const newlyVisitedRooms =
-        typeof roomSystem.consumeNewlyVisitedRoomKeys === 'function'
-          ? roomSystem.consumeNewlyVisitedRoomKeys()
-          : [];
 
       if (minimapSnapshot) {
         const minimapEnemies = [];
