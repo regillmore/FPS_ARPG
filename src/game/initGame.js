@@ -77,7 +77,7 @@ export async function initializeGame({
     let roomVertexCount = roomSystem.getVertexCount();
     const bounds = roomSystem.getBounds();
     const bulletHoleManager = createBulletHoleManager(device);
-    let requeueProceduralEnemy = () => {};
+    let requeueProceduralEnemy = () => { };
 
     const enemyManager = createEnemyManager(device, {
       onEnemyDamaged: (details) => {
@@ -793,13 +793,6 @@ export async function initializeGame({
             typeof roomSystem.getRoomKeyForPosition === 'function'
               ? roomSystem.getRoomKeyForPosition(controller.position)
               : '';
-          const newlyVisitedRooms =
-            typeof roomSystem.consumeNewlyVisitedRoomKeys === 'function'
-              ? roomSystem.consumeNewlyVisitedRoomKeys()
-              : [];
-          if (newlyVisitedRooms.length > 0) {
-            enemyManager.startAggroForRooms?.(newlyVisitedRooms, enemyUpdateContext);
-          }
           enemyManager.update(deltaTime, enemyUpdateContext);
         }
         if (primaryFireCooldown > 0) {
@@ -1118,9 +1111,9 @@ export async function initializeGame({
       const minimapSnapshot =
         typeof roomSystem.getMinimapSnapshot === 'function'
           ? roomSystem.getMinimapSnapshot(controller.position, {
-              radius: 4,
-              showUnvisitedRooms: showUnvisitedMinimapRooms
-            })
+            radius: 4,
+            showUnvisitedRooms: showUnvisitedMinimapRooms
+          })
           : null;
 
       if (minimapSnapshot) {

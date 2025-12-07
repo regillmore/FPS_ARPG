@@ -120,10 +120,6 @@ export function createProceduralSpawner({ roomSystem, enemyManager, eventTarget 
           roomKey: spawn?.key ?? '',
           position
         };
-
-        if (roomSystem?.isRoomKeyVisited?.(fighter.spawnContext.roomKey)) {
-          fighter.startAggro?.();
-        }
       }
     }
   };

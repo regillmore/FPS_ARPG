@@ -51,8 +51,6 @@ export function createProceduralRoomSystem(device, options = {}) {
   const halfRoom = roomSize * 0.5;
   const levelHeight = roomHeight + floorThickness;
   const visitedCells = new Set();
-  const newlyVisitedRoomKeys = [];
-  const newlyVisitedRoomKeySet = new Set();
   const worldSeed = (options.seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0;
 
   const clampedDoorHeight = Math.min(
@@ -145,15 +143,6 @@ export function createProceduralRoomSystem(device, options = {}) {
 
   const { buildGeometryForCenter } = geometryBuilder;
 
-  function trackVisitedRoom(layerIndex, x, z) {
-    const roomKey = `${layerIndex}:${getCellKey(x, z)}`;
-    if (newlyVisitedRoomKeySet.has(roomKey)) {
-      return;
-    }
-    newlyVisitedRoomKeySet.add(roomKey);
-    newlyVisitedRoomKeys.push(roomKey);
-  }
-
   function markCellVisited(x, z) {
     if (!getExistingCellEdgesForLayer(x, z)) {
       return;
@@ -170,12 +159,7 @@ export function createProceduralRoomSystem(device, options = {}) {
       }
 
       processed.add(cellKey);
-      const wasVisited = visitedCells.has(cellKey);
       visitedCells.add(cellKey);
-
-      if (!wasVisited) {
-        trackVisitedRoom(0, currentX, currentZ);
-      }
 
       const cellEdges = getExistingCellEdgesForLayer(currentX, currentZ);
       if (!cellEdges) {
@@ -434,17 +418,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     }
   }
 
-  function consumeNewlyVisitedRoomKeys() {
-    if (newlyVisitedRoomKeys.length === 0) {
-      return [];
-    }
-
-    const keys = [...newlyVisitedRoomKeys];
-    newlyVisitedRoomKeys.length = 0;
-    newlyVisitedRoomKeySet.clear();
-    return keys;
-  }
-
   buildGeometryForCenter(centerCellX, centerCellZ);
 
   return {
@@ -468,7 +441,6 @@ export function createProceduralRoomSystem(device, options = {}) {
     getRoomKeyForPosition,
     getNavigationHelper,
     revealCellsForDoorAnchor,
-    consumeNewlyVisitedRoomKeys,
     isPositionWithinGenerationRadius,
     consumeFighterSpawnPoints,
     scheduleFighterSpawnPoint,
