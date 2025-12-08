@@ -555,6 +555,7 @@ export function createFighter(device, options = {}) {
     lastEnemyCellKey: '',
     rebuildTimer: 0
   };
+  const originCellKey = resolveOriginCellKey(options.spawnContext);
   let legPhase = Math.random() * Math.PI * 2;
   let legMotion = 0;
   let legsUpdatedThisFrame = false;
@@ -564,6 +565,27 @@ export function createFighter(device, options = {}) {
       return '';
     }
     return `${cell.layerIndex}:${cell.cellX},${cell.cellZ}`;
+  }
+
+  function resolveOriginCellKey(spawnContext) {
+    const key = typeof spawnContext?.roomKey === 'string' ? spawnContext.roomKey : '';
+    if (!key) {
+      return '';
+    }
+    const separatorIndex = key.indexOf(':');
+    return separatorIndex >= 0 ? key.slice(separatorIndex + 1) : key;
+  }
+
+  function hasDiscoveredOriginCell(visibleCells) {
+    if (!originCellKey) {
+      return false;
+    }
+
+    if (!visibleCells || typeof visibleCells.has !== 'function') {
+      return false;
+    }
+
+    return visibleCells.has(originCellKey);
   }
 
   function clearPath() {
@@ -978,6 +1000,10 @@ export function createFighter(device, options = {}) {
       clearPath();
       animateLegs(deltaTime, 0);
       return;
+    }
+
+    if (!isAggro && hasDiscoveredOriginCell(context?.visibleCells)) {
+      startAggro(context);
     }
 
     if (!isAggro) {
