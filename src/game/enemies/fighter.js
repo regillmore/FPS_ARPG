@@ -897,22 +897,6 @@ export function createFighter(device, options = {}) {
     }
   }
 
-  function mergeDamageContext(context) {
-    if (!context && !lastUpdateContext) {
-      return {};
-    }
-
-    if (!lastUpdateContext) {
-      return { ...context };
-    }
-
-    if (!context) {
-      return { ...lastUpdateContext };
-    }
-
-    return { ...lastUpdateContext, ...context };
-  }
-
   function animateLegs(deltaTime, movedDistance = 0) {
     legsUpdatedThisFrame = true;
     const dt = Math.max(Number(deltaTime) || 0, 0);
@@ -1040,19 +1024,12 @@ export function createFighter(device, options = {}) {
       return;
     }
 
-    const wasAggro = isAggro;
-    const damageContext = mergeDamageContext(context);
     currentHealth = Math.max(currentHealth - value, 0);
 
     if (onDamaged) {
       try {
-        onDamaged({
-          enemy: fighter,
-          damage: value,
-          remainingHealth: currentHealth,
-          context: damageContext,
-          wasAggressive: wasAggro
-        });
+        onDamaged({ enemy: fighter, damage: value, remainingHealth: currentHealth, context });
+        startAggro(context);
       } catch (error) {
         console.error('Error while handling fighter damage callback:', error);
       }
@@ -1095,12 +1072,10 @@ export function createFighter(device, options = {}) {
       if (!Number.isFinite(dt) || dt <= 0) {
         return;
       }
-      lastUpdateContext = context ?? null;
       seekPlayer(dt, context);
       syncTransform();
     },
     takeDamage,
-    startAggro,
     onHit(impact) {
       if (isDead) {
         return;
