@@ -29,6 +29,7 @@ import {
   WORLD_UP
 } from './constants.js';
 import { blendWithWhite, floatColorToCss } from './ui/colorUtils.js';
+import { buildVisibleCellSet } from '../ui/minimap.js';
 import {
   resolvePlayerCollisions,
   PLAYER_COLLISION_RADIUS,
@@ -256,6 +257,7 @@ export async function initializeGame({
     let pacifyEnemies = Boolean(initialDiagnostics?.pacifyEnemies);
     let showFramerate = Boolean(initialDiagnostics?.showFramerate);
     let showUnvisitedMinimapRooms = Boolean(initialOptions?.showUnvisitedMinimapRooms);
+    let minimapVisibleCells = null;
     const enemyUpdateContext = {
       playerPosition: controller.position,
       playerRadius: PLAYER_COLLISION_RADIUS,
@@ -271,7 +273,8 @@ export async function initializeGame({
       playerRoomKey:
         typeof roomSystem.getRoomKeyForPosition === 'function'
           ? roomSystem.getRoomKeyForPosition(controller.position)
-          : ''
+          : '',
+      visibleCells: minimapVisibleCells
     };
 
     const updateStorageChestProximity = () => {
@@ -789,6 +792,7 @@ export async function initializeGame({
           enemyUpdateContext.activeDoors = activeDoors;
           enemyUpdateContext.requestDoorOpen = doorManager.requestOpen;
           enemyUpdateContext.pacifyEnemies = pacifyEnemies;
+          enemyUpdateContext.visibleCells = minimapVisibleCells;
           enemyUpdateContext.playerRoomKey =
             typeof roomSystem.getRoomKeyForPosition === 'function'
               ? roomSystem.getRoomKeyForPosition(controller.position)
@@ -1138,6 +1142,8 @@ export async function initializeGame({
           playerYaw: controller.yaw
         };
       }
+
+      minimapVisibleCells = buildVisibleCellSet(minimapSnapshot);
 
       hudController?.updateWorldSpaceUI?.({
         enemies,

@@ -79,7 +79,7 @@ function createTransform(snapshot, space) {
   };
 }
 
-function buildVisibleCellSet(snapshot) {
+export function buildVisibleCellSet(snapshot) {
   const cells = Array.isArray(snapshot?.cells) ? snapshot.cells : null;
   if (!cells || cells.length === 0) {
     return null;
